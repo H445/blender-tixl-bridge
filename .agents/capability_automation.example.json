@@ -4,10 +4,11 @@
     "executable": null
   },
   "blenderMcp": {
-    "command": [
-      "<installed Blender MCP server executable>",
-      "<optional arguments>"
-    ],
+    "transport": "auto",
+    "host": "127.0.0.1",
+    "port": 9876,
+    "command": null,
+    "args": [],
     "cwd": null,
     "env": {}
   },

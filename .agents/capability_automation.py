@@ -17,6 +17,7 @@ import os
 import queue
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -43,6 +44,8 @@ DEFAULT_LOCK = AGENTS_DIR / ".capability-automation.lock"
 DEFAULT_OUTPUT = AGENTS_DIR / "CAPABILITIES.md"
 PROBE_SCRIPT = AGENTS_DIR / "probes" / "blender_runtime_probe.py"
 SCHEMA_VERSION = 1
+DEFAULT_BLENDER_MCP_HOST = "127.0.0.1"
+DEFAULT_BLENDER_MCP_PORT = 9876
 
 
 def utc_now() -> str:
@@ -210,6 +213,48 @@ def discover_mcp_spec(config: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+def tcp_extension_spec(config: dict[str, Any]) -> dict[str, Any] | None:
+    mcp_config = config.get("blenderMcp", {}) if isinstance(config.get("blenderMcp"), dict) else {}
+    transport = str(mcp_config.get("transport") or os.environ.get("BLENDER_MCP_TRANSPORT") or "auto").lower()
+    if transport == "stdio":
+        return None
+    host = str(mcp_config.get("host") or os.environ.get("BLENDER_MCP_HOST") or DEFAULT_BLENDER_MCP_HOST)
+    if host.lower() == "localhost":
+        host = DEFAULT_BLENDER_MCP_HOST
+    port = int(mcp_config.get("port") or os.environ.get("BLENDER_MCP_PORT") or DEFAULT_BLENDER_MCP_PORT)
+    return {"host": host, "port": port, "source": "Blender MCP TCP extension"}
+
+
+class BlenderTcpExtensionClient:
+    """Client for Blender's official null-delimited MCP extension bridge."""
+
+    def __init__(self, host: str, port: int, timeout: float = 20.0):
+        self.host = host
+        self.port = port
+        self.timeout = timeout
+
+    def execute(self, code: str) -> dict[str, Any]:
+        request = {"type": "execute", "strict_json": True, "code": code}
+        encoded = (json.dumps(request, separators=(",", ":")) + "\0").encode("utf-8")
+        with socket.create_connection((self.host, self.port), timeout=min(3, self.timeout)) as connection:
+            connection.settimeout(self.timeout)
+            connection.sendall(encoded)
+            response = bytearray()
+            while b"\0" not in response:
+                chunk = connection.recv(65536)
+                if not chunk:
+                    raise ConnectionError("Blender MCP TCP extension closed without a response")
+                response.extend(chunk)
+                if len(response) > 10 * 1024 * 1024:
+                    raise ValueError("Blender MCP TCP extension response exceeds 10 MiB")
+        value = json.loads(bytes(response).split(b"\0", 1)[0])
+        if not isinstance(value, dict):
+            raise ValueError("Blender MCP TCP extension returned a non-object response")
+        if value.get("status") != "ok":
+            raise RuntimeError(str(value.get("message") or "Blender MCP TCP extension execution failed"))
+        return value
+
+
 class StdioMcpClient:
     def __init__(self, spec: dict[str, Any], timeout: float = 20.0):
         self.timeout = timeout
@@ -344,11 +389,8 @@ def python_tool(tools: list[dict[str, Any]]) -> tuple[str, str] | None:
     return None
 
 
-def probe_mcp(config: dict[str, Any], previous: dict[str, Any],
-              previous_runtime: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    spec = discover_mcp_spec(config)
-    if not spec:
-        return {"status": "missing", "summary": "No Blender MCP command configured or discovered", "tools": []}, None
+def _probe_stdio_mcp(config: dict[str, Any], spec: dict[str, Any], previous: dict[str, Any],
+                     previous_runtime: dict[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
     command_path = Path(spec["command"][0])
     resolved_command = command_path if command_path.is_file() else Path(shutil.which(spec["command"][0]) or "")
     command_file = file_evidence(resolved_command if resolved_command.is_file() else None,
@@ -363,7 +405,7 @@ def probe_mcp(config: dict[str, Any], previous: dict[str, Any],
         version = server.get("version", "unknown") if isinstance(server, dict) else "unknown"
         result: dict[str, Any] = {
             "status": "ok",
-            "summary": f"{name} {version}; {len(tools)} tools",
+            "summary": f"{name} {version}",
             "source": spec.get("source", "configured command"),
             "command": spec["command"],
             "commandFile": command_file,
@@ -401,6 +443,86 @@ def probe_mcp(config: dict[str, Any], previous: dict[str, Any],
     finally:
         if client:
             client.close()
+
+
+def _tcp_tool_inventory() -> list[dict[str, Any]]:
+    return [{
+        "name": "execute_blender_code",
+        "description": "Execute Python inside Blender through the official Blender MCP TCP extension.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"code": {"type": "string", "description": "Python source to execute in Blender"}},
+            "required": ["code"],
+        },
+    }]
+
+
+def _probe_tcp_extension(config: dict[str, Any], spec: dict[str, Any], previous: dict[str, Any],
+                         previous_runtime: dict[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    host = spec["host"]
+    port = spec["port"]
+    try:
+        if not PROBE_SCRIPT.is_file():
+            raise FileNotFoundError(PROBE_SCRIPT)
+        response = BlenderTcpExtensionClient(
+            host, port, timeout=float(config.get("mcpTimeoutSeconds", 30))
+        ).execute(PROBE_SCRIPT.read_text(encoding="utf-8"))
+        runtime = response.get("result")
+        if not isinstance(runtime, dict) or not runtime:
+            runtime = marker_json(str(response.get("stdout", "")))
+        if not isinstance(runtime, dict) or not runtime:
+            raise ValueError("Blender runtime probe returned no capability object")
+        extension = runtime.get("blenderMcpTcpExtension", {})
+        version = extension.get("version", "unknown") if isinstance(extension, dict) else "unknown"
+        tools = _tcp_tool_inventory()
+        return {
+            "status": "ok",
+            "summary": f"Blender MCP TCP extension {version}",
+            "source": spec["source"],
+            "transport": "tcp-extension",
+            "host": host,
+            "port": port,
+            "serverInfo": {"name": "Blender MCP TCP extension", "version": version},
+            "tools": tools,
+            "runtimeProbe": "complete",
+        }, runtime
+    except Exception as error:
+        retained_tools = previous.get("tools", []) if isinstance(previous, dict) else []
+        retained_server = previous.get("serverInfo", {}) if isinstance(previous, dict) else {}
+        return {
+            "status": "unavailable",
+            "summary": f"Blender MCP TCP extension is not answering {host}:{port}: {type(error).__name__}",
+            "source": spec["source"],
+            "transport": "tcp-extension",
+            "host": host,
+            "port": port,
+            "serverInfo": retained_server,
+            "tools": retained_tools,
+        }, previous_runtime
+
+
+def probe_mcp(config: dict[str, Any], previous: dict[str, Any],
+              previous_runtime: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    mcp_config = config.get("blenderMcp", {}) if isinstance(config.get("blenderMcp"), dict) else {}
+    transport = str(mcp_config.get("transport") or os.environ.get("BLENDER_MCP_TRANSPORT") or "auto").lower()
+    stdio_spec = None if transport == "tcp" else discover_mcp_spec(config)
+    stdio_result = None
+    if stdio_spec:
+        stdio_result, runtime = _probe_stdio_mcp(config, stdio_spec, previous, previous_runtime)
+        if stdio_result.get("status") == "ok":
+            return stdio_result, runtime
+    tcp_spec = tcp_extension_spec(config)
+    if tcp_spec:
+        tcp_result, runtime = _probe_tcp_extension(config, tcp_spec, previous, previous_runtime)
+        if tcp_result.get("status") == "ok" or stdio_result is None:
+            return tcp_result, runtime
+    if stdio_result is not None:
+        return stdio_result, previous_runtime
+    return {
+        "status": "missing",
+        "summary": "No Blender MCP stdio command or TCP extension transport is enabled",
+        "tools": [],
+    }, previous_runtime
 
 
 def winget_blender_version(package_id: str) -> str | None:

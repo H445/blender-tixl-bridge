@@ -1,6 +1,8 @@
 import importlib.util
 import json
+import socket
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -61,6 +63,41 @@ class CapabilityAutomationTest(unittest.TestCase):
         configured = self.automation.command_spec({"command": ["server", "--stdio"], "env": {"MODE": "test"}})
         self.assertEqual(configured["command"], ["server", "--stdio"])
         self.assertEqual(configured["env"], {"MODE": "test"})
+
+    def test_tcp_extension_client_executes_null_delimited_request(self):
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+        received = {}
+
+        def serve():
+            connection, _ = listener.accept()
+            with connection:
+                payload = bytearray()
+                while b"\0" not in payload:
+                    payload.extend(connection.recv(4096))
+                received.update(json.loads(bytes(payload).split(b"\0", 1)[0]))
+                response = {"status": "ok", "result": {"blenderVersion": "5.2.2"}}
+                connection.sendall(json.dumps(response).encode("utf-8") + b"\0")
+            listener.close()
+
+        thread = threading.Thread(target=serve)
+        thread.start()
+        response = self.automation.BlenderTcpExtensionClient("127.0.0.1", port).execute("result = {}")
+        thread.join(timeout=2)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(received["type"], "execute")
+        self.assertTrue(received["strict_json"])
+        self.assertEqual(response["result"]["blenderVersion"], "5.2.2")
+
+    def test_tcp_extension_defaults_and_tool_contract(self):
+        spec = self.automation.tcp_extension_spec({})
+        self.assertEqual(spec["host"], "127.0.0.1")
+        self.assertEqual(spec["port"], 9876)
+        tool = self.automation._tcp_tool_inventory()[0]
+        self.assertEqual(tool["name"], "execute_blender_code")
+        self.assertEqual(tool["inputSchema"]["required"], ["code"])
 
 
 if __name__ == "__main__":

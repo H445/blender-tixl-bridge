@@ -6,10 +6,10 @@
 
 | Source | Status | Evidence |
 | --- | --- | --- |
-| Bridge checkout | complete | add-on 1.3.0; source SHA-256 `9f1e613d0caed517` |
-| Blender installation | complete | Blender 5.2.2.0 via Windows package 9PP3C07GTVRH |
-| Blender runtime via MCP | unavailable | The next add-on refresh retries when Blender MCP is connected |
-| Blender MCP | missing | 0 tools; No Blender MCP command configured or discovered |
+| Bridge checkout | complete | add-on 1.3.1; source SHA-256 `52889db4f494027e` |
+| Blender installation | complete | Blender 5.2.2 LTS via MCP runtime |
+| Blender runtime via MCP | complete | 5.2.2 LTS |
+| Blender MCP | complete | 1 tool; Blender MCP TCP extension 1.0.3 |
 | TiXL installation | complete | TiXL 4.3.0.2 |
 | TiXL source | complete | matching `Editor/App/DebugProtocol/DebugServer.cs`; SHA-256 `1b3dae492cd919b4` |
 | TiXL debug bridge | complete | client `1bcfd6fcf391b5ec`; server `1b3dae492cd919b4` |
@@ -19,14 +19,53 @@ The automation keeps retrying unavailable live probes. A `missing` row means its
 
 ## Blender bridge runtime
 
-- Add-on: **Prismal Labs Blender → TiXL Bridge 1.3.0**
+- Add-on: **Prismal Labs Blender → TiXL Bridge 1.3.1**
 - Minimum Blender declared by add-on: **4.3.0**
 - Registered bridge operators: `tixl_bridge.refresh_agent_capabilities`, `tixl_bridge.sync_saved_blend`
 - Add-on properties discovered from source: `capability_repository`, `connection_mode`, `debug_port`, `editor_directory`, `operator_project`, `tixl_bridge_autosync`
 
+Runtime probe:
+
+```json
+{
+  "addonEnabled": true,
+  "addonVersion": [
+    1,
+    3,
+    1
+  ],
+  "background": false,
+  "blenderMcpTcpExtension": {
+    "autostart": true,
+    "host": "localhost",
+    "module": "bl_ext.lab_blender_org.mcp",
+    "port": 9876,
+    "version": "1.0.3"
+  },
+  "blenderVersion": "5.2.2 LTS",
+  "blenderVersionTuple": [
+    5,
+    2,
+    2
+  ],
+  "bridgeOperators": [
+    "refresh_agent_capabilities",
+    "sync_saved_blend"
+  ],
+  "canExecutePython": true,
+  "canOpenAndSaveBlend": true,
+  "canReadScene": true,
+  "canRender": true,
+  "pythonVersion": "3.13.13",
+  "sceneHasAutosyncProperty": true
+}
+```
+
 ## Blender MCP tools discovered automatically
 
-No Blender MCP command was discovered or the configured server did not answer `tools/list`.
+| Tool | Inputs | Advertised capability |
+| --- | --- | --- |
+| `execute_blender_code` | `code` (required) | Execute Python inside Blender through the official Blender MCP TCP extension. |
 
 ## TiXL debug-protocol methods
 

@@ -179,13 +179,13 @@ The checkout installer records this repository in the add-on's **Agent capabilit
 No AI-generated probe file is required. The refresh process:
 
 - fingerprints the Blender executable or Windows Store package;
-- starts the configured/discovered Blender MCP server and calls MCP `initialize` and `tools/list` directly;
+- connects directly to Blender's official MCP TCP extension when it is running, or starts a configured/discovered stdio MCP server and calls `initialize` and `tools/list`;
 - runs the read-only Blender probe through an advertised Blender Python tool when Blender is connected;
 - fingerprints `TiXL.exe`, parses the matching `DebugServer.cs`, and calls the running TiXL debug protocol when available;
 - fingerprints `blender_tixl_bridge/source/tixl_bridge.py` and the TiXL server implementation;
 - preserves the last successful live inventory when an application is temporarily closed.
 
-If Blender MCP is not found in a supported user MCP configuration, copy `.agents/capability_automation.example.json` to the ignored local file `.agents/capability_automation.json` and set `blenderMcp.command` to the installed server command. Do this once during setup; later updates are detected automatically from the MCP server version, command fingerprint, and tool schemas.
+The official Blender MCP extension needs no separate command configuration: the add-on passes its saved host and port to each refresh. For another MCP server, copy `.agents/capability_automation.example.json` to the ignored local file `.agents/capability_automation.json` and set `blenderMcp.command`. Later updates are detected automatically from the extension/server version, command fingerprint, and tool schemas.
 
 Review newly discovered or unclassified capabilities before using them. Never infer safety or parameters from a method name alone. The user can force an immediate non-AI refresh with the add-on's **Refresh agent capabilities** button or:
 

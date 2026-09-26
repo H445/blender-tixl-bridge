@@ -240,6 +240,7 @@ def render(args: argparse.Namespace) -> str:
     mcp_server = components.get("blenderMcp", {}) if isinstance(components, dict) else {}
     tixl_install = components.get("tixl", {}) if isinstance(components, dict) else {}
     debug_bridge = components.get("tixlDebugBridge", {}) if isinstance(components, dict) else {}
+    mcp_tool_count = f"{len(mcp_tools)} tool" + ("" if len(mcp_tools) == 1 else "s")
     cached_tixl_version = tixl_install.get("liveVersion") if isinstance(tixl_install, dict) else None
     live_tixl_complete = bool(live_tixl and not live_tixl.get("error"))
     live_tixl_evidence = (json.dumps(live_tixl, sort_keys=True) if live_tixl_complete
@@ -268,7 +269,7 @@ def render(args: argparse.Namespace) -> str:
         f"| Bridge checkout | complete | add-on {escape_cell(bridge['version'])}; source SHA-256 `{digest(bridge['source'])}` |",
         f"| Blender installation | {'complete' if blender_install.get('status') == 'ok' else 'missing'} | {escape_cell(blender_install.get('summary', 'Configure automatic Blender discovery'))} |",
         f"| Blender runtime via MCP | {'complete' if blender_probe else 'unavailable'} | {escape_cell((blender_probe or {}).get('blenderVersion', 'The next add-on refresh retries when Blender MCP is connected'))} |",
-        f"| Blender MCP | {'complete' if mcp_tools else 'missing'} | {len(mcp_tools)} tools; {escape_cell(mcp_server.get('summary', 'configure blenderMcp.command'))} |",
+        f"| Blender MCP | {'complete' if mcp_tools else ('unavailable' if mcp_server.get('status') == 'unavailable' else 'missing')} | {mcp_tool_count}; {escape_cell(mcp_server.get('summary', 'configure Blender MCP transport'))} |",
         f"| TiXL installation | {'complete' if tixl_install.get('status') == 'ok' else 'missing'} | {escape_cell(tixl_install.get('summary', 'Configure or infer TiXL.exe'))} |",
         f"| TiXL source | {'complete' if debug_server else 'missing'} | " + (f"matching `{DEBUG_SERVER_RELATIVE.as_posix()}`; SHA-256 `{digest(debug_server)}` |" if debug_server else "Pass --tixl-source |"),
         f"| TiXL debug bridge | {'complete' if debug_bridge.get('status') == 'ok' else 'missing'} | {escape_cell(debug_bridge.get('summary', 'Client/server implementation fingerprint unavailable'))} |",

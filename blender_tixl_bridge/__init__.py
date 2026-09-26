@@ -3,7 +3,7 @@
 bl_info = {
     "name": "Prismal Labs Blender → TiXL Bridge",
     "author": "Prismal Labs",
-    "version": (1, 3, 0),
+    "version": (1, 3, 1),
     "blender": (4, 3, 0),
     "location": "Scene Properties > TiXL Bridge",
     "description": "Build TiXL geometry, animation, camera and graph from a saved .blend",
@@ -74,6 +74,13 @@ def queue_capability_refresh(force=False):
         command.append("--force")
     env = dict(os.environ)
     env["BLENDER_EXECUTABLE"] = bpy.app.binary_path
+    for enabled_addon in bpy.context.preferences.addons:
+        if enabled_addon.module == "mcp" or enabled_addon.module.endswith(".mcp"):
+            mcp_preferences = enabled_addon.preferences
+            env["BLENDER_MCP_TRANSPORT"] = "tcp"
+            env["BLENDER_MCP_HOST"] = str(getattr(mcp_preferences, "host", "127.0.0.1"))
+            env["BLENDER_MCP_PORT"] = str(getattr(mcp_preferences, "port", 9876))
+            break
     try:
         prefs = settings()
         editor = Path(bpy.path.abspath(prefs.editor_directory))
