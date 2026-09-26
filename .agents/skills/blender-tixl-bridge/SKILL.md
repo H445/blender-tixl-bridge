@@ -7,7 +7,7 @@ description: Operate, inspect, validate, edit, and troubleshoot the Blender-to-T
 
 Use this skill after the installation and first-run workflow in `../../README.md`. Blender is the authored source. The generated TiXL project owns editable timing and render-graph changes, while `.tixl_cache` contains replaceable generated imports.
 
-Before relying on the catalogs below, read `../../CAPABILITIES.md`. During agentic setup, or whenever Blender, Blender MCP, TiXL, or this bridge changes version, regenerate that snapshot with `../../rebuild_capabilities.py`. The generated snapshot records what the current environment actually exposes; this skill supplies the safe workflows and semantics.
+Before relying on the catalogs below, read `../../CAPABILITIES.md`. The Blender add-on maintains that snapshot without an AI agent: it checks capabilities on install/update, add-on registration, and before sync. This skill supplies the safe workflows and semantics.
 
 ## Non-negotiable tool routing
 
@@ -31,29 +31,24 @@ Before relying on the catalogs below, read `../../CAPABILITIES.md`. During agent
 | Diagnose TiXL | TiXL debug bridge | `getLogTail`, `getMetrics`, `getContext`, and screenshots |
 | Change loaded `.t3`/`.t3ui` structure on disk | Filesystem plus end-user-safe restart | Save editor work and restart TiXL with `--debug-server 9042` |
 
-## Capability discovery and rebuild
+## Automatic capability discovery
 
-Do this during every agentic install/setup and after an upgrade. Discovery is read-only except for writing the generated snapshot.
+Agents do not assemble capability inputs. `.agents/capability_automation.py` performs deterministic local discovery and invokes the lower-level generator. The Blender add-on queues it:
 
-1. Ask the agent host for the connected Blender MCP's advertised tool names and descriptions. Save them as a temporary JSON array of `{ "name": "...", "description": "..." }` objects. This inventory comes from MCP discovery, not from Blender UI inspection.
-2. Through Blender MCP's Python-execution capability, execute `.agents/probes/blender_runtime_probe.py` inside the running Blender process. Capture the JSON between `BLENDER_TIXL_CAPABILITIES_BEGIN` and `BLENDER_TIXL_CAPABILITIES_END` into a temporary JSON file.
-3. Locate the TiXL source tree matching the installed editor when available. For a source build, use that checkout. For a release build, prefer a matching tagged source tree. Do not parse an unrelated checkout.
-4. Start or connect to TiXL through the supported Debug-mode workflow and probe its configured local port. The rebuild script calls `getVersion` and attempts future protocol-level capability discovery when the server supports it.
-5. From the repository root, run:
+- with `--force` after checkout installation or update;
+- without force when the add-on registers after Blender starts;
+- before every sync;
+- with `--force` when the user clicks **Refresh agent capabilities**.
 
-   ```powershell
-   python .agents/rebuild_capabilities.py `
-     --tixl-source "<matching TiXL source root>" `
-     --tixl-port 9042 `
-     --blender-probe "<temporary Blender probe JSON>" `
-     --blender-mcp-tools "<temporary MCP tool inventory JSON>"
-   ```
+The automation fingerprints Blender, Blender MCP, TiXL, the TiXL debug bridge client/server, this add-on, and its operator contracts. It speaks MCP directly to obtain server version, tool descriptions, and input schemas, and uses a Blender Python tool for the runtime probe when available. It speaks TiXL's local debug protocol directly and parses matching source when present. A lock prevents overlapping plugin triggers, and the state fingerprint prevents unnecessary rewrites. It is a one-shot process and must not be replaced with a scheduled task, watcher, or background service.
 
-   Omit only inputs that genuinely are unavailable. The generated file marks missing discovery sources as incomplete.
-6. Read `.agents/CAPABILITIES.md`. Investigate every **unclassified** TiXL method and any newly advertised Blender MCP tool before using it. Update this skill when a new capability changes safe workflows or parameters.
-7. Run the same command with `--check`. It must report that the snapshot is current. Remove temporary probe files if they contain machine-specific paths.
+If the Blender MCP command cannot be discovered from supported user MCP configuration, configure it once in the ignored `.agents/capability_automation.json` using `.agents/capability_automation.example.json`. Do not place credentials in the checked-in example or capability snapshot.
 
-The generator deterministically derives add-on metadata and operator contracts from this bridge checkout, TiXL methods from the matching `DebugServer.cs`, live TiXL version/capability data from the debug server, Blender runtime facts from the MCP-executed probe, and the MCP tool inventory supplied by the agent host. It never uses Computer Use.
+An agent should read `.agents/CAPABILITIES.md` and investigate any new **unclassified** method. It may ask the user to click the manual refresh button if the snapshot reports a missing configured component, but it must not fabricate probe results or use Computer Use. Developers can force the same non-AI path with:
+
+```powershell
+python .agents/capability_automation.py once --force
+```
 
 ## Blender MCP capabilities
 
@@ -307,6 +302,8 @@ Sync preserves the user-owned home graph, TimeClips, and supported editable rout
 - `blender_tixl_bridge/source/blend_sync_worker.py`: Blender preflight, worlds, and camera export.
 - `blender_tixl_bridge/source/tixl_animation_export.py`: supported scene and animation data.
 - `blender_tixl_bridge/source/tixl_bridge.py`: JSON-lines TiXL client.
+- `.agents/capability_automation.py`: non-AI component discovery, fingerprints, MCP probing, and refresh triggers.
+- `.agents/rebuild_capabilities.py`: deterministic Markdown renderer used by the automation.
 - `blender_tixl_bridge/operators/`: reusable TiXL operator implementations and UI contracts.
 - `tests/debug_blend_shape_example_render.py`: proven time/pump/screenshot validation pattern.
 

@@ -17,6 +17,9 @@ from typing import Any
 
 AGENTS_DIR = Path(__file__).resolve().parent
 REPOSITORY = AGENTS_DIR.parent
+BRIDGE_PACKAGE = (REPOSITORY / "blender_tixl_bridge"
+                  if (REPOSITORY / "blender_tixl_bridge" / "__init__.py").is_file()
+                  else REPOSITORY)
 DEFAULT_OUTPUT = AGENTS_DIR / "CAPABILITIES.md"
 DEBUG_SERVER_RELATIVE = Path("Editor/App/DebugProtocol/DebugServer.cs")
 
@@ -63,6 +66,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tixl-port", type=int, help="Running TiXL debug-server port")
     parser.add_argument("--blender-probe", type=Path, help="JSON captured from probes/blender_runtime_probe.py")
     parser.add_argument("--blender-mcp-tools", type=Path, help="JSON inventory of advertised Blender MCP tools")
+    parser.add_argument("--automation-evidence", type=Path,
+                        help="JSON component fingerprints produced by capability_automation.py")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true", help="Fail when the output differs from current evidence")
     return parser.parse_args()
@@ -83,7 +88,7 @@ def load_json(path: Path | None) -> Any:
     return json.loads(text)
 
 
-def normalize_mcp_tools(raw: Any) -> list[dict[str, str]]:
+def normalize_mcp_tools(raw: Any) -> list[dict[str, Any]]:
     if raw is None:
         return []
     if isinstance(raw, dict):
@@ -91,17 +96,18 @@ def normalize_mcp_tools(raw: Any) -> list[dict[str, str]]:
     result = []
     for item in raw if isinstance(raw, list) else []:
         if isinstance(item, str):
-            result.append({"name": item, "description": ""})
+            result.append({"name": item, "description": "", "inputSchema": {}})
         elif isinstance(item, dict):
             name = str(item.get("name") or item.get("tool") or "").strip()
             if name:
                 description = " ".join(str(item.get("description") or "").split())
-                result.append({"name": name, "description": description[:500]})
+                schema = item.get("inputSchema") if isinstance(item.get("inputSchema"), dict) else {}
+                result.append({"name": name, "description": description[:500], "inputSchema": schema})
     return sorted(result, key=lambda item: item["name"].lower())
 
 
 def parse_bridge_metadata() -> dict[str, Any]:
-    source = REPOSITORY / "blender_tixl_bridge" / "__init__.py"
+    source = BRIDGE_PACKAGE / "__init__.py"
     tree = ast.parse(source.read_text(encoding="utf-8"))
     bl_info: dict[str, Any] = {}
     operators: list[str] = []
@@ -146,7 +152,7 @@ def parse_bridge_metadata() -> dict[str, Any]:
 
 def parse_bridge_operators() -> list[dict[str, str]]:
     result = []
-    folder = REPOSITORY / "blender_tixl_bridge" / "operators"
+    folder = BRIDGE_PACKAGE / "operators"
     for path in sorted(folder.glob("Blender*.t3ui")):
         data = json.loads(path.read_text(encoding="utf-8-sig"))
         result.append({"name": path.stem, "description": " ".join(data.get("Description", "").split())})
@@ -209,6 +215,16 @@ def escape_cell(value: Any) -> str:
     return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")
 
 
+def mcp_inputs(tool: dict[str, Any]) -> str:
+    schema = tool.get("inputSchema") or {}
+    properties = schema.get("properties") if isinstance(schema, dict) else {}
+    required = set(schema.get("required", [])) if isinstance(schema, dict) else set()
+    if not isinstance(properties, dict) or not properties:
+        return "none advertised"
+    return ", ".join(f"`{name}`" + (" (required)" if name in required else "")
+                     for name in sorted(properties))
+
+
 def render(args: argparse.Namespace) -> str:
     bridge = parse_bridge_metadata()
     bridge_ops = parse_bridge_operators()
@@ -216,7 +232,19 @@ def render(args: argparse.Namespace) -> str:
     tixl_methods, debug_server = parse_tixl_methods(tixl_source)
     blender_probe = load_json(args.blender_probe)
     mcp_tools = normalize_mcp_tools(load_json(args.blender_mcp_tools))
+    automation_evidence = load_json(getattr(args, "automation_evidence", None))
     live_tixl = probe_tixl(args.tixl_port)
+
+    components = automation_evidence.get("components", {}) if isinstance(automation_evidence, dict) else {}
+    blender_install = components.get("blender", {}) if isinstance(components, dict) else {}
+    mcp_server = components.get("blenderMcp", {}) if isinstance(components, dict) else {}
+    tixl_install = components.get("tixl", {}) if isinstance(components, dict) else {}
+    debug_bridge = components.get("tixlDebugBridge", {}) if isinstance(components, dict) else {}
+    cached_tixl_version = tixl_install.get("liveVersion") if isinstance(tixl_install, dict) else None
+    live_tixl_complete = bool(live_tixl and not live_tixl.get("error"))
+    live_tixl_evidence = (json.dumps(live_tixl, sort_keys=True) if live_tixl_complete
+                          else (f"last known {json.dumps(cached_tixl_version, sort_keys=True)}; editor currently unavailable"
+                                if cached_tixl_version else "TiXL is not currently answering the configured port"))
 
     live_methods: dict[str, dict[str, Any]] = {}
     if live_tixl and isinstance(live_tixl.get("capabilities"), dict):
@@ -231,19 +259,22 @@ def render(args: argparse.Namespace) -> str:
     lines = [
         "# Discovered Blender–TiXL capabilities",
         "",
-        "> Generated by `.agents/rebuild_capabilities.py`. Do not hand-edit. Rebuild during agentic setup and after component upgrades.",
+        "> Generated automatically. Do not hand-edit. `.agents/capability_automation.py` rebuilds this file when a monitored component changes.",
         "",
         "## Discovery coverage",
         "",
         "| Source | Status | Evidence |",
         "| --- | --- | --- |",
         f"| Bridge checkout | complete | add-on {escape_cell(bridge['version'])}; source SHA-256 `{digest(bridge['source'])}` |",
-        f"| Blender runtime via MCP | {'complete' if blender_probe else 'missing'} | {escape_cell((blender_probe or {}).get('blenderVersion', 'Run the MCP probe'))} |",
-        f"| Blender MCP advertised tools | {'complete' if mcp_tools else 'missing'} | {len(mcp_tools)} tools inventoried |",
+        f"| Blender installation | {'complete' if blender_install.get('status') == 'ok' else 'missing'} | {escape_cell(blender_install.get('summary', 'Configure automatic Blender discovery'))} |",
+        f"| Blender runtime via MCP | {'complete' if blender_probe else 'unavailable'} | {escape_cell((blender_probe or {}).get('blenderVersion', 'The next add-on refresh retries when Blender MCP is connected'))} |",
+        f"| Blender MCP | {'complete' if mcp_tools else 'missing'} | {len(mcp_tools)} tools; {escape_cell(mcp_server.get('summary', 'configure blenderMcp.command'))} |",
+        f"| TiXL installation | {'complete' if tixl_install.get('status') == 'ok' else 'missing'} | {escape_cell(tixl_install.get('summary', 'Configure or infer TiXL.exe'))} |",
         f"| TiXL source | {'complete' if debug_server else 'missing'} | " + (f"matching `{DEBUG_SERVER_RELATIVE.as_posix()}`; SHA-256 `{digest(debug_server)}` |" if debug_server else "Pass --tixl-source |"),
-        f"| Live TiXL debug server | {'complete' if live_tixl and not live_tixl.get('error') else 'missing'} | {escape_cell(json.dumps(live_tixl, sort_keys=True) if live_tixl else 'Pass --tixl-port')} |",
+        f"| TiXL debug bridge | {'complete' if debug_bridge.get('status') == 'ok' else 'missing'} | {escape_cell(debug_bridge.get('summary', 'Client/server implementation fingerprint unavailable'))} |",
+        f"| Live TiXL debug server | {'complete' if live_tixl_complete else ('cached' if cached_tixl_version else 'unavailable')} | {escape_cell(live_tixl_evidence)} |",
         "",
-        "Any `missing` row means setup has not fully inventoried the current environment. Do not assume the checked-in baseline covers an upgraded component.",
+        "The automation keeps retrying unavailable live probes. A `missing` row means its component is not configured or discoverable and is not yet monitored.",
         "",
         "## Blender bridge runtime",
         "",
@@ -255,12 +286,13 @@ def render(args: argparse.Namespace) -> str:
     if blender_probe:
         lines.extend(["", "Runtime probe:", "", "```json", json.dumps(blender_probe, indent=2, sort_keys=True), "```"])
 
-    lines.extend(["", "## Blender MCP tools advertised during setup", ""])
+    lines.extend(["", "## Blender MCP tools discovered automatically", ""])
     if mcp_tools:
-        lines.extend(["| Tool | Advertised capability |", "| --- | --- |"])
-        lines.extend(f"| `{escape_cell(tool['name'])}` | {escape_cell(tool['description'])} |" for tool in mcp_tools)
+        lines.extend(["| Tool | Inputs | Advertised capability |", "| --- | --- | --- |"])
+        lines.extend(f"| `{escape_cell(tool['name'])}` | {mcp_inputs(tool)} | {escape_cell(tool['description'])} |"
+                     for tool in mcp_tools)
     else:
-        lines.append("No MCP inventory was supplied. Rebuild with `--blender-mcp-tools` before claiming MCP-specific proficiency.")
+        lines.append("No Blender MCP command was discovered or the configured server did not answer `tools/list`.")
 
     lines.extend(["", "## TiXL debug-protocol methods", ""])
     if methods:

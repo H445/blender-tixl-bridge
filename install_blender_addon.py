@@ -99,7 +99,11 @@ def main():
         preferences.editor_directory = str(editor)
     if args.connection_mode:
         preferences.connection_mode = args.connection_mode
-    if migrated or not previously_enabled or args.operator_project or args.editor_dir or args.connection_mode:
+    repository = Path(__file__).resolve().parent
+    if (repository / ".agents" / "capability_automation.py").is_file():
+        preferences.capability_repository = str(repository)
+    if (migrated or not previously_enabled or args.operator_project or args.editor_dir
+            or args.connection_mode or preferences.capability_repository):
         bpy.ops.wm.save_userpref()
 
     module = sys.modules[source.name]
@@ -112,6 +116,12 @@ def main():
     print(f"TiXL operator project: {preferences.operator_project}")
     print(f"TiXL Editor folder: {preferences.editor_directory}")
     print(f"TiXL connection: {preferences.connection_mode}")
+    print(f"Agent capability repository: {preferences.capability_repository}")
+    if hasattr(module, "queue_capability_refresh"):
+        ok, message = module.queue_capability_refresh(force=True)
+        print(f"Agent capabilities: {message}")
+        if not ok:
+            raise RuntimeError(message)
 
 
 if __name__ == "__main__":

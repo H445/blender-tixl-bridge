@@ -24,7 +24,7 @@ Before operating, validating, editing, or troubleshooting a bridge project, read
 
 Tool names exposed by a particular Blender MCP server may vary. Use the MCP server's advertised tools and map them to the capabilities in the skill. Never invent an unavailable tool or replace it with Computer Use.
 
-During every agentic install/setup, rebuild `.agents/CAPABILITIES.md` after Blender, Blender MCP, TiXL, and this bridge are installed. Also rebuild it after any of those components is upgraded. The operational skill contains the exact discovery and rebuild procedure. A checked-in snapshot is only a baseline; the live MCP inventory and current TiXL implementation take precedence.
+Capability discovery is automated without an AI agent. The Blender add-on starts `.agents/capability_automation.py` when the add-on is installed or updated, when it registers after Blender starts, and before a bridge sync. The add-on also exposes **Refresh agent capabilities** for an explicit manual run. Each trigger launches one fingerprinted refresh; it installs no scheduled task, watcher, or background service. The refresh rewrites `.agents/CAPABILITIES.md` only when Blender, Blender MCP, TiXL, the TiXL debug bridge, or this bridge changes.
 
 ## Agent contract
 
@@ -172,11 +172,26 @@ For Debug mode, launch TiXL with:
 
 The server binds locally. Verify it with `getVersion` through `blender_tixl_bridge/source/tixl_bridge.py` before relying on live reload.
 
-## 5a. Refresh the agent capability snapshot
+## 5a. Verify automatic capability discovery
 
-Follow the **Capability discovery and rebuild** section in [the operational skill](skills/blender-tixl-bridge/SKILL.md). The setup agent must inventory the tools advertised by the connected Blender MCP, run the Blender runtime probe through MCP, inspect or probe the installed TiXL version, and regenerate `.agents/CAPABILITIES.md`.
+The checkout installer records this repository in the add-on's **Agent capability repository** preference and queues a forced refresh. Confirm that `.agents/capability_plugin.log` and `.agents/capability_automation.log` show a completed run and that `.agents/CAPABILITIES.md` reflects the installed versions.
 
-Review newly discovered or unclassified capabilities before using them. Never infer safety or parameters from a method name alone. If TiXL is not yet running with its debug server, perform a source-only refresh and repeat the live probe after starting Debug mode.
+No AI-generated probe file is required. The refresh process:
+
+- fingerprints the Blender executable or Windows Store package;
+- starts the configured/discovered Blender MCP server and calls MCP `initialize` and `tools/list` directly;
+- runs the read-only Blender probe through an advertised Blender Python tool when Blender is connected;
+- fingerprints `TiXL.exe`, parses the matching `DebugServer.cs`, and calls the running TiXL debug protocol when available;
+- fingerprints `blender_tixl_bridge/source/tixl_bridge.py` and the TiXL server implementation;
+- preserves the last successful live inventory when an application is temporarily closed.
+
+If Blender MCP is not found in a supported user MCP configuration, copy `.agents/capability_automation.example.json` to the ignored local file `.agents/capability_automation.json` and set `blenderMcp.command` to the installed server command. Do this once during setup; later updates are detected automatically from the MCP server version, command fingerprint, and tool schemas.
+
+Review newly discovered or unclassified capabilities before using them. Never infer safety or parameters from a method name alone. The user can force an immediate non-AI refresh with the add-on's **Refresh agent capabilities** button or:
+
+```powershell
+python .agents/capability_automation.py once --force
+```
 
 ## 6. Perform the first sync with the end user
 

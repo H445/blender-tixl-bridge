@@ -5,6 +5,8 @@ __pycache__/
 *.blend2
 .agents/*
 !.agents/*.md
+!.agents/capability_automation.py
+!.agents/capability_automation.example.json
 !.agents/rebuild_capabilities.py
 !.agents/probes/
 .agents/probes/*

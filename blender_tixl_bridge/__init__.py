@@ -3,7 +3,7 @@
 bl_info = {
     "name": "Prismal Labs Blender → TiXL Bridge",
     "author": "Prismal Labs",
-    "version": (1, 2, 0),
+    "version": (1, 3, 0),
     "blender": (4, 3, 0),
     "location": "Scene Properties > TiXL Bridge",
     "description": "Build TiXL geometry, animation, camera and graph from a saved .blend",
@@ -20,6 +20,7 @@ from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
 ROOT = Path(__file__).resolve().parent
 SYNC = ROOT / "source" / "blend_sync.py"
+CAPABILITY_SCRIPT = Path(".agents") / "capability_automation.py"
 
 
 def settings():
@@ -31,6 +32,75 @@ def bundled_python():
     suffix = "python.exe" if os.name == "nt" else "python3"
     candidate = Path(bpy.app.binary_path).parent / version / "python" / "bin" / suffix
     return candidate if candidate.is_file() else None
+
+
+def capability_repository():
+    """Return the checkout containing the non-AI capability automation."""
+    try:
+        configured = Path(bpy.path.abspath(settings().capability_repository))
+    except (KeyError, AttributeError, TypeError):
+        configured = Path()
+    candidates = [configured] if str(configured) not in ("", ".") else []
+    candidates.extend((ROOT, ROOT.parent))
+    environment = os.environ.get("BLENDER_TIXL_BRIDGE_REPOSITORY")
+    if environment:
+        candidates.insert(0, Path(environment))
+    for candidate in candidates:
+        if (candidate / CAPABILITY_SCRIPT).is_file():
+            return candidate.resolve()
+    return None
+
+
+def tixl_source_for(editor):
+    """Find a source checkout above an Editor build directory when present."""
+    editor = editor.resolve()
+    for candidate in (editor, *editor.parents):
+        if (candidate / "Editor" / "App" / "DebugProtocol" / "DebugServer.cs").is_file():
+            return candidate
+    return None
+
+
+def queue_capability_refresh(force=False):
+    """Start a fingerprinted capability refresh without blocking Blender."""
+    repository = capability_repository()
+    if repository is None:
+        return False, "Set Agent capability repository to this bridge checkout"
+    python = bundled_python()
+    if python is None:
+        return False, "Blender's bundled Python was not found"
+    script = repository / CAPABILITY_SCRIPT
+    command = [str(python), str(script), "once"]
+    if force:
+        command.append("--force")
+    env = dict(os.environ)
+    env["BLENDER_EXECUTABLE"] = bpy.app.binary_path
+    try:
+        prefs = settings()
+        editor = Path(bpy.path.abspath(prefs.editor_directory))
+        if (editor / "TiXL.exe").is_file():
+            env["TIXL_EXECUTABLE"] = str(editor / "TiXL.exe")
+            source = tixl_source_for(editor)
+            if source:
+                env["TIXL_SOURCE"] = str(source)
+        env["TIXL_BRIDGE_PORT"] = str(prefs.debug_port)
+    except (KeyError, AttributeError, TypeError):
+        pass
+    log = repository / ".agents" / "capability_plugin.log"
+    output = log.open("a", encoding="utf-8")
+    try:
+        subprocess.Popen(command, cwd=str(repository), env=env, stdout=output,
+                         stderr=subprocess.STDOUT,
+                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                         close_fds=True)
+    finally:
+        output.close()
+    return True, f"Agent capability refresh queued; log: {log}"
+
+
+def refresh_after_register():
+    ok, message = queue_capability_refresh()
+    print(f"TiXL Bridge: {message}")
+    return None
 
 
 def queue_sync():
@@ -45,6 +115,7 @@ def queue_sync():
     editor = Path(bpy.path.abspath(prefs.editor_directory))
     if not next(project.glob("*.csproj"), None) or not (editor / "TiXL.exe").is_file():
         return False, "Set the TiXL operator project and Editor folder in add-on preferences"
+    queue_capability_refresh()
     logdir = blend.parent / ".tixl_cache" / blend.stem / "sync_logs"
     logdir.mkdir(parents=True, exist_ok=True)
     output = (logdir / "latest.log").open("a", encoding="utf-8")
@@ -80,6 +151,8 @@ class TIXLBRIDGE_preferences(bpy.types.AddonPreferences):
         description="TiXL project folder containing a .csproj and Symbols directory")
     editor_directory: StringProperty(name="TiXL Editor folder", subtype="DIR_PATH",
         description="Built TiXL Editor folder containing TiXL.exe")
+    capability_repository: StringProperty(name="Agent capability repository", subtype="DIR_PATH",
+        description="Bridge checkout containing .agents/capability_automation.py")
 
     def draw(self, context):
         layout = self.layout
@@ -89,6 +162,10 @@ class TIXLBRIDGE_preferences(bpy.types.AddonPreferences):
         if self.connection_mode != "OFFLINE":
             layout.prop(self, "debug_port")
         layout.label(text="Set these once; each .blend gets its own generated TiXL project.")
+        layout.separator()
+        layout.prop(self, "capability_repository")
+        layout.operator("tixl_bridge.refresh_agent_capabilities")
+        layout.label(text="Refresh is automatic on add-on load and before sync.")
 
 
 class TIXLBRIDGE_OT_sync_now(bpy.types.Operator):
@@ -98,6 +175,17 @@ class TIXLBRIDGE_OT_sync_now(bpy.types.Operator):
 
     def execute(self, context):
         ok, message = queue_sync()
+        self.report({"INFO" if ok else "ERROR"}, message)
+        return {"FINISHED"} if ok else {"CANCELLED"}
+
+
+class TIXLBRIDGE_OT_refresh_capabilities(bpy.types.Operator):
+    bl_idname = "tixl_bridge.refresh_agent_capabilities"
+    bl_label = "Refresh agent capabilities"
+    bl_description = "Re-probe Blender, Blender MCP, TiXL, and the TiXL debug bridge"
+
+    def execute(self, context):
+        ok, message = queue_capability_refresh(force=True)
         self.report({"INFO" if ok else "ERROR"}, message)
         return {"FINISHED"} if ok else {"CANCELLED"}
 
@@ -112,10 +200,12 @@ class TIXLBRIDGE_PT_scene(bpy.types.Panel):
     def draw(self, context):
         self.layout.prop(context.scene, "tixl_bridge_autosync", text="Sync after save")
         self.layout.operator("tixl_bridge.sync_saved_blend")
+        self.layout.operator("tixl_bridge.refresh_agent_capabilities")
         self.layout.label(text="The .blend is the source; exports are generated.")
 
 
-CLASSES = (TIXLBRIDGE_preferences, TIXLBRIDGE_OT_sync_now, TIXLBRIDGE_PT_scene)
+CLASSES = (TIXLBRIDGE_preferences, TIXLBRIDGE_OT_sync_now,
+           TIXLBRIDGE_OT_refresh_capabilities, TIXLBRIDGE_PT_scene)
 
 
 def register():
@@ -124,9 +214,13 @@ def register():
         bpy.utils.register_class(cls)
     if on_save not in bpy.app.handlers.save_post:
         bpy.app.handlers.save_post.append(on_save)
+    if not bpy.app.background and not bpy.app.timers.is_registered(refresh_after_register):
+        bpy.app.timers.register(refresh_after_register, first_interval=2.0)
 
 
 def unregister():
+    if bpy.app.timers.is_registered(refresh_after_register):
+        bpy.app.timers.unregister(refresh_after_register)
     if on_save in bpy.app.handlers.save_post:
         bpy.app.handlers.save_post.remove(on_save)
     for cls in reversed(CLASSES):

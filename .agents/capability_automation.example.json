@@ -1,0 +1,21 @@
+{
+  "blender": {
+    "packageId": "9PP3C07GTVRH",
+    "executable": null
+  },
+  "blenderMcp": {
+    "command": [
+      "<installed Blender MCP server executable>",
+      "<optional arguments>"
+    ],
+    "cwd": null,
+    "env": {}
+  },
+  "tixl": {
+    "source": "<matching TiXL source checkout>",
+    "executable": "<folder containing TiXL.exe>/TiXL.exe",
+    "port": 9042
+  },
+  "output": ".agents/CAPABILITIES.md",
+  "state": ".agents/.capability-automation-state.json"
+}

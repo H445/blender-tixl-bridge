@@ -15,4 +15,17 @@ with ZipFile(output, "w", ZIP_DEFLATED) as archive:
                       "blender_tixl_bridge/examples/" + name)
     for path in sorted((root / "examples" / "screenshots").glob("*.png")):
         archive.write(path, "blender_tixl_bridge/examples/screenshots/" + path.name)
+    # A ZIP install has no checkout path. Bundle the non-AI capability refresh
+    # under the add-on so install/update/register/manual triggers still work.
+    agent_files = [
+        root / ".agents" / "CAPABILITIES.md",
+        root / ".agents" / "README.md",
+        root / ".agents" / "capability_automation.py",
+        root / ".agents" / "capability_automation.example.json",
+        root / ".agents" / "rebuild_capabilities.py",
+        root / ".agents" / "probes" / "blender_runtime_probe.py",
+        root / ".agents" / "skills" / "blender-tixl-bridge" / "SKILL.md",
+    ]
+    for path in agent_files:
+        archive.write(path, "blender_tixl_bridge/" + path.relative_to(root).as_posix())
 print(output)
