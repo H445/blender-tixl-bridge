@@ -18,7 +18,9 @@ class ExportContractTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        # Windows runners can expose TEMP through an 8.3 alias. Keep fixture
+        # paths consistent with the resolved glob paths used by these mocks.
+        self.root = Path(self.temp.name).resolve()
         self.blender = self.root / "blender.exe"
         self.blender.write_bytes(b"binary-v1")
         self.source = self.root / "source"
