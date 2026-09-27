@@ -202,6 +202,7 @@ def python_executable():
 
 
 def rapid_save_benchmark(folder: Path, run: dict):
+    from sync_queue import LatestRequestQueue
     scene = reset_scene("rapid_saves", 1, 180)
     cube = add_cube(scene)
     for frame, x in ((1, 0), (180, 1)):
@@ -212,58 +213,63 @@ def rapid_save_benchmark(folder: Path, run: dict):
     cli_bootstrap = ("import sys; sys.path.insert(0, " + repr(str(SOURCE)) + "); "
                      "import blend_sync; blend_sync.wait_for_editor_pause=lambda: None; "
                      "blend_sync.main()")
-    command_base = [str(python_executable()), "-c", cli_bootstrap, "sync",
-                    "--blend", str(blend), "--profile", "generic", "--cache-root", str(cache),
-                    "--blender", str(Path(bpy.app.binary_path)), "--no-install"]
-    requests = []
+    command = [str(python_executable()), "-c", cli_bootstrap, "sync",
+               "--blend", str(blend), "--profile", "generic", "--cache-root", str(cache),
+               "--blender", str(Path(bpy.app.binary_path)), "--no-install"]
+    launched = []
+    peak_active = 0
+    def launch(request):
+        nonlocal peak_active
+        log = folder / (request["runId"] + ".cli.log")
+        with log.open("w", encoding="utf-8") as output:
+            process = subprocess.Popen(command, cwd=str(ROOT), stdout=output,
+                                       stderr=subprocess.STDOUT, env=request["env"],
+                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        launched.append({"request": request, "process": process, "log": log,
+                         "started": time.perf_counter()})
+        peak_active = max(peak_active, sum(row["process"].poll() is None for row in launched))
+        return process
+    queue = LatestRequestQueue(launch)
     snapshots = []
-    # Launch a real CLI sync after each rapid saved revision. CLI processes
-    # serialize on the cache lock and re-read the latest saved source.
     for index in range(5):
-        cube.location.y = index * 0.125
+        cube.location.y = index * .125
         cube.keyframe_insert(data_path="location", frame=1 + index)
         bpy.ops.wm.save_as_mainfile(filepath=str(blend), check_existing=False, compress=True)
         saved_sha = blend_sync.digest(blend)
         snapshots.append(saved_sha)
-        started = time.perf_counter()
         run_id = uuid.uuid4().hex
-        env = dict(os.environ, TIXL_SYNC_RUN_ID=run_id)
-        process = subprocess.Popen(command_base, cwd=str(ROOT), stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT, text=True, env=env,
-                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        requests.append((index + 1, saved_sha, started, process, run_id))
+        queue.submit({"source": str(blend), "index": index + 1,
+                      "sourceSha256": saved_sha, "runId": run_id, "queuedAt": time.time(),
+                      "statusPath": str(cache / "sync_status.json"),
+                      "env": dict(os.environ, TIXL_SYNC_RUN_ID=run_id)})
+        if index == 0:
+            # Change subsequent saves only after the first request is actively
+            # exporting. This exercises a pending save across worker failure.
+            deadline = time.monotonic() + 30
+            while not list((cache / ".staging").glob("*/export.log")):
+                queue.poll()
+                if not queue.has_work or time.monotonic() >= deadline:
+                    raise AssertionError("First rapid-save export did not start")
+                time.sleep(.05)
+    deadline = time.monotonic() + 300
+    while queue.has_work:
+        queue.poll()
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Rapid-save queue did not drain")
+        time.sleep(.05)
     results = []
     rejected = []
-    for index, submitted_sha, started, process, run_id in requests:
-        output, _ = process.communicate(timeout=7200)
-        elapsed = time.perf_counter() - started
-        cli_result = None
-        if process.returncode == 0:
-            # CLI prints an indented JSON object. Keep tolerant of preceding
-            # Blender/Python diagnostics by decoding from each opening brace.
-            try:
-                cli_result = json.loads(output)
-            except ValueError:
-                decoder = json.JSONDecoder()
-                for offset, char in enumerate(output):
-                    if char == "{":
-                        try:
-                            cli_result, _ = decoder.raw_decode(output[offset:])
-                            break
-                        except ValueError:
-                            continue
-        accepted = process.returncode == 0 and cli_result is not None
-        record = {"request": index, "submittedSourceSha256": submitted_sha,
-                  "returnCode": process.returncode, "wallSeconds": elapsed,
-                  "result": cli_result, "stdoutTail": output[-1600:],
-                  "metrics": load_metrics({"metrics": str(cache / "sync_metrics" / (run_id + ".sync.json"))})}
+    for row in launched:
+        request, process = row["request"], row["process"]
+        output = row["log"].read_text(encoding="utf-8", errors="replace")
+        record = {"request": request["index"], "submittedSourceSha256": request["sourceSha256"],
+                  "returnCode": process.returncode,
+                  "wallSeconds": time.perf_counter() - row["started"], "stdoutTail": output[-1600:],
+                  "metrics": load_metrics({"metrics": str(cache / "sync_metrics" / (request["runId"] + ".sync.json"))})}
         results.append(record)
-        if not accepted:
-            rejected.append({"request": index, "sourceSha256": submitted_sha,
-                             "returnCode": process.returncode, "stdoutTail": output[-1600:]})
+        if process.returncode:
+            rejected.append({"request": request["index"], "returnCode": process.returncode})
     latest_sha = blend_sync.digest(blend)
-    # Verify the CLI requests themselves delivered the final save. A recovery
-    # sync here would conceal a queue failure and invalidate this benchmark.
     manifest = cache_publication.read_manifest(cache)
     verified_sha = manifest.get("source_sha256")
     report = {"blend": str(blend), "cache": str(cache), "requests": results,
@@ -271,13 +277,17 @@ def rapid_save_benchmark(folder: Path, run: dict):
               "verifiedCacheSourceSha256": verified_sha,
               "latestSourceAccepted": verified_sha == latest_sha,
               "rejectedSaveCount": len(rejected), "rejectedSaves": rejected,
-              "cacheBytes": cache_bytes(cache),
-              "cliProcessCount": len(requests),
+              "cacheBytes": cache_bytes(cache), "submittedRequestCount": len(snapshots),
+              "cliProcessCount": len(launched), "peakActiveCliProcesses": peak_active,
+              "coalescedRequestCount": len(snapshots) - len(launched),
+              "queueStatus": queue.snapshot(str(blend)),
               "workerProcessCount": sum((item["metrics"] or {}).get("counters", {}).get("blenderProcesses", 0)
                                         for item in results)}
     run["rapidSaves"] = report
     if not report["latestSourceAccepted"]:
-        raise AssertionError("Final rapid-save cache does not match the latest saved Blender source")
+        raise AssertionError("Rapid-save queue lost the final saved source")
+    if peak_active != 1 or len(launched) > 2:
+        raise AssertionError("Rapid-save queue exceeded one active plus one latest pending request")
 
 
 def main():

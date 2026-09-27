@@ -53,6 +53,8 @@ The `.blend` must be saved and must have either an active camera or camera-bound
 2. Click **Sync saved .blend to TiXL**, or enable **Sync after save** for continuing automatic builds.
 3. Follow `<blend folder>/.tixl_cache/<blend name>/sync_logs/latest.log` during the first build.
 
+Repeated saves share one active sync per source file. While it runs, another save replaces the pending request with the latest saved revision. The Scene panel and `sync_logs/sync_status.json` report running, pending, completed, and error states. A failed job does not discard a newer pending save. Launch failures retry three times, then remain available for the next save or manual sync. Keep Blender open until pending work finishes.
+
 ![Blender TiXL Bridge panel with save sync, on-demand sync, and capability refresh controls](screenshots/blender-plugin.png)
 
 The first sync installs the reusable operators, creates a TiXL project beside the operator project, and records its exact location in `.tixl_cache/<blend name>/tixl_project.json`. Later syncs replace generated imports while preserving the project home, TimeClips, editable mesh and texture routes, and render graph.

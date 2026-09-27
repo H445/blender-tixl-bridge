@@ -27,6 +27,10 @@ Generation installation updates only known bridge file-path inputs that still po
 
 Cache reuse requires the saved `.blend` hash and a versioned export contract. The contract fingerprints exporter/worker code, the Blender executable, glTF exporter scripts, and the fixed 60 Hz export configuration. Saved scene settings are covered by the `.blend` hash and recorded in the contract. Graph templates and TiXL operator builds use separate fingerprints; editing a graph or operator does not invalidate exported geometry by itself.
 
+Save-triggered requests use a per-source queue inside Blender: one active CLI child and one replaceable latest pending request. A temporary timer polls children only while active or retryable work exists. Pending work starts after either a successful or failed child exit; different source paths have independent queues. Launch failures stop automatic retries after three attempts, retaining the latest request for the next submission. Status snapshots omit process environment and command arguments. The queue lives for the Blender process; exiting Blender before it drains can lose a pending request.
+
+Exports use a kernel-owned advisory lock in `.blend_sync.process.lock`. The lock file remains in place, and ownership releases automatically on process exit, including crashes. An existing `.blend_sync.lock` belongs to an older bridge version: wait for that sync to finish, or verify it has exited before removing its stale marker. Do not run older and newer bridge versions concurrently against the same cache.
+
 External resources come from Blender's path inventory, including linked libraries and their resources. Unpacked files are content-hashed; packed resources are covered by the `.blend` hash. Numbered image sequences and tiled textures track matching filenames as well as content, so added or removed files invalidate reuse. Missing resources, unrecognized directories, and unsupported sequence paths cannot be reused. Old caches without this contract require one fresh export. The worker checks that code, runtime, and dependencies remain unchanged through export before declaring the stage complete.
 
 ## Home graph

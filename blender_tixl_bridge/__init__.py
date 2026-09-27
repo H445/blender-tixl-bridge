@@ -12,18 +12,23 @@ bl_info = {
 
 import os
 import subprocess
+import sys
 import time
+import types
 import uuid
 from pathlib import Path
 
 import bpy
 from .source.sync_metrics import RunMetrics, count, phase
+from .source.sync_queue import LatestRequestQueue, get_or_create_queue
 from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
 ROOT = Path(__file__).resolve().parent
 SYNC = ROOT / "source" / "blend_sync.py"
 CAPABILITY_SCRIPT = Path(".agents") / "capability_automation.py"
+_SYNC_QUEUE_KEY = "tixl_bridge.latest_request_queue.v1"
+_SYNC_RUNTIME_MODULE = "_tixl_bridge_sync_runtime_v1"
 
 
 def settings():
@@ -110,6 +115,66 @@ def queue_capability_refresh(force=False, metrics_env=None):
     return True, f"Agent capability refresh queued; log: {log}"
 
 
+def _launch_sync_request(request):
+    """Launch one sync child when the per-source queue makes it active."""
+    output = Path(request["logPath"]).open("a", encoding="utf-8")
+    try:
+        env = dict(request["env"])
+        with RunMetrics(Path(request["metricsDirectory"]), "queue", request["runId"]) as run:
+            env.update(run.environment())
+            env["TIXL_SYNC_QUEUED_AT"] = str(request["queuedAt"])
+            with phase("discovery_launch"):
+                queue_capability_refresh(metrics_env=env)
+            with phase("queue"):
+                child = subprocess.Popen(request["command"], cwd=request["cwd"], env=env,
+                                         stdout=output, stderr=subprocess.STDOUT,
+                                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                                         close_fds=True)
+                count("orchestratorProcesses")
+        return child
+    finally:
+        output.close()
+
+
+def _sync_queue():
+    """Get the queue retained across add-on reloads and .blend file loads."""
+    runtime = sys.modules.get(_SYNC_RUNTIME_MODULE)
+    if runtime is None:
+        runtime = types.ModuleType(_SYNC_RUNTIME_MODULE)
+        sys.modules[_SYNC_RUNTIME_MODULE] = runtime
+    return get_or_create_queue(runtime.__dict__, _SYNC_QUEUE_KEY,
+                               lambda: LatestRequestQueue(_launch_sync_request, max_launch_attempts=3))
+
+
+def _poll_sync_queue():
+    runtime = sys.modules.get(_SYNC_RUNTIME_MODULE)
+    queue = runtime.__dict__.get(_SYNC_QUEUE_KEY) if runtime else None
+    if queue is None:
+        return None
+    if queue.poll():
+        return 0.5
+    # Keep the manager in a private runtime module, but let Blender discard
+    # this timer when all children and retryable requests have drained.
+    queue.timer_registered = False
+    return None
+
+
+def _ensure_sync_queue_timer(queue):
+    runtime = sys.modules.get(_SYNC_RUNTIME_MODULE)
+    if runtime is None:
+        return
+    if queue.timer_registered:
+        return
+    callback = runtime.__dict__.get("timer_callback")
+    if callback and bpy.app.timers.is_registered(callback):
+        queue.timer_registered = True
+        return
+    callback = callback or _poll_sync_queue
+    runtime.__dict__["timer_callback"] = callback
+    bpy.app.timers.register(callback, first_interval=0.1, persistent=True)
+    queue.timer_registered = True
+
+
 def refresh_after_register():
     ok, message = queue_capability_refresh()
     print(f"TiXL Bridge: {message}")
@@ -131,26 +196,32 @@ def queue_sync():
         return False, "Set the TiXL operator project and Editor folder in add-on preferences"
     logdir = blend.parent / ".tixl_cache" / blend.stem / "sync_logs"
     logdir.mkdir(parents=True, exist_ok=True)
-    output = (logdir / "latest.log").open("a", encoding="utf-8")
     env = dict(os.environ)
     env.update(TIXL_BRIDGE_OPERATOR_PROJECT=str(project), TIXL_BRIDGE_EDITOR=str(editor),
                TIXL_BRIDGE_BLENDER=bpy.app.binary_path,
                TIXL_BRIDGE_MODE=prefs.connection_mode.lower(),
                TIXL_BRIDGE_PORT=str(prefs.debug_port))
-    try:
-        with RunMetrics(logdir.parent / "sync_metrics", "queue", uuid.uuid4().hex) as run:
-            env.update(run.environment())
-            env["TIXL_SYNC_QUEUED_AT"] = str(queued_at)
-            with phase("discovery_launch"):
-                queue_capability_refresh(metrics_env=env)
-            with phase("queue"):
-                subprocess.Popen([str(python), str(SYNC), "sync", "--blend", str(blend)],
-                                 cwd=str(ROOT), env=env, stdout=output, stderr=subprocess.STDOUT,
-                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), close_fds=True)
-                count("orchestratorProcesses")
-    finally:
-        output.close()
-    return True, f"TiXL sync queued; log: {logdir / 'latest.log'}"
+    request = {
+        "source": str(blend.resolve()),
+        "command": [str(python), str(SYNC), "sync", "--blend", str(blend)],
+        "cwd": str(ROOT),
+        "env": env,
+        "queuedAt": queued_at,
+        "runId": uuid.uuid4().hex,
+        "metricsDirectory": str(logdir.parent / "sync_metrics"),
+        "logPath": str(logdir / "latest.log"),
+        "statusPath": str(logdir / "sync_status.json"),
+    }
+    queue = _sync_queue()
+    status = queue.submit(request)
+    _ensure_sync_queue_timer(queue)
+    if status["status"] == "error":
+        return True, (f"TiXL sync request retained after a launch error; status: "
+                      f"{logdir / 'sync_status.json'}; log: {logdir / 'latest.log'}")
+    if status["pending"] is not None:
+        return True, (f"TiXL sync queued behind the active sync; the newest save will run next. "
+                      f"Status: {logdir / 'sync_status.json'}; log: {logdir / 'latest.log'}")
+    return True, f"TiXL sync queued; status: {logdir / 'sync_status.json'}; log: {logdir / 'latest.log'}"
 
 
 @persistent
@@ -221,6 +292,13 @@ class TIXLBRIDGE_PT_scene(bpy.types.Panel):
         self.layout.prop(context.scene, "tixl_bridge_autosync", text="Sync after save")
         self.layout.operator("tixl_bridge.sync_saved_blend")
         self.layout.operator("tixl_bridge.refresh_agent_capabilities")
+        blend = bpy.data.filepath
+        if blend:
+            status = _sync_queue().snapshot(blend)
+            if status:
+                self.layout.label(text=f"Last sync: {status['status']}")
+                if status["pending"]:
+                    self.layout.label(text="A newer saved version is queued")
         self.layout.label(text="The .blend is the source; exports are generated.")
 
 
@@ -243,6 +321,9 @@ def unregister():
         bpy.app.timers.unregister(refresh_after_register)
     if on_save in bpy.app.handlers.save_post:
         bpy.app.handlers.save_post.remove(on_save)
+    # Do not unregister the sync queue timer or terminate its child. The queue
+    # lives in a private sys.modules runtime and remains polled through add-on
+    # unregister/re-register and saved-file loads.
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)
     del bpy.types.Scene.tixl_bridge_autosync

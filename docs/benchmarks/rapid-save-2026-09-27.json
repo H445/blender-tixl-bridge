@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "measuredUtc": "2026-09-27T03:32:20Z",
+  "scope": "shared add-on queue; five saves with later revisions submitted after first export start; private no-install cache, editor transport excluded",
+  "runtime": {
+    "blenderVersion": "5.2.2 LTS",
+    "blenderBuildHash": "d13f752e3b9c",
+    "pythonVersion": "3.13.13 (main, May  8 2026, 12:37:03) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "win32"
+  },
+  "result": {
+    "latestSourceAccepted": true,
+    "rejectedSaveCount": 1,
+    "submittedRequestCount": 5,
+    "cliProcessCount": 2,
+    "peakActiveCliProcesses": 1,
+    "coalescedRequestCount": 3,
+    "workerProcessCount": 2
+  },
+  "requests": [
+    {
+      "request": 1,
+      "exitCode": 1,
+      "workerProcesses": 1,
+      "status": "failed"
+    },
+    {
+      "request": 5,
+      "exitCode": 0,
+      "workerProcesses": 1,
+      "status": "passed"
+    }
+  ]
+}

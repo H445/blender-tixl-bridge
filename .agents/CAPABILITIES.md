@@ -6,7 +6,7 @@
 
 | Source | Status | Evidence |
 | --- | --- | --- |
-| Bridge checkout | complete | add-on 1.3.1; source SHA-256 `38d9a48b1f831e89` |
+| Bridge checkout | complete | add-on 1.3.1; source SHA-256 `a2392b8f65eaa25a` |
 | Blender installation | complete | Blender 5.2.2 LTS via MCP runtime |
 | Blender runtime via MCP | complete | 5.2.2 LTS |
 | Blender MCP | complete | 1 tool; Blender MCP TCP extension 1.0.3 |

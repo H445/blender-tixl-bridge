@@ -46,29 +46,17 @@ def digest(path: Path) -> str:
 
 @contextmanager
 def export_lock(cache: Path):
-    cache.mkdir(parents=True, exist_ok=True)
-    path = cache / ".blend_sync.lock"
-    deadline = time.time() + 2 * 3600
+    from process_lock import process_lock
     with phase("queue_wait"):
-        while True:
-            try:
-                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
-                break
-            except FileExistsError:
-                # Saves made during a bake queue behind it. Each queued process
-                # rechecks the latest saved source after acquiring the lock.
-                if time.time() - path.stat().st_mtime > 6 * 3600:
-                    path.unlink()
-                elif time.time() >= deadline:
-                    raise TimeoutError(f"Timed out waiting for TiXL sync: {cache}")
-                else:
-                    time.sleep(2)
+        lock = process_lock(cache / ".blend_sync.process.lock")
+        lock.__enter__()
     try:
-        with os.fdopen(fd, "w") as stream:
-            stream.write(f"pid={os.getpid()} started={time.time()}\n")
+        if (cache / ".blend_sync.lock").exists():
+            raise RuntimeError("An older-version sync lock remains. Wait for that sync to finish; "
+                               "if it has exited, remove .blend_sync.lock before retrying.")
         yield
     finally:
-        path.unlink(missing_ok=True)
+        lock.__exit__(None, None, None)
 
 
 def profile_for(blend: Path, requested: str) -> str:
