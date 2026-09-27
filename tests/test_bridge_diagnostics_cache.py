@@ -17,9 +17,11 @@ import bridge_diagnostics as diagnostics
 
 class BridgeDiagnosticsCacheTest(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        # Windows runners keep TEMP and the checkout on different drives.
+        # These fixtures explicitly test paths relative to the checkout.
+        self.temporary = tempfile.TemporaryDirectory(dir=Path.cwd())
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.source = self.root / "scene.blend"
         self.source.write_bytes(b"authored scene snapshot")
         self.cache = self.root / "cache"
