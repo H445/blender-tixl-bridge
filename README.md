@@ -19,7 +19,13 @@ Save a Blender scene and turn it into an editable TiXL project. Blender remains 
 
 ## Quick start on Windows
 
-You need Blender 4.3 or newer, a TiXL Editor build, a TiXL-created C# operator project, and the .NET SDK. The current release is tested with Blender 5.2.2 LTS and TiXL 4.3.0.2.
+Before installing the bridge:
+
+- Install Blender 4.3 or newer, complete its first launch, and install and enable the official Blender MCP extension.
+- Install TiXL, complete its welcome and username/root-namespace setup, and create a dedicated TiXL C# operator project.
+- Install the .NET SDK required by TiXL.
+
+The current release is tested with Blender 5.2.2 LTS and TiXL 4.3.0.2.
 
 1. Run `python build_addon_zip.py`.
 2. In Blender, install `blender_tixl_bridge.zip` from **Preferences → Add-ons → Install from Disk** and enable **Prismal Labs Blender → TiXL Bridge**.

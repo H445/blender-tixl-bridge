@@ -5,13 +5,20 @@ This guide covers the human installation and daily workflow for the Blender–Ti
 ## Requirements
 
 - Blender 4.3 or newer.
+- The official Blender MCP extension, installed and enabled in Blender.
 - A TiXL Editor build.
 - The .NET SDK required by that TiXL build.
 - A TiXL-created C# operator project containing a `.csproj`, `Symbols` directory, and valid release metadata.
 
 The current bridge release is tested with Blender 5.2.2 LTS and TiXL 4.3.0.2.
 
-## Complete TiXL's first run
+## Complete application first-run setup
+
+### Blender and Blender MCP
+
+Launch Blender once and complete its first-run splash before installing the bridge. Install and enable the official Blender MCP extension through Blender's Extensions/Add-ons interface, then connect an MCP client and confirm it can read Blender state or execute a harmless Blender Python expression.
+
+### TiXL
 
 Launch TiXL once before configuring the bridge. Choose a short, stable username/root namespace when TiXL asks for one; it becomes part of project namespaces and is difficult to change later. Then create a dedicated operator project in TiXL rather than using its built-in `examples` project.
 
