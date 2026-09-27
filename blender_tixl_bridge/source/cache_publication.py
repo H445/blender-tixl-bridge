@@ -8,6 +8,7 @@ import os
 import re
 import uuid
 from pathlib import Path
+from sync_metrics import count, timed
 
 SCHEMA = 1
 POINTER = "current_generation.json"
@@ -15,11 +16,13 @@ RECOVERY = "previous_generation.json"
 MARKER = "generation_commit.json"
 
 
+@timed("hashing")
 def _hash(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
+            count("hashBytes", len(block))
     return digest.hexdigest()
 
 

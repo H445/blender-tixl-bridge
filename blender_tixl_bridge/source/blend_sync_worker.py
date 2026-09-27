@@ -19,6 +19,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import tixl_animation_export as exporter
 from export_contract import SAMPLE_RATE, build_contract
+from sync_metrics import phase, worker_metrics
 
 
 def args():
@@ -163,8 +164,10 @@ def main():
     runtime = Path(bpy.app.binary_path)
     gltf_root = Path(io_scene_gltf2.__file__).parent
     contract = build_contract(runtime, gltf_root, settings, external_dependency_specs())
-    exporter.export_all(scene)
-    write_camera(scene, "generic", options.staging)
+    with phase("export"):
+        exporter.export_all(scene)
+    with phase("camera_baking"):
+        write_camera(scene, "generic", options.staging)
     if contract != build_contract(runtime, gltf_root, settings, external_dependency_specs()):
         raise RuntimeError("Export code, runtime, or external resources changed during export; retry sync")
     manifest_path = options.staging / "worlds" / "manifest.json"
@@ -176,4 +179,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with worker_metrics():
+        main()

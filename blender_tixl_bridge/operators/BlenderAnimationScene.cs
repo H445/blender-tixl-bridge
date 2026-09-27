@@ -1,11 +1,13 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Numerics;
 using System.Text;
 using System.Text.Json;
 using T3.Core.DataTypes;
+using T3.Core.Logging;
 using T3.Core.Operator;
 using T3.Core.Operator.Attributes;
 using T3.Core.Operator.Interfaces;
@@ -44,6 +46,7 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
 
     public BlenderAnimationScene()
     {
+        RenderStatsCollector.RegisterProvider(_stats);
         Result.UpdateAction = Update;
         OpaqueResult.UpdateAction = Update;
         TransparentResult.UpdateAction = Update;
@@ -53,6 +56,8 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
         MaterialValues.UpdateAction = Update;
         MeshShapeKeyValues.UpdateAction = Update;
     }
+
+    private readonly RuntimeStats _stats = new();
 
     private void Update(EvaluationContext context)
     {
@@ -119,6 +124,13 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
 
     private void Initialize(SceneSetup scene, string requestedPath, string requestedGlbPath)
     {
+        var started = Stopwatch.GetTimestamp();
+        try { InitializeCore(scene, requestedPath, requestedGlbPath); }
+        finally { _stats.SceneLoad(Stopwatch.GetTimestamp() - started); }
+    }
+
+    private void InitializeCore(SceneSetup scene, string requestedPath, string requestedGlbPath)
+    {
         ReleaseMorphs();
         _scene = scene;
         _requestedPath = requestedPath;
@@ -183,7 +195,7 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
                 missing++;
             if (morphMeshes.TryGetValue(name, out var meshes) && primitive < meshes.Count && meshes[primitive].Targets.Length > 0)
             {
-                binding.Morph = new MorphBinding(dispatch, meshes[primitive], morphTrack, weightCount);
+                binding.Morph = new MorphBinding(dispatch, meshes[primitive], morphTrack, weightCount, _stats);
                 weightCount += meshes[primitive].Targets.Length;
             }
             _bindings[i] = binding;
@@ -192,7 +204,7 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
                 channels.Materials.TryGetValue(dispatch.Material.Name, out var materialTrack);
                 materialDefaults.TryGetValue(dispatch.Material.Name, out var defaults);
                 if (materialTrack != null)
-                    materials.Add(new MaterialBinding(dispatch.Material, materialTrack, defaults));
+                    materials.Add(new MaterialBinding(dispatch.Material, materialTrack, defaults, _stats));
             }
         }
         _materials = materials.ToArray();
@@ -359,8 +371,56 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             ReleaseMorphs();
+            RenderStatsCollector.UnregisterProvider(_stats);
+        }
         base.Dispose(disposing);
+    }
+
+    private sealed class RuntimeStats : IRenderStatsProvider
+    {
+        private int _morphUploads, _materialUploads, _sceneLoads;
+        private long _morphBytes, _materialBytes, _loadUs;
+        private long _totalMorphUploads, _totalMaterialUploads, _totalMorphBytes, _totalMaterialBytes;
+        private long _totalSceneLoads, _totalLoadUs;
+        public void MorphUpload(int vertices)
+        {
+            _morphUploads++; _totalMorphUploads++;
+            var bytes = (long)vertices * PbrVertex.Stride;
+            _morphBytes += bytes; _totalMorphBytes += bytes;
+        }
+        public void MaterialUpload()
+        {
+            _materialUploads++; _totalMaterialUploads++;
+            _materialBytes += PbrMaterial.PbrParameters.Stride;
+            _totalMaterialBytes += PbrMaterial.PbrParameters.Stride;
+        }
+        public void SceneLoad(long elapsedTicks)
+        {
+            _sceneLoads++; _totalSceneLoads++;
+            var microseconds = elapsedTicks * 1_000_000 / Stopwatch.Frequency;
+            _loadUs += microseconds; _totalLoadUs += microseconds;
+        }
+        private static int Bound(long value) => (int)Math.Min(int.MaxValue, value);
+        public IEnumerable<(string, int)> GetStats()
+        {
+            yield return ("Blender scene loads", _sceneLoads);
+            yield return ("Blender scene load us", Bound(_loadUs));
+            yield return ("Blender cumulative scene loads", Bound(_totalSceneLoads));
+            yield return ("Blender cumulative scene load us", Bound(_totalLoadUs));
+            yield return ("Blender morph uploads", _morphUploads);
+            yield return ("Blender material uploads", _materialUploads);
+            yield return ("Blender upload bytes", Bound(_morphBytes + _materialBytes));
+            yield return ("Blender cumulative morph uploads", Bound(_totalMorphUploads));
+            yield return ("Blender cumulative material uploads", Bound(_totalMaterialUploads));
+            yield return ("Blender cumulative upload bytes", Bound(_totalMorphBytes + _totalMaterialBytes));
+        }
+        public void StartNewFrame()
+        {
+            _morphUploads = _materialUploads = _sceneLoads = 0;
+            _morphBytes = _materialBytes = _loadUs = 0;
+        }
     }
 
     private sealed class Binding
@@ -428,7 +488,8 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
         private readonly PbrMaterial _material;
         private readonly MaterialTrack _track;
         private readonly MaterialDefaults? _defaults;
-        public MaterialBinding(PbrMaterial material, MaterialTrack track, MaterialDefaults? defaults) { _material = material; _track = track; _defaults = defaults; }
+        private readonly RuntimeStats _stats;
+        public MaterialBinding(PbrMaterial material, MaterialTrack track, MaterialDefaults? defaults, RuntimeStats stats) { _material = material; _track = track; _defaults = defaults; _stats = stats; }
         public void Apply(int frame)
         {
             var p = _material.Parameters;
@@ -445,6 +506,7 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
             p.BaseColor = color;
             _material.Parameters = p;
             _material.UpdateParameterBuffer();
+            _stats.MaterialUpload();
         }
     }
 
@@ -548,9 +610,11 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
         private BufferWithViews? _vertexBuffer = new();
         private bool _uploaded;
 
-        public MorphBinding(SceneSetup.SceneDrawDispatch dispatch, MorphMesh mesh, MorphTrack? track, int weightOffset)
+        private readonly RuntimeStats _stats;
+        public MorphBinding(SceneSetup.SceneDrawDispatch dispatch, MorphMesh mesh, MorphTrack? track, int weightOffset, RuntimeStats stats)
         {
             _dispatch = dispatch; _mesh = mesh; _track = track; _weightOffset = weightOffset;
+            _stats = stats;
             _vertices = new PbrVertex[mesh.Base.Length];
             _lastWeights = new float[mesh.Targets.Length];
             _originalBuffers = dispatch.MeshBuffers;
@@ -612,6 +676,7 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
                 vertex.Bitangent = Vector3.Cross(vertex.Normal, vertex.Tangent) * sign;
             }
             ResourceManager.SetupBufferWithViews(_vertices, ref _vertexBuffer);
+            _stats.MorphUpload(_vertices.Length);
             _ownedWrapper.VertexBuffer = _vertexBuffer!;
             _dispatch.MeshBuffers = _ownedWrapper;
             _uploaded = true;

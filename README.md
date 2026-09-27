@@ -48,6 +48,7 @@ The first build creates a TiXL project beside the operator project. After that, 
 - [Setup and usage guide](docs/USER_GUIDE.md) — first run, installation, connection modes, multi-world scenes, updates, and troubleshooting.
 - [Agentic workspace workflow](docs/AGENTIC_WORKFLOW.md) — when to use the repository as an agent workspace and what it improves.
 - [Bridge reference](docs/BRIDGE_REFERENCE.md) — transferred data, generated files, graph ownership, editable operator paths, and limitations.
+- [Validation and benchmarks](docs/VALIDATION.md) — regression checks, phase measurements, and performance baselines.
 - [BlendShapeExample](examples/README.md) — bundled scene and rendered results.
 - [Agent installation and operation guide](.agents/README.md) — required workflow for Claude, Codex, and other AI agents.
 

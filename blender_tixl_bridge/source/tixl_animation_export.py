@@ -315,15 +315,18 @@ def export_world(scene, world, coll_name):
 
 
 def export_all(scene=None):
+    from sync_metrics import phase
     scene = scene or bpy.context.scene
     OUT.mkdir(parents=True, exist_ok=True)
     # Preserve the .blend frame rate; source frames are resampled at 60 Hz.
     set_output_frame(scene, 1)
-    exported = [export_world(scene, w, c) for w, c in WORLD_COLLECTIONS.items()]
+    with phase("geometry_export"):
+        exported = [export_world(scene, w, c) for w, c in WORLD_COLLECTIONS.items()]
     manifests = [m for m,r in exported]
     if "--geometry-only" not in sys.argv:
-        jobs = [prepare_cache(m["world"],r,scene) for m,r in exported]
-        bake_all(scene,jobs)
+        with phase("animation_baking"):
+            jobs = [prepare_cache(m["world"],r,scene) for m,r in exported]
+            bake_all(scene,jobs)
     else:
         for m,records in exported:
             old=json.loads((OUT/f"{m['world']}_animation.json").read_text())

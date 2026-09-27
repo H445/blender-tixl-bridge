@@ -22,6 +22,7 @@ from contextlib import contextmanager
 from collections import Counter
 from pathlib import Path
 from cache_publication import active_root, generation_root, read_manifest, publish_generation
+from sync_metrics import count, current_run, measured_sync, phase, timed
 
 ROOT = Path(__file__).resolve().parents[1]
 BLENDER = Path(os.environ.get("TIXL_BRIDGE_BLENDER", shutil.which("blender") or "blender"))
@@ -33,11 +34,13 @@ if MODE not in {"auto", "offline", "debug"}:
     raise ValueError(f"Unknown TiXL bridge mode: {MODE}")
 
 
+@timed("hashing")
 def digest(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             h.update(block)
+            count("hashBytes", len(block))
     return h.hexdigest()
 
 
@@ -46,19 +49,20 @@ def export_lock(cache: Path):
     cache.mkdir(parents=True, exist_ok=True)
     path = cache / ".blend_sync.lock"
     deadline = time.time() + 2 * 3600
-    while True:
-        try:
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
-            break
-        except FileExistsError:
-            # Saves made during a bake queue behind it. Each queued process
-            # rechecks the latest saved source after acquiring the lock.
-            if time.time() - path.stat().st_mtime > 6 * 3600:
-                path.unlink()
-            elif time.time() >= deadline:
-                raise TimeoutError(f"Timed out waiting for TiXL sync: {cache}")
-            else:
-                time.sleep(2)
+    with phase("queue_wait"):
+        while True:
+            try:
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+                break
+            except FileExistsError:
+                # Saves made during a bake queue behind it. Each queued process
+                # rechecks the latest saved source after acquiring the lock.
+                if time.time() - path.stat().st_mtime > 6 * 3600:
+                    path.unlink()
+                elif time.time() >= deadline:
+                    raise TimeoutError(f"Timed out waiting for TiXL sync: {cache}")
+                else:
+                    time.sleep(2)
     try:
         with os.fdopen(fd, "w") as stream:
             stream.write(f"pid={os.getpid()} started={time.time()}\n")
@@ -77,6 +81,7 @@ def cache_for(blend: Path, profile: str, requested: Path | None) -> Path:
     return blend.parent / ".tixl_cache" / blend.stem
 
 
+@timed("cache_validation")
 def cached_manifest(cache: Path, sha: str, blender: Path | None = None) -> dict | None:
     from export_contract import valid_contract
     try:
@@ -96,6 +101,7 @@ def cached_manifest(cache: Path, sha: str, blender: Path | None = None) -> dict 
             for pass_name in world["glbs"]:
                 if not (data / "worlds" / f"{name}_{pass_name}.glb").is_file():
                     return None
+        count("cacheBytes", sum(p.stat().st_size for p in data.rglob("*") if p.is_file()))
         return manifest
     except (ValueError, KeyError, OSError, TypeError):
         return None
@@ -104,6 +110,7 @@ def cached_manifest(cache: Path, sha: str, blender: Path | None = None) -> dict 
 def valid_cache(cache: Path, sha: str, blender: Path | None = None) -> bool:
     return cached_manifest(cache, sha, blender) is not None
 
+@timed("validation")
 def validate_stage(stage: Path, sha: str, blender: Path | None = None) -> dict:
     from export_contract import valid_contract
     from cache_validation import validate_export_payload
@@ -151,6 +158,7 @@ def validate_stage(stage: Path, sha: str, blender: Path | None = None) -> dict:
     return manifest
 
 
+@timed("publication")
 def publish(stage: Path, cache: Path, manifest: dict, profile: str,
             source: Path | None = None, expected_sha: str | None = None) -> dict:
     return publish_generation(stage, cache, manifest, profile, source, expected_sha)
@@ -176,6 +184,7 @@ def require_editor_closed() -> None:
             "then retry sync. The bridge will not close or terminate TiXL.")
 
 
+@timed("application_start")
 def start_editor(debug: bool = False) -> bool:
     if os.environ.get("TIXL_BRIDGE_LAUNCH_EDITOR", "1") == "0":
         return False
@@ -202,6 +211,7 @@ def bridge_available() -> bool:
         return False
 
 
+@timed("transport_wait")
 def wait_for_editor_pause() -> None:
     """Keep changed cache files and symbols off TiXL's realtime path."""
     if not editor_running():
@@ -244,6 +254,7 @@ def open_project(name: str) -> None:
     pin_home_output(name)
 
 
+@timed("activation")
 def open_project_when_ready(name: str) -> None:
     last_error = None
     for _ in range(45):
@@ -302,7 +313,8 @@ def verify_project_graph(name: str, home_state: dict | None = None, live_states:
     local_symbols = {_read_tixl_json(path)["Id"].lower(): path for path in sorted(symbols.rglob("*.t3"))}
     expected_files = [home]
     visited = set()
-    bridge_call("pumpFrames", count=3)
+    with phase("first_evaluation"):
+        bridge_call("pumpFrames", count=3)
     for path in expected_files:
         expected = _read_tixl_json(path)
         symbol_id = expected["Id"].lower()
@@ -348,6 +360,7 @@ def verify_project_graph(name: str, home_state: dict | None = None, live_states:
                 expected_files.append(local_symbols[referenced])
 
 
+@timed("graph_installation")
 def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refresh_runtime: bool = False) -> None:
     from blend_sync_graph import generate
     # A parent TiXL project can watch generated C# inside this checkout.
@@ -424,9 +437,11 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
         before = capture_project_graph(project_state["name"])
         if needs_copy:
             install_operators()
-            bridge_call("reload", project=csproj.stem)
+            with phase("activation"):
+                bridge_call("reload", project=csproj.stem)
         ensure_generic_project(blend, cache, files, build=False, manifest=manifest)
-        bridge_call("reload", project=project_state["name"])
+        with phase("activation"):
+            bridge_call("reload", project=project_state["name"])
         # Reload must preserve the current composition, selection and output
         # pin. Reopening can discard unsaved graph edits, even on a data sync.
         verify_project_graph(project_state["name"], live_states=before)
@@ -436,8 +451,7 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
     try:
         if needs_copy:
             install_operators()
-            subprocess.run(["dotnet", "build", str(csproj),
-                            f"-p:T3_ASSEMBLY_PATH={TIXL_EDITOR}", "--nologo"], check=True)
+            build_project(csproj)
         ensure_generic_project(blend, cache, files, manifest=manifest)
         success = True
     finally:
@@ -446,6 +460,13 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
             if started and success and wants_debug:
                 project = json.loads((cache / "tixl_project.json").read_text(encoding="utf-8"))
                 open_project_when_ready(project["name"])
+
+
+@timed("build")
+def build_project(csproj: Path) -> None:
+    count("buildProcesses")
+    subprocess.run(["dotnet", "build", str(csproj),
+                    f"-p:T3_ASSEMBLY_PATH={TIXL_EDITOR}", "--nologo"], check=True)
 
 
 def ensure_generic_project(blend: Path, cache: Path, files: list[Path], build: bool = True,
@@ -476,12 +497,12 @@ def ensure_generic_project(blend: Path, cache: Path, files: list[Path], build: b
     from cache_bindings import rebind_project_paths
     rebind_project_paths(path, cache, manifest["generation"])
     if build:
-        subprocess.run(["dotnet", "build", str(next(path.glob("*.csproj"))),
-                        f"-p:T3_ASSEMBLY_PATH={TIXL_EDITOR}", "--nologo"], check=True)
+        build_project(next(path.glob("*.csproj")))
     marker.write_text(json.dumps({"name": name, "path": str(path), "source_blend": str(blend),
                                   "graph_sha256": graph_sha}, indent=2), encoding="utf-8")
 
 
+@measured_sync
 def sync(blend: Path, requested_profile: str, requested_cache: Path | None,
          blender: Path, force: bool, install: bool) -> dict:
     blend = blend.resolve()
@@ -514,14 +535,20 @@ def sync(blend: Path, requested_profile: str, requested_cache: Path | None,
         cmd = [str(blender), "--background", str(blend), "--python", str(ROOT / "source" / "blend_sync_worker.py"),
                "--", "--staging", str(stage)]
         log = stage / "export.log"
-        with log.open("w", encoding="utf-8") as output:
-            completed = subprocess.run(cmd, stdout=output, stderr=subprocess.STDOUT)
-        if completed.returncode or "BLEND_SYNC_STAGE_COMPLETE" not in log.read_text(encoding="utf-8", errors="replace"):
-            raise RuntimeError(f"Blender export failed; prior cache retained. See {log}")
+        env = dict(os.environ)
+        env.update(current_run().environment())
+        count("blenderProcesses")
+        with phase("blender_process"):
+            with log.open("w", encoding="utf-8") as output:
+                completed = subprocess.run(cmd, stdout=output, stderr=subprocess.STDOUT, env=env)
+            if completed.returncode or "BLEND_SYNC_STAGE_COMPLETE" not in log.read_text(encoding="utf-8", errors="replace"):
+                raise RuntimeError(f"Blender export failed; prior cache retained. See {log}")
         manifest = validate_stage(stage, sha, blender)
         wait_for_editor_pause()
         manifest = publish(stage, cache, manifest, profile, blend, sha)
-        log = generation_root(cache, manifest["generation"]) / "export.log"
+        data = generation_root(cache, manifest["generation"])
+        log = data / "export.log"
+        count("cacheBytes", sum(p.stat().st_size for p in data.rglob("*") if p.is_file()))
         generic_finish(blend, cache, manifest, install, refresh_runtime=True)
         return {"status": "rebuilt", "blend": str(blend), "cache": str(cache),
                 "profile": profile, "worlds": len(manifest["worlds"]), "log": str(log)}

@@ -12,9 +12,12 @@ bl_info = {
 
 import os
 import subprocess
+import time
+import uuid
 from pathlib import Path
 
 import bpy
+from .source.sync_metrics import RunMetrics, count, phase
 from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
@@ -60,7 +63,7 @@ def tixl_source_for(editor):
     return None
 
 
-def queue_capability_refresh(force=False):
+def queue_capability_refresh(force=False, metrics_env=None):
     """Start a fingerprinted capability refresh without blocking Blender."""
     repository = capability_repository()
     if repository is None:
@@ -73,6 +76,8 @@ def queue_capability_refresh(force=False):
     if force:
         command.append("--force")
     env = dict(os.environ)
+    if metrics_env:
+        env.update(metrics_env)
     env["BLENDER_EXECUTABLE"] = bpy.app.binary_path
     for enabled_addon in bpy.context.preferences.addons:
         if enabled_addon.module == "mcp" or enabled_addon.module.endswith(".mcp"):
@@ -99,6 +104,7 @@ def queue_capability_refresh(force=False):
                          stderr=subprocess.STDOUT,
                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                          close_fds=True)
+        count("discoveryProcesses")
     finally:
         output.close()
     return True, f"Agent capability refresh queued; log: {log}"
@@ -111,6 +117,7 @@ def refresh_after_register():
 
 
 def queue_sync():
+    queued_at = time.time()
     blend = Path(bpy.data.filepath)
     if not blend.is_file():
         return False, "Save the Blender file first"
@@ -122,7 +129,6 @@ def queue_sync():
     editor = Path(bpy.path.abspath(prefs.editor_directory))
     if not next(project.glob("*.csproj"), None) or not (editor / "TiXL.exe").is_file():
         return False, "Set the TiXL operator project and Editor folder in add-on preferences"
-    queue_capability_refresh()
     logdir = blend.parent / ".tixl_cache" / blend.stem / "sync_logs"
     logdir.mkdir(parents=True, exist_ok=True)
     output = (logdir / "latest.log").open("a", encoding="utf-8")
@@ -132,9 +138,16 @@ def queue_sync():
                TIXL_BRIDGE_MODE=prefs.connection_mode.lower(),
                TIXL_BRIDGE_PORT=str(prefs.debug_port))
     try:
-        subprocess.Popen([str(python), str(SYNC), "sync", "--blend", str(blend)],
-                         cwd=str(ROOT), env=env, stdout=output, stderr=subprocess.STDOUT,
-                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), close_fds=True)
+        with RunMetrics(logdir.parent / "sync_metrics", "queue", uuid.uuid4().hex) as run:
+            env.update(run.environment())
+            env["TIXL_SYNC_QUEUED_AT"] = str(queued_at)
+            with phase("discovery_launch"):
+                queue_capability_refresh(metrics_env=env)
+            with phase("queue"):
+                subprocess.Popen([str(python), str(SYNC), "sync", "--blend", str(blend)],
+                                 cwd=str(ROOT), env=env, stdout=output, stderr=subprocess.STDOUT,
+                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), close_fds=True)
+                count("orchestratorProcesses")
     finally:
         output.close()
     return True, f"TiXL sync queued; log: {logdir / 'latest.log'}"

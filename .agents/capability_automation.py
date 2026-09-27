@@ -797,7 +797,14 @@ def main() -> int:
         print(json.dumps(read_json(state_path, {"status": "not yet checked"}), indent=2, sort_keys=True))
         return 0
     if options.action == "once":
-        print(json.dumps(run_once(config_path, options.force), indent=2, sort_keys=True))
+        sys.path.insert(0, str(REPOSITORY / "blender_tixl_bridge" / "source"))
+        from sync_metrics import phase, worker_metrics
+        with worker_metrics("discovery") as metrics:
+            with phase("discovery"):
+                result = run_once(config_path, options.force)
+            if metrics is not None:
+                metrics.report["resultStatus"] = "skipped" if result.get("skipped") else ("rebuilt" if result.get("changed") else "unchanged")
+        print(json.dumps(result, indent=2, sort_keys=True))
         return 0
     return 0
 

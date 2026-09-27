@@ -4,6 +4,7 @@ import json
 import re
 import uuid
 from pathlib import Path
+from sync_metrics import timed
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "templates"
@@ -18,6 +19,7 @@ def _write_if_changed(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+@timed("graph_generation")
 def generate(blend: Path, cache: Path, manifest: dict) -> list[Path]:
     from cache_publication import verify_generation
     data = verify_generation(cache, manifest["generation"]) if "generation" in manifest else cache

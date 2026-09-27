@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Any
+from sync_metrics import count, timed
 
 EXPORT_SCHEMA = 1
 SAMPLE_RATE = 60
@@ -18,11 +19,13 @@ _EXPORT_SOURCES = (
 )
 
 
+@timed("hashing")
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(_CHUNK_SIZE), b""):
             digest.update(block)
+            count("hashBytes", len(block))
     return digest.hexdigest()
 
 
