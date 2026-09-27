@@ -17,6 +17,12 @@ The authored `.blend` stays in place. Generated data, logs, manifests, camera sa
 
 Sync replaces generated import data but preserves the user-owned project home, TimeClips, supported timing wires, editable mesh and texture routes, node positions, and render graph. If Blender adds or removes worlds, update the corresponding user-owned scene branches deliberately. Older home symbols replaced during migration are backed up under `project_backups/` in the cache.
 
+## Export cache validity
+
+Cache reuse requires the saved `.blend` hash and a versioned export contract. The contract fingerprints exporter/worker code, the Blender executable, glTF exporter scripts, and the fixed 60 Hz export configuration. Saved scene settings are covered by the `.blend` hash and recorded in the contract. Graph templates and TiXL operator builds use separate fingerprints; editing a graph or operator does not invalidate exported geometry by itself.
+
+External resources come from Blender's path inventory, including linked libraries and their resources. Unpacked files are content-hashed; packed resources are covered by the `.blend` hash. Numbered image sequences and tiled textures track matching filenames as well as content, so added or removed files invalidate reuse. Missing resources, unrecognized directories, and unsupported sequence paths cannot be reused. Old caches without this contract require one fresh export. The worker checks that code, runtime, and dependencies remain unchanged through export before declaring the stage complete.
+
 ## Home graph
 
 The generated home has one row per world and a shared world switch and render chain. This zoomed view shows one world's animation, mesh, and texture path:

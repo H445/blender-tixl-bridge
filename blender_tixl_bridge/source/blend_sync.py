@@ -76,13 +76,16 @@ def cache_for(blend: Path, profile: str, requested: Path | None) -> Path:
     return blend.parent / ".tixl_cache" / blend.stem
 
 
-def valid_cache(cache: Path, sha: str) -> bool:
+def valid_cache(cache: Path, sha: str, blender: Path | None = None) -> bool:
+    from export_contract import valid_contract
     manifest_path = cache / "worlds" / "manifest.json"
     if not manifest_path.is_file() or not (cache / "camera_60hz.bin").is_file():
         return False
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if manifest.get("source_sha256") != sha:
+            return False
+        if not valid_contract(manifest.get("export_contract"), blender or BLENDER):
             return False
         for world in manifest["worlds"]:
             name = world["world"]
@@ -97,11 +100,14 @@ def valid_cache(cache: Path, sha: str) -> bool:
         return False
 
 
-def validate_stage(stage: Path, sha: str) -> dict:
+def validate_stage(stage: Path, sha: str, blender: Path | None = None) -> dict:
+    from export_contract import valid_contract
     worlds = stage / "worlds"
     manifest = json.loads((worlds / "manifest.json").read_text(encoding="utf-8"))
     if manifest["source_sha256"] != sha or not manifest["worlds"]:
         raise ValueError("The staged export does not match the saved Blender file")
+    if not valid_contract(manifest.get("export_contract"), blender or BLENDER, require_reusable=False):
+        raise ValueError("The staged export contract is stale or invalid")
     for world in manifest["worlds"]:
         name = world["world"]
         binary = worlds / f"{name}_animation.bin"
@@ -500,7 +506,7 @@ def sync(blend: Path, requested_profile: str, requested_cache: Path | None,
     sha = digest(blend)
     if stat_before != (blend.stat().st_size, blend.stat().st_mtime_ns):
         raise RuntimeError("Blender save was still changing; retry sync shortly")
-    if not force and valid_cache(cache, sha):
+    if not force and valid_cache(cache, sha, blender):
         generic_finish(blend, cache, json.loads((cache / "worlds" / "manifest.json").read_text()), install)
         return {"status": "up_to_date", "blend": str(blend), "cache": str(cache), "profile": profile}
     if not blender.is_file():
@@ -511,7 +517,7 @@ def sync(blend: Path, requested_profile: str, requested_cache: Path | None,
         sha = digest(blend)
         if stable != (blend.stat().st_size, blend.stat().st_mtime_ns):
             raise RuntimeError("Blender save changed during sync; retry on the next save")
-        if not force and valid_cache(cache, sha):
+        if not force and valid_cache(cache, sha, blender):
             generic_finish(blend, cache, json.loads((cache / "worlds" / "manifest.json").read_text()), install)
             return {"status": "up_to_date", "blend": str(blend), "cache": str(cache), "profile": profile}
         stage = cache / ".staging" / uuid.uuid4().hex
@@ -523,7 +529,7 @@ def sync(blend: Path, requested_profile: str, requested_cache: Path | None,
             completed = subprocess.run(cmd, stdout=output, stderr=subprocess.STDOUT)
         if completed.returncode or "BLEND_SYNC_STAGE_COMPLETE" not in log.read_text(encoding="utf-8", errors="replace"):
             raise RuntimeError(f"Blender export failed; prior cache retained. See {log}")
-        manifest = validate_stage(stage, sha)
+        manifest = validate_stage(stage, sha, blender)
         wait_for_editor_pause()
         publish(stage, cache, manifest, profile)
         generic_finish(blend, cache, manifest, install, refresh_runtime=True)
@@ -546,7 +552,7 @@ def main() -> None:
         blend = options.blend.resolve()
         profile = profile_for(blend, options.profile)
         cache = cache_for(blend, profile, options.cache_root)
-        result = {"status": "up_to_date" if valid_cache(cache, digest(blend)) else "stale",
+        result = {"status": "up_to_date" if valid_cache(cache, digest(blend), options.blender) else "stale",
                   "blend": str(blend), "cache": str(cache), "profile": profile}
         print(json.dumps(result, indent=2))
         return
@@ -554,7 +560,7 @@ def main() -> None:
         blend = options.blend.resolve()
         profile = profile_for(blend, options.profile)
         cache = cache_for(blend, profile, options.cache_root)
-        if profile != "generic" or not valid_cache(cache, digest(blend)):
+        if profile != "generic" or not valid_cache(cache, digest(blend), options.blender):
             raise ValueError("Install requires an up-to-date generic Blender cache")
         generic_finish(blend, cache, json.loads((cache / "worlds" / "manifest.json").read_text()), True)
         print(json.dumps({"status": "installed", "blend": str(blend)}))

@@ -6,6 +6,8 @@ staging cache that the host process validates before publishing.
 import argparse
 import json
 import math
+import re
+import os
 import struct
 import sys
 from pathlib import Path
@@ -16,6 +18,7 @@ from mathutils import Vector
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import tixl_animation_export as exporter
+from export_contract import SAMPLE_RATE, build_contract
 
 
 def args():
@@ -105,13 +108,70 @@ def write_camera(scene, profile, staging):
     print(f"CAMERA_COMPLETE {count} samples", flush=True)
 
 
+def external_dependency_specs():
+    """Use Blender's own path inventory, including linked-library resources.
+
+    Packed data is already covered by the saved blend hash. Numbered image
+    sequences/tiles fingerprint their whole matching family, including files
+    added or removed since the last export. Unknown directories cannot reuse
+    an export; they are recorded rather than silently ignored.
+    """
+    specs = {}
+    for value in bpy.utils.blend_paths(absolute=True, packed=False, local=False):
+        if not value:
+            continue
+        # Preserve the declared alias so retargeted links are checked afresh.
+        path = os.path.normpath(value)
+        kind = "file"
+        if "<UDIM>" in path:
+            path = path.replace("<UDIM>", "[0-9]" * 4)
+            kind = "glob"
+        elif "<UVTILE>" in path:
+            path = path.replace("<UVTILE>", "u[0-9]*_v[0-9]*")
+            kind = "glob"
+        elif Path(path).is_dir():
+            kind = "unsupported"
+        specs[path] = {"kind": kind, "path": path}
+    for image in bpy.data.images:
+        if image.source not in {"SEQUENCE", "TILED"}:
+            continue
+        path = os.path.normpath(bpy.path.abspath(image.filepath, library=image.library))
+        if path not in specs:
+            continue  # Packed or already represented by a tile token.
+        match = re.match(r"^(.*?)(\d+)(\.[^.]+)$", Path(path).name)
+        if match:
+            pattern = str(Path(path).with_name(match[1] + "[0-9]" * len(match[2]) + match[3]))
+            specs.pop(path)
+            specs[pattern] = {"kind": "glob", "path": pattern}
+        else:
+            specs[path]["kind"] = "unsupported"
+    return [specs[key] for key in sorted(specs)]
+
+
 def main():
     options = args()
     scene = bpy.context.scene
     options.staging.mkdir(parents=True, exist_ok=True)
+    exporter.FPS = SAMPLE_RATE
     configure(scene, "generic", options.staging)
+    import io_scene_gltf2
+    settings = {"sampleRate": SAMPLE_RATE, "profile": "generic",
+                "sourceFrameStart": scene.frame_start, "sourceFrameEnd": scene.frame_end,
+                "sourceFps": exporter.SOURCE_FPS,
+                "worldCollections": exporter.WORLD_COLLECTIONS,
+                "worldClips": exporter.WORLD_CLIPS}
+    runtime = Path(bpy.app.binary_path)
+    gltf_root = Path(io_scene_gltf2.__file__).parent
+    contract = build_contract(runtime, gltf_root, settings, external_dependency_specs())
     exporter.export_all(scene)
     write_camera(scene, "generic", options.staging)
+    if contract != build_contract(runtime, gltf_root, settings, external_dependency_specs()):
+        raise RuntimeError("Export code, runtime, or external resources changed during export; retry sync")
+    manifest_path = options.staging / "worlds" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["export_contract"] = contract
+    manifest["blender_version"] = bpy.app.version_string
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print("BLEND_SYNC_STAGE_COMPLETE", flush=True)
 
 
