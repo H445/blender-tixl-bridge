@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "scope": "official add-on one-shot triggers through Blender MCP; forced complete baseline, reuse window, two temporary unavailable-port probes, and normal-port restoration; reported worker duration excludes process startup",
+  "freshnessSeconds": 30,
+  "runs": [
+    {
+      "case": "issue7_final_force",
+      "durationSeconds": 2.406598399975337,
+      "startupSeconds": 0.3791055679321289,
+      "resultStatus": "rebuilt",
+      "counters": {
+        "screenStatFiles": 62,
+        "fullRefreshes": 1,
+        "liveMcpProbes": 1,
+        "blenderProbes": 1,
+        "hashBytes": 113687028,
+        "fileHashes": 59,
+        "liveTiXLProbes": 1,
+        "sourceTreeFiles": 55,
+        "stateAndReportWrites": 5,
+        "snapshotRebuilds": 1
+      },
+      "evidence": {
+        "status": "fully verified",
+        "freshnessSeconds": 30,
+        "lastFullyVerifiedUtc": "2026-09-27T04:02:57+00:00",
+        "freshUntilUtc": "2026-09-27T04:03:27+00:00"
+      }
+    },
+    {
+      "case": "issue7_final_cached",
+      "durationSeconds": 0.022872399946209043,
+      "startupSeconds": 0.3678011894226074,
+      "resultStatus": "cached",
+      "counters": {
+        "screenStatFiles": 62,
+        "freshCacheHits": 1
+      },
+      "evidence": {
+        "status": "within bounded freshness window",
+        "ageSeconds": 4.464,
+        "freshnessSeconds": 30,
+        "lastFullyVerifiedUtc": "2026-09-27T04:02:57+00:00",
+        "freshUntilUtc": "2026-09-27T04:03:27+00:00"
+      }
+    },
+    {
+      "case": "issue7_final_retryA",
+      "durationSeconds": 4.104160299990326,
+      "startupSeconds": 0.36196279525756836,
+      "resultStatus": "unchanged",
+      "counters": {
+        "screenStatFiles": 62,
+        "fullRefreshes": 1,
+        "liveMcpProbes": 1,
+        "blenderProbes": 1,
+        "hashBytes": 113687028,
+        "fileHashes": 59,
+        "liveTiXLProbes": 1,
+        "sourceTreeFiles": 55,
+        "stateAndReportWrites": 1
+      },
+      "evidence": {
+        "status": "partial verification; unavailable evidence will be retried",
+        "freshnessSeconds": 30,
+        "lastFullyVerifiedUtc": "2026-09-27T04:02:57+00:00",
+        "freshUntilUtc": "2026-09-27T04:03:27+00:00"
+      }
+    },
+    {
+      "case": "issue7_final_retryB",
+      "durationSeconds": 3.994827600021381,
+      "startupSeconds": 0.35633182525634766,
+      "resultStatus": "unchanged",
+      "counters": {
+        "screenStatFiles": 62,
+        "fullRefreshes": 1,
+        "liveMcpProbes": 1,
+        "blenderProbes": 1,
+        "hashBytes": 113687028,
+        "fileHashes": 59,
+        "liveTiXLProbes": 1,
+        "sourceTreeFiles": 55,
+        "stateAndReportWrites": 1
+      },
+      "evidence": {
+        "status": "partial verification; unavailable evidence will be retried",
+        "freshnessSeconds": 30,
+        "lastFullyVerifiedUtc": "2026-09-27T04:02:57+00:00",
+        "freshUntilUtc": "2026-09-27T04:03:27+00:00"
+      }
+    },
+    {
+      "case": "issue7_final_restored",
+      "durationSeconds": 2.1512543999706395,
+      "startupSeconds": 0.40299487113952637,
+      "resultStatus": "rebuilt",
+      "counters": {
+        "screenStatFiles": 62,
+        "fullRefreshes": 1,
+        "liveMcpProbes": 1,
+        "blenderProbes": 1,
+        "hashBytes": 113687028,
+        "fileHashes": 59,
+        "liveTiXLProbes": 1,
+        "sourceTreeFiles": 55,
+        "stateAndReportWrites": 5,
+        "snapshotRebuilds": 1
+      },
+      "evidence": {
+        "status": "fully verified",
+        "freshnessSeconds": 30,
+        "lastFullyVerifiedUtc": "2026-09-27T04:04:22+00:00",
+        "freshUntilUtc": "2026-09-27T04:04:52+00:00"
+      }
+    }
+  ],
+  "configurationRestored": true
+}

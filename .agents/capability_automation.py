@@ -24,7 +24,7 @@ import tempfile
 import threading
 import time
 import tomllib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -44,8 +44,19 @@ DEFAULT_LOCK = AGENTS_DIR / ".capability-automation.lock"
 DEFAULT_OUTPUT = AGENTS_DIR / "CAPABILITIES.md"
 PROBE_SCRIPT = AGENTS_DIR / "probes" / "blender_runtime_probe.py"
 SCHEMA_VERSION = 1
+CACHE_FRESHNESS_SECONDS = 30
 DEFAULT_BLENDER_MCP_HOST = "127.0.0.1"
 DEFAULT_BLENDER_MCP_PORT = 9876
+_ACTIVE_COUNTERS: dict[str, int] | None = None
+
+
+def increment(name: str, amount: int = 1) -> None:
+    if _ACTIVE_COUNTERS is not None:
+        _ACTIVE_COUNTERS[name] = _ACTIVE_COUNTERS.get(name, 0) + amount
+
+
+def current_counters() -> dict[str, int]:
+    return dict(_ACTIVE_COUNTERS or {})
 
 
 def utc_now() -> str:
@@ -75,6 +86,7 @@ def atomic_write(path: Path, text: str) -> None:
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_text(text, encoding="utf-8", newline="\n")
     temporary.replace(path)
+    increment("stateAndReportWrites")
 
 
 def atomic_write_json(path: Path, value: Any) -> None:
@@ -86,17 +98,22 @@ def sha256_file(path: Path) -> str:
     with path.open("rb") as stream:
         while block := stream.read(1024 * 1024):
             digest.update(block)
+            increment("hashBytes", len(block))
+    increment("fileHashes")
     return digest.hexdigest()
 
 
-def file_evidence(path: Path | None, previous: dict[str, Any] | None = None) -> dict[str, Any]:
+def file_evidence(path: Path | None, previous: dict[str, Any] | None = None,
+                  force_hash: bool = False) -> dict[str, Any]:
     if path is None or not path.is_file():
         return {"status": "missing"}
     resolved = path.resolve()
     stat = resolved.stat()
     quick = {"size": stat.st_size, "mtimeNs": stat.st_mtime_ns}
     previous = previous or {}
-    digest = previous.get("sha256") if all(previous.get(key) == value for key, value in quick.items()) else None
+    digest = (previous.get("sha256") if not force_hash and
+              previous.get("path") == str(resolved) and
+              all(previous.get(key) == value for key, value in quick.items()) else None)
     return {
         "status": "ok",
         "path": str(resolved),
@@ -105,19 +122,27 @@ def file_evidence(path: Path | None, previous: dict[str, Any] | None = None) -> 
     }
 
 
-def tree_evidence(paths: list[Path]) -> dict[str, Any]:
+def tree_evidence(paths: list[Path], previous_files: list[dict[str, Any]] | None = None,
+                  force_hash: bool = False) -> dict[str, Any]:
     digest = hashlib.sha256()
     files = sorted({path.resolve() for path in paths if path.is_file()}, key=lambda path: str(path).lower())
+    previous_by_path = {item.get("path"): item for item in (previous_files or [])
+                        if isinstance(item, dict)}
+    file_rows = []
     for path in files:
+        evidence = file_evidence(path, previous_by_path.get(str(path)), force_hash=force_hash)
         try:
             relative = path.relative_to(REPOSITORY.resolve()).as_posix()
         except ValueError:
             relative = path.name
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(evidence["sha256"].encode("ascii"))
         digest.update(b"\0")
-    return {"status": "ok" if files else "missing", "fileCount": len(files), "sha256": digest.hexdigest()}
+        file_rows.append(evidence)
+    increment("sourceTreeFiles", len(files))
+    return {"status": "ok" if files else "missing", "fileCount": len(files),
+            "sha256": digest.hexdigest(), "_files": file_rows}
 
 
 def command_spec(value: Any) -> dict[str, Any] | None:
@@ -390,11 +415,14 @@ def python_tool(tools: list[dict[str, Any]]) -> tuple[str, str] | None:
 
 
 def _probe_stdio_mcp(config: dict[str, Any], spec: dict[str, Any], previous: dict[str, Any],
-                     previous_runtime: dict[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+                     previous_runtime: dict[str, Any] | None,
+                     force_hash: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    increment("liveMcpProbes")
     command_path = Path(spec["command"][0])
     resolved_command = command_path if command_path.is_file() else Path(shutil.which(spec["command"][0]) or "")
     command_file = file_evidence(resolved_command if resolved_command.is_file() else None,
-                                 previous.get("commandFile") if isinstance(previous, dict) else None)
+                                 previous.get("commandFile") if isinstance(previous, dict) else None,
+                                 force_hash=force_hash)
     client = None
     try:
         client = StdioMcpClient(spec, timeout=float(config.get("mcpTimeoutSeconds", 30)))
@@ -458,7 +486,9 @@ def _tcp_tool_inventory() -> list[dict[str, Any]]:
 
 
 def _probe_tcp_extension(config: dict[str, Any], spec: dict[str, Any], previous: dict[str, Any],
-                         previous_runtime: dict[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+                         previous_runtime: dict[str, Any] | None,
+                         force_hash: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    increment("liveMcpProbes")
     host = spec["host"]
     port = spec["port"]
     try:
@@ -502,18 +532,19 @@ def _probe_tcp_extension(config: dict[str, Any], spec: dict[str, Any], previous:
 
 
 def probe_mcp(config: dict[str, Any], previous: dict[str, Any],
-              previous_runtime: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+              previous_runtime: dict[str, Any] | None = None,
+              force_hash: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None]:
     mcp_config = config.get("blenderMcp", {}) if isinstance(config.get("blenderMcp"), dict) else {}
     transport = str(mcp_config.get("transport") or os.environ.get("BLENDER_MCP_TRANSPORT") or "auto").lower()
     stdio_spec = None if transport == "tcp" else discover_mcp_spec(config)
     stdio_result = None
     if stdio_spec:
-        stdio_result, runtime = _probe_stdio_mcp(config, stdio_spec, previous, previous_runtime)
+        stdio_result, runtime = _probe_stdio_mcp(config, stdio_spec, previous, previous_runtime, force_hash)
         if stdio_result.get("status") == "ok":
             return stdio_result, runtime
     tcp_spec = tcp_extension_spec(config)
     if tcp_spec:
-        tcp_result, runtime = _probe_tcp_extension(config, tcp_spec, previous, previous_runtime)
+        tcp_result, runtime = _probe_tcp_extension(config, tcp_spec, previous, previous_runtime, force_hash)
         if tcp_result.get("status") == "ok" or stdio_result is None:
             return tcp_result, runtime
     if stdio_result is not None:
@@ -554,18 +585,32 @@ def discover_blender_executable(config: dict[str, Any]) -> Path | None:
     return None
 
 
-def probe_blender(config: dict[str, Any], previous: dict[str, Any], runtime: dict[str, Any] | None) -> dict[str, Any]:
-    executable = discover_blender_executable(config)
-    binary = file_evidence(executable, previous.get("binary") if isinstance(previous, dict) else None)
+def probe_blender(config: dict[str, Any], previous: dict[str, Any], runtime: dict[str, Any] | None,
+                  force_hash: bool = False) -> dict[str, Any]:
+    increment("blenderProbes")
     blender_config = config.get("blender", {}) if isinstance(config.get("blender"), dict) else {}
+    configured_executable_values = (
+        blender_config.get("executable"), os.environ.get("BLENDER_EXECUTABLE"),
+        os.environ.get("TIXL_BRIDGE_BLENDER"),
+    )
+    configuration_issues = (["configured Blender executable is missing"]
+                            if any(value and not Path(value).expanduser().is_file()
+                                   for value in configured_executable_values) else [])
+    executable = discover_blender_executable(config)
+    binary = file_evidence(executable, previous.get("binary") if isinstance(previous, dict) else None,
+                           force_hash=force_hash)
     package_id = str(blender_config.get("packageId") or "9PP3C07GTVRH")
     package_version = winget_blender_version(package_id)
     runtime_version = runtime.get("blenderVersion") if isinstance(runtime, dict) else None
     version = runtime_version or package_version
     if binary.get("status") != "ok" and not version:
-        return {"status": "missing", "summary": "Blender executable/package was not discovered", "binary": binary}
+        result = {"status": "missing", "summary": "Blender executable/package was not discovered", "binary": binary}
+        if configuration_issues:
+            result["configurationIssues"] = configuration_issues
+            result["currentlyUnavailable"] = True
+        return result
     source = "MCP runtime" if runtime_version else (f"Windows package {package_id}" if package_version else "executable")
-    return {
+    result = {
         "status": "ok",
         "summary": f"Blender {version or 'version unknown'} via {source}",
         "version": version,
@@ -573,6 +618,10 @@ def probe_blender(config: dict[str, Any], previous: dict[str, Any], runtime: dic
         "binary": binary,
         "runtime": runtime,
     }
+    if configuration_issues:
+        result["configurationIssues"] = configuration_issues
+        result["currentlyUnavailable"] = True
+    return result
 
 
 def discover_tixl_executable(config: dict[str, Any], source: Path | None) -> Path | None:
@@ -589,14 +638,27 @@ def discover_tixl_executable(config: dict[str, Any], source: Path | None) -> Pat
     return None
 
 
-def probe_tixl(config: dict[str, Any], previous: dict[str, Any]) -> tuple[dict[str, Any], Path | None, int]:
+def probe_tixl(config: dict[str, Any], previous: dict[str, Any],
+               force_hash: bool = False) -> tuple[dict[str, Any], Path | None, int]:
+    increment("liveTiXLProbes")
     tixl_config = config.get("tixl", {}) if isinstance(config.get("tixl"), dict) else {}
-    configured_source = Path(tixl_config["source"]).expanduser() if tixl_config.get("source") else None
+    configured_source_value = tixl_config.get("source") or os.environ.get("TIXL_SOURCE")
+    configured_source = Path(configured_source_value).expanduser() if configured_source_value else None
+    configured_executable_value = (tixl_config.get("executable") or os.environ.get("TIXL_EXECUTABLE"))
+    configured_executable = (Path(configured_executable_value).expanduser()
+                             if configured_executable_value else None)
+    configuration_issues = []
+    if configured_source and not (configured_source / rebuild.DEBUG_SERVER_RELATIVE).is_file():
+        configuration_issues.append("configured TiXL source is missing its DebugServer.cs")
+    if configured_executable and not configured_executable.is_file():
+        configuration_issues.append("configured TiXL executable is missing")
     source = rebuild.infer_tixl_source(configured_source)
     executable = discover_tixl_executable(config, source)
-    binary = file_evidence(executable, previous.get("binary") if isinstance(previous, dict) else None)
+    binary = file_evidence(executable, previous.get("binary") if isinstance(previous, dict) else None,
+                           force_hash=force_hash)
     server_file = source / rebuild.DEBUG_SERVER_RELATIVE if source else None
-    server = file_evidence(server_file, previous.get("debugServer") if isinstance(previous, dict) else None)
+    server = file_evidence(server_file, previous.get("debugServer") if isinstance(previous, dict) else None,
+                           force_hash=force_hash)
     port = int(tixl_config.get("port") or os.environ.get("TIXL_BRIDGE_PORT") or 9042)
     live = rebuild.probe_tixl(port)
     last_live = previous.get("live") if isinstance(previous, dict) else None
@@ -610,13 +672,19 @@ def probe_tixl(config: dict[str, Any], previous: dict[str, Any]) -> tuple[dict[s
         status = "ok"
         editor_version = version.get("editorVersion") if isinstance(version, dict) else None
         summary = f"TiXL {editor_version or 'version inferred from binary/source'}"
-    return {
+    result = {
         "status": status,
         "summary": summary,
         "binary": binary,
         "debugServer": server,
         "live": live,
-    }, source, port
+    }
+    if configuration_issues:
+        result["configurationIssues"] = configuration_issues
+        result["currentlyUnavailable"] = True
+    if isinstance(live, dict) and live.get("currentlyUnavailable"):
+        result["currentlyUnavailable"] = True
+    return result, source, port
 
 
 def stable_component(value: Any) -> Any:
@@ -642,6 +710,7 @@ def public_evidence(components: dict[str, Any]) -> dict[str, Any]:
     for component in result.values():
         if not isinstance(component, dict):
             continue
+        component.pop("_files", None)
         for key in ("binary", "debugServer", "commandFile", "client", "server"):
             if isinstance(component.get(key), dict):
                 component[key] = public_file(component[key])
@@ -655,8 +724,11 @@ def public_evidence(components: dict[str, Any]) -> dict[str, Any]:
     return {"schemaVersion": SCHEMA_VERSION, "components": result}
 
 
-def bridge_evidence(tixl: dict[str, Any]) -> dict[str, Any]:
-    client = file_evidence(BRIDGE_PACKAGE / "source/tixl_bridge.py")
+def bridge_evidence(tixl: dict[str, Any], previous: dict[str, Any] | None = None,
+                    force_hash: bool = False) -> dict[str, Any]:
+    client = file_evidence(BRIDGE_PACKAGE / "source/tixl_bridge.py",
+                           previous.get("client") if isinstance(previous, dict) else None,
+                           force_hash=force_hash)
     server = tixl.get("debugServer", {})
     protocol = ((tixl.get("live") or {}).get("version") or {}).get("protocolVersion") if isinstance(tixl.get("live"), dict) else None
     status = "ok" if client.get("status") == "ok" and (server.get("status") == "ok" or protocol is not None) else "missing"
@@ -669,30 +741,37 @@ def bridge_evidence(tixl: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def collect(config: dict[str, Any], previous: dict[str, Any]) -> tuple[dict[str, Any], Path | None, int]:
+def bridge_file_paths() -> list[Path]:
+    suffixes = {".py", ".json", ".cs", ".t3", ".t3ui"}
+    files = [path for path in BRIDGE_PACKAGE.rglob("*")
+             if path.is_file() and path.suffix.lower() in suffixes
+             and ".agents" not in path.parts and "__pycache__" not in path.parts]
+    files.extend(REPOSITORY / name for name in ("install_blender_addon.py", "build_addon_zip.py"))
+    return files
+
+
+def collect(config: dict[str, Any], previous: dict[str, Any],
+            force: bool = False) -> tuple[dict[str, Any], Path | None, int]:
     previous_components = previous.get("components", {}) if isinstance(previous, dict) else {}
     previous_blender = previous_components.get("blender", {})
     previous_runtime = previous_blender.get("runtime") if isinstance(previous_blender, dict) else None
-    mcp, runtime = probe_mcp(config, previous_components.get("blenderMcp", {}), previous_runtime)
-    blender = probe_blender(config, previous_components.get("blender", {}), runtime)
-    tixl, tixl_source, port = probe_tixl(config, previous_components.get("tixl", {}))
-    bridge_suffixes = {".py", ".json", ".cs", ".t3", ".t3ui"}
-    bridge_files = [
-        path for path in BRIDGE_PACKAGE.rglob("*")
-        if path.is_file()
-        and path.suffix.lower() in bridge_suffixes
-        and ".agents" not in path.parts
-        and "__pycache__" not in path.parts
-    ]
-    bridge_files.extend((REPOSITORY / name for name in ("install_blender_addon.py", "build_addon_zip.py")))
-    bridge = tree_evidence(bridge_files)
+    mcp, runtime = probe_mcp(config, previous_components.get("blenderMcp", {}), previous_runtime,
+                             force_hash=force)
+    blender = probe_blender(config, previous_components.get("blender", {}), runtime,
+                            force_hash=force)
+    tixl, tixl_source, port = probe_tixl(config, previous_components.get("tixl", {}),
+                                        force_hash=force)
+    bridge = tree_evidence(bridge_file_paths(),
+                           previous_components.get("bridge", {}).get("_files"),
+                           force_hash=force)
     bridge.update({"summary": f"bridge source `{bridge.get('sha256', '')[:16]}`"})
     components = {
         "bridge": bridge,
         "blender": blender,
         "blenderMcp": mcp,
         "tixl": tixl,
-        "tixlDebugBridge": bridge_evidence(tixl),
+        "tixlDebugBridge": bridge_evidence(tixl, previous_components.get("tixlDebugBridge", {}),
+                                            force_hash=force),
     }
     return components, tixl_source, port
 
@@ -726,6 +805,149 @@ def rebuild_snapshot(config: dict[str, Any], components: dict[str, Any], tixl_so
     return output
 
 
+def _stat_signature(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {"status": "missing"}
+    try:
+        resolved = path.expanduser().resolve(strict=False)
+        stat = resolved.stat()
+    except OSError:
+        return {"status": "missing", "path": str(path)}
+    increment("screenStatFiles")
+    return {"status": "ok", "path": str(resolved), "size": stat.st_size,
+            "mtimeNs": stat.st_mtime_ns}
+
+
+def quick_screen(config: dict[str, Any], config_path: Path) -> dict[str, Any]:
+    """Cheaply detect configuration, endpoint, path, and source-tree changes."""
+    try:
+        config_hash = sha256_file(config_path) if config_path.is_file() else None
+    except OSError:
+        config_hash = None
+    environment_names = (
+        "BLENDER_EXECUTABLE", "TIXL_BRIDGE_BLENDER", "BLENDER_MCP_COMMAND",
+        "BLENDER_MCP_TRANSPORT", "BLENDER_MCP_HOST", "BLENDER_MCP_PORT",
+        "TIXL_EXECUTABLE", "TIXL_SOURCE", "TIXL_BRIDGE_PORT", "APPDATA",
+        "ProgramFiles", "PATH", "HOME", "USERPROFILE", "LOCALAPPDATA",
+    )
+    mcp_spec = discover_mcp_spec(config)
+    mcp_command = None
+    if mcp_spec and mcp_spec.get("command"):
+        candidate = Path(mcp_spec["command"][0]).expanduser()
+        if not candidate.is_file():
+            candidate = Path(shutil.which(mcp_spec["command"][0]) or "")
+        mcp_command = candidate if candidate.is_file() else None
+    blender_path = discover_blender_executable(config)
+    tixl_config = config.get("tixl", {}) if isinstance(config.get("tixl"), dict) else {}
+    configured_source = Path(tixl_config["source"]).expanduser() if tixl_config.get("source") else None
+    tixl_source = rebuild.infer_tixl_source(configured_source)
+    tixl_executable = discover_tixl_executable(config, tixl_source)
+    tree = [_stat_signature(path) for path in bridge_file_paths()]
+    tree.sort(key=lambda row: row.get("path", "").lower())
+    inputs = {
+        "configPath": str(config_path.resolve(strict=False)),
+        "configSha256": config_hash,
+        "config": config,
+        "environment": {name: os.environ.get(name) for name in environment_names},
+        "mcpSpec": mcp_spec,
+        "mcpTransport": tcp_extension_spec(config),
+        "mcpCommand": _stat_signature(mcp_command),
+        "blenderExecutable": _stat_signature(blender_path),
+        "tixlSource": str(tixl_source.resolve()) if tixl_source else None,
+        "tixlExecutable": _stat_signature(tixl_executable),
+        "tixlDebugServer": _stat_signature(
+            tixl_source / rebuild.DEBUG_SERVER_RELATIVE if tixl_source else None),
+        "bridgeTree": tree,
+        "discoveryCode": [_stat_signature(Path(__file__)),
+                          _stat_signature(Path(rebuild.__file__)),
+                          _stat_signature(PROBE_SCRIPT)],
+    }
+    encoded = json.dumps(inputs, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    return {"schemaVersion": 1, "sha256": hashlib.sha256(encoded).hexdigest()}
+
+
+def _cache_is_complete(components: dict[str, Any]) -> bool:
+    if not isinstance(components, dict):
+        return False
+    blender_mcp = components.get("blenderMcp", {})
+    blender = components.get("blender", {})
+    tixl = components.get("tixl", {})
+    bridge_api = components.get("tixlDebugBridge", {})
+    live = tixl.get("live") if isinstance(tixl, dict) else None
+    bridge = components.get("bridge", {})
+    tree_files = bridge.get("_files", []) if isinstance(bridge, dict) else []
+    has_operator_contract = any(
+        str(item.get("path", "")).lower().endswith(".t3ui")
+        for item in tree_files if isinstance(item, dict)
+    )
+    return bool(
+        isinstance(blender_mcp, dict) and blender_mcp.get("status") == "ok"
+        and blender_mcp.get("runtimeProbe") == "complete"
+        and blender_mcp.get("tools")
+        and isinstance(blender, dict) and blender.get("status") == "ok"
+        and isinstance(blender.get("runtime"), dict) and bool(blender.get("runtime"))
+        and isinstance(tixl, dict) and tixl.get("status") == "ok"
+        and isinstance(live, dict) and isinstance(live.get("version"), dict)
+        and bool(live.get("version"))
+        and isinstance(bridge_api, dict) and bridge_api.get("status") == "ok"
+        and isinstance(bridge, dict) and bridge.get("status") == "ok"
+        and has_operator_contract
+        and not _contains_unavailable_marker(components)
+    )
+
+
+def _contains_unavailable_marker(value: Any) -> bool:
+    if isinstance(value, dict):
+        if value.get("currentlyUnavailable") is True:
+            return True
+        return any(_contains_unavailable_marker(child) for child in value.values())
+    if isinstance(value, list):
+        return any(_contains_unavailable_marker(child) for child in value)
+    return False
+
+
+def _verification_age(previous: dict[str, Any], now: datetime) -> float | None:
+    if not isinstance(previous, dict):
+        return None
+    value = previous.get("lastFullyVerifiedUtc")
+    deadline_value = previous.get("evidenceFreshUntilUtc")
+    if (not isinstance(value, str) or not isinstance(deadline_value, str)
+            or previous.get("freshnessSeconds") != CACHE_FRESHNESS_SECONDS):
+        return None
+    try:
+        verified = datetime.fromisoformat(value)
+        deadline = datetime.fromisoformat(deadline_value)
+        if verified.tzinfo is None:
+            verified = verified.replace(tzinfo=timezone.utc)
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        if abs((deadline - (verified + timedelta(seconds=CACHE_FRESHNESS_SECONDS))).total_seconds()) > 1:
+            return None
+        age = (now - verified).total_seconds()
+        return age if age >= 0 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _cached_result(previous: dict[str, Any], output: Path, age: float) -> dict[str, Any]:
+    increment("freshCacheHits")
+    evidence_age = round(age, 3)
+    fresh_until = previous.get("evidenceFreshUntilUtc")
+    log(f"reused capability evidence verified {evidence_age:.1f}s ago; fresh until {fresh_until}")
+    return {
+        "changed": False,
+        "cached": True,
+        "cache": {"status": "within bounded freshness window", "ageSeconds": evidence_age,
+                  "freshnessSeconds": CACHE_FRESHNESS_SECONDS,
+                  "lastFullyVerifiedUtc": previous.get("lastFullyVerifiedUtc"),
+                  "freshUntilUtc": fresh_until},
+        "fingerprint": previous.get("fingerprint"),
+        "output": str(output),
+        "components": public_evidence(previous.get("components", {}))["components"],
+        "counters": current_counters(),
+    }
+
+
 def _acquire_lock() -> int | None:
     try:
         return os.open(DEFAULT_LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -751,31 +973,75 @@ def run_once(config_path: Path, force: bool = False) -> dict[str, Any]:
 
 
 def _run_once_unlocked(config_path: Path, force: bool = False) -> dict[str, Any]:
+    global _ACTIVE_COUNTERS
+    _ACTIVE_COUNTERS = {}
     config = read_json(config_path, {})
+    if not isinstance(config, dict):
+        config = {}
     state_path = Path(config.get("state") or DEFAULT_STATE)
     if not state_path.is_absolute():
         state_path = (REPOSITORY / state_path).resolve()
     previous = read_json(state_path, {})
-    components, tixl_source, port = collect(config, previous)
-    current_fingerprint = fingerprint(components)
+    if not isinstance(previous, dict):
+        previous = {}
     output = Path(config.get("output") or DEFAULT_OUTPUT)
     if not output.is_absolute():
         output = (REPOSITORY / output).resolve()
+    screen = quick_screen(config, config_path)
+    now = datetime.now(timezone.utc)
+    age = _verification_age(previous, now)
+    if (not force and output.is_file() and age is not None
+            and age <= CACHE_FRESHNESS_SECONDS
+            and previous.get("quickScreen") == screen
+            and _cache_is_complete(previous.get("components", {}))):
+        return _cached_result(previous, output, age)
+
+    increment("fullRefreshes")
+    # Every cache miss fully hashes inputs. Otherwise unrelated changes could
+    # renew a bounded cache while carrying a same-stat stale digest forward.
+    components, tixl_source, port = collect(config, previous, force=True)
+    current_fingerprint = fingerprint(components)
     changed = force or previous.get("fingerprint") != current_fingerprint or not output.is_file()
     if changed:
         rebuilt = rebuild_snapshot(config, components, tixl_source, port)
+        increment("snapshotRebuilds")
         log(f"rebuilt {rebuilt} because monitored capability evidence changed")
     else:
         log("capability evidence unchanged")
+    checked_at = datetime.now(timezone.utc)
+    complete_evidence = _cache_is_complete(components)
+    last_fully_verified = (checked_at.replace(microsecond=0).isoformat() if complete_evidence
+                           else previous.get("lastFullyVerifiedUtc"))
+    evidence_deadline = ((checked_at + timedelta(seconds=CACHE_FRESHNESS_SECONDS))
+                         .replace(microsecond=0).isoformat() if complete_evidence
+                         else previous.get("evidenceFreshUntilUtc"))
+    last_verified_fingerprint = (current_fingerprint if complete_evidence
+                                 else previous.get("lastFullyVerifiedFingerprint",
+                                                   previous.get("fingerprint") if _cache_is_complete(
+                                                       previous.get("components", {})) else None))
     state = {
         "schemaVersion": SCHEMA_VERSION,
         "fingerprint": current_fingerprint,
-        "lastCheckedUtc": utc_now(),
+        "lastCheckedUtc": checked_at.replace(microsecond=0).isoformat(),
+        "lastAttemptUtc": checked_at.replace(microsecond=0).isoformat(),
+        "verificationStatus": "complete" if complete_evidence else "partial",
+        "lastFullyVerifiedUtc": last_fully_verified,
+        "lastFullyVerifiedFingerprint": last_verified_fingerprint,
+        "evidenceFreshUntilUtc": evidence_deadline,
+        "freshnessSeconds": CACHE_FRESHNESS_SECONDS,
+        "quickScreen": screen,
         "lastRebuiltUtc": utc_now() if changed else previous.get("lastRebuiltUtc"),
         "components": components,
     }
     atomic_write_json(state_path, state)
-    return {"changed": changed, "fingerprint": current_fingerprint, "output": str(output), "components": public_evidence(components)["components"]}
+    return {"changed": changed, "cached": False, "fingerprint": current_fingerprint,
+            "output": str(output), "components": public_evidence(components)["components"],
+            "cache": {"status": "fully verified" if complete_evidence else "partial verification; unavailable evidence will be retried",
+                      "freshnessSeconds": CACHE_FRESHNESS_SECONDS,
+                      "lastAttemptUtc": state["lastAttemptUtc"],
+                      "lastFullyVerifiedUtc": state["lastFullyVerifiedUtc"],
+                      "freshUntilUtc": state["evidenceFreshUntilUtc"]},
+            "counters": current_counters()}
 
 
 def parse_args() -> argparse.Namespace:
@@ -803,7 +1069,20 @@ def main() -> int:
             with phase("discovery"):
                 result = run_once(config_path, options.force)
             if metrics is not None:
-                metrics.report["resultStatus"] = "skipped" if result.get("skipped") else ("rebuilt" if result.get("changed") else "unchanged")
+                metrics.report["resultStatus"] = (
+                    "skipped" if result.get("skipped") else
+                    "cached" if result.get("cached") else
+                    "rebuilt" if result.get("changed") else "unchanged")
+                cache = result.get("cache", {})
+                if isinstance(cache, dict):
+                    metrics.report["discoveryEvidence"] = {
+                        key: cache[key] for key in (
+                            "status", "ageSeconds", "freshnessSeconds",
+                            "lastFullyVerifiedUtc", "freshUntilUtc") if key in cache
+                    }
+                for name, value in result.get("counters", {}).items():
+                    if isinstance(value, int) and value >= 0:
+                        metrics.report["counters"][name] = metrics.report["counters"].get(name, 0) + value
         print(json.dumps(result, indent=2, sort_keys=True))
         return 0
     return 0

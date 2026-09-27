@@ -4,7 +4,7 @@ import json
 import re
 import uuid
 from pathlib import Path
-from sync_metrics import timed
+from sync_metrics import count, timed
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "templates"
@@ -15,8 +15,10 @@ def _write_if_changed(path: Path, content: str) -> None:
     # Preserve mtimes so TiXL does not see a spurious source-code change and
     # start a project rebuild during playback.
     if path.is_file() and path.read_text(encoding="utf-8") == content:
+        count("generatedFilesUnchanged")
         return
     path.write_text(content, encoding="utf-8")
+    count("generatedFilesWritten")
 
 
 @timed("graph_generation")

@@ -187,6 +187,8 @@ No AI-generated probe file is required. The refresh process:
 - fingerprints `blender_tixl_bridge/source/tixl_bridge.py` and the TiXL server implementation;
 - preserves the last successful live inventory when an application is temporarily closed.
 
+Complete capability evidence may be reused for at most 30 seconds when a cheap screen finds no change to the config, relevant environment and endpoint settings, executable/source paths, or monitored bridge/operator file membership and metadata. The automation retries any missing or unavailable component on every trigger. A cache hit reports its age and expiry; partial probes do not advance the last fully verified time. Every cache miss, manual force, and TTL expiry performs a full probe and bypasses per-file hash reuse. Discovery remains one-shot; this freshness window does not install a watcher or background service.
+
 The official Blender MCP extension needs no separate command configuration: the add-on passes its saved host and port to each refresh. For another MCP server, copy `.agents/capability_automation.example.json` to the ignored local file `.agents/capability_automation.json` and set `blenderMcp.command`. Later updates are detected automatically from the extension/server version, command fingerprint, and tool schemas.
 
 Review newly discovered or unclassified capabilities before using them. Never infer safety or parameters from a method name alone. The user can force an immediate non-AI refresh with the add-on's **Refresh agent capabilities** button or:

@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "scope": "private operator installation with one mismatched existing C# file; builds, editor launch, and transport bypassed; identical inputs",
+  "baselineCommit": "9d91f95",
+  "results": [
+    {
+      "version": "before",
+      "counters": {
+        "generatedFilesUnchanged": 5,
+        "hashBytes": 462466
+      },
+      "phases": {
+        "graph_generation": {
+          "calls": 1,
+          "totalSeconds": 0.009635399968829006,
+          "minSeconds": 0.009635399968829006,
+          "maxSeconds": 0.009635399968829006,
+          "failures": 0
+        },
+        "hashing": {
+          "calls": 140,
+          "totalSeconds": 0.057688200497068465,
+          "minSeconds": 0.0003627000260166824,
+          "maxSeconds": 0.0007458000327460468,
+          "failures": 0
+        },
+        "graph_installation": {
+          "calls": 1,
+          "totalSeconds": 0.08009960001800209,
+          "minSeconds": 0.08009960001800209,
+          "maxSeconds": 0.08009960001800209,
+          "failures": 0
+        }
+      },
+      "durationSeconds": 0.08012020000023767,
+      "unchangedDestinationMtimesPreserved": true,
+      "installedBytesMatch": true
+    },
+    {
+      "version": "after",
+      "counters": {
+        "generatedFilesUnchanged": 5,
+        "hashBytes": 327143,
+        "operatorFilesUnchanged": 32,
+        "operatorFilesWritten": 1
+      },
+      "phases": {
+        "graph_generation": {
+          "calls": 1,
+          "totalSeconds": 0.010229700012132525,
+          "minSeconds": 0.010229700012132525,
+          "maxSeconds": 0.010229700012132525,
+          "failures": 0
+        },
+        "hashing": {
+          "calls": 71,
+          "totalSeconds": 0.030812099983450025,
+          "minSeconds": 0.00036700000055134296,
+          "maxSeconds": 0.0027461000136099756,
+          "failures": 0
+        },
+        "graph_installation": {
+          "calls": 1,
+          "totalSeconds": 0.051713199994992465,
+          "minSeconds": 0.051713199994992465,
+          "maxSeconds": 0.051713199994992465,
+          "failures": 0
+        }
+      },
+      "durationSeconds": 0.051735199987888336,
+      "unchangedDestinationMtimesPreserved": true,
+      "installedBytesMatch": true
+    }
+  ]
+}

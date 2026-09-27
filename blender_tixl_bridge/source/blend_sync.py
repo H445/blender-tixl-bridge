@@ -375,10 +375,19 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
             raise FileNotFoundError(f"Incomplete TiXL operator: {stem}")
     install_files = operator_files
     operator_target = target / "PrismalLabs" / "BlenderExport"
+    # Read each source once, then use that exact snapshot for both comparison
+    # and publication. Export-contract and authored-source checks remain fresh.
+    with phase("hashing"):
+        operator_bytes = {file: file.read_bytes() for file in install_files}
+        operator_hashes = {file: hashlib.sha256(data).hexdigest() for file, data in operator_bytes.items()}
+        count("hashBytes", sum(len(data) for data in operator_bytes.values()))
+    destination_hashes = {file: digest(operator_target / file.name)
+                          if (operator_target / file.name).is_file() else None
+                          for file in install_files}
     changed_operators = [file for file in install_files
-                         if not (operator_target / file.name).is_file()
-                         or digest(operator_target / file.name) != digest(file)
+                         if destination_hashes[file] != operator_hashes[file]
                          or (target / file.name).is_file()]
+    count("operatorFilesUnchanged", len(install_files) - len(changed_operators))
     needs_copy = bool(changed_operators)
     operator_structure_changed = any(file.suffix in {".t3", ".t3ui"}
                                      or (target / file.name).is_file()
@@ -393,8 +402,9 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
                 shutil.copy2(legacy, backup / file.name)
                 legacy.unlink()
             destination = operator_target / file.name
-            if not destination.is_file() or digest(destination) != digest(file):
-                shutil.copy2(file, destination)
+            if not destination.is_file() or digest(destination) != operator_hashes[file]:
+                destination.write_bytes(operator_bytes[file])
+                count("operatorFilesWritten")
     marker = cache / "tixl_project.json"
     graph_sha = hashlib.sha256(("world-clip-lanes-v6|" + "|".join(digest(file) for file in files)).encode()).hexdigest()
     project_state = json.loads(marker.read_text(encoding="utf-8")) if marker.is_file() else {}
@@ -427,7 +437,7 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
             install_operators()
             with phase("activation"):
                 bridge_call("reload", project=csproj.stem)
-        ensure_generic_project(blend, cache, files, build=False, manifest=manifest)
+        ensure_generic_project(blend, cache, files, build=False, manifest=manifest, graph_sha=graph_sha)
         with phase("activation"):
             bridge_call("reload", project=project_state["name"])
         # Reload must preserve the current composition, selection and output
@@ -440,7 +450,7 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
         if needs_copy:
             install_operators()
             build_project(csproj)
-        ensure_generic_project(blend, cache, files, manifest=manifest)
+        ensure_generic_project(blend, cache, files, manifest=manifest, graph_sha=graph_sha)
         success = True
     finally:
         if success and (needs_project or wants_debug):
@@ -458,10 +468,10 @@ def build_project(csproj: Path) -> None:
 
 
 def ensure_generic_project(blend: Path, cache: Path, files: list[Path], build: bool = True,
-                           manifest: dict | None = None) -> None:
+                           manifest: dict | None = None, graph_sha: str | None = None) -> None:
     from blend_sync_project import create_scaffold, populate, project_name_for
     marker = cache / "tixl_project.json"
-    graph_sha = hashlib.sha256(("world-clip-lanes-v6|" + "|".join(digest(file) for file in files)).encode()).hexdigest()
+    graph_sha = graph_sha or hashlib.sha256(("world-clip-lanes-v6|" + "|".join(digest(file) for file in files)).encode()).hexdigest()
     existing = None
     if marker.is_file():
         state = json.loads(marker.read_text(encoding="utf-8"))
