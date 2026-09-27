@@ -19,11 +19,11 @@ Sync replaces generated import data but preserves the user-owned project home, T
 
 ## Home graph
 
-The generated home has one row per world and a shared world switch and render chain:
+The generated home has one row per world and a shared world switch and render chain. This zoomed view shows one world's animation, mesh, and texture path:
 
-![TiXL home graph with four world branches and a shared render chain](screenshots/tixl-graph.png)
+![Zoomed TiXL world branch showing Blender animation, mesh replacement, and texture editing](screenshots/tixl-graph.png)
 
-Each world exposes animation, mesh, texture, and scene connections:
+A wider branch view includes the surrounding scene connections:
 
 ![TiXL graph detail showing animation and editable mesh and texture connections](screenshots/tixl-graph-detail.png)
 

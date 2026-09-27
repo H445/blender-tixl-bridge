@@ -38,12 +38,12 @@ Keep these filenames so documentation links remain stable:
 | --- | --- |
 | `docs/screenshots/blender-plugin.png` | Scene Properties → TiXL Bridge, including save sync, on-demand sync, and capability refresh. |
 | `docs/screenshots/blender-preferences.png` | Enabled add-on entry, version, TiXL paths, connection/port, capability repository, and refresh control. |
-| `docs/screenshots/tixl-graph.png` | Full `BlendShapeExample` home graph with four world branches and shared render chain. |
-| `docs/screenshots/tixl-graph-detail.png` | One world branch showing animation, mesh select/replace, texture select/replace, and scene output. |
+| `docs/screenshots/tixl-graph.png` | Readable zoom on one world branch showing animation, mesh select/replace, and texture select/replace. Do not fit the entire graph when that makes labels illegible. |
+| `docs/screenshots/tixl-graph-detail.png` | Wider context around the same branch, including its scene output and surrounding connections. |
 
 For Blender, set the relevant area and call Blender's native `screen.screenshot_area` through MCP. Redraw before capture. For Preferences, use `screen.userpref_show` and `preferences.addon_show` through MCP.
 
-For TiXL, pause playback, open `BlendShapeExample`, pump three frames, frame stable child IDs from `getGraphState`, pump again, and call `screenshotWindow` with `region="graph"`. Restore the original time and playback speed afterward.
+For TiXL, pause playback, open `BlendShapeExample`, pump three frames, and frame stable child IDs from `getGraphState`. For the main graph image, select only the nodes needed to explain one branch; a tiny full-graph thumbnail is not acceptable. Pump again, call `screenshotWindow` with `region="graph"`, and restore the original graph view, time, playback speed, selection, and output pin afterward.
 
 Visually inspect every image. Text and wires must be legible, the intended controls/nodes must be visible, no modal dialog may obscure the subject, and captions must describe what the image actually shows. Never accept file existence or dimensions as visual verification.
 

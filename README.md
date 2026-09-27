@@ -5,7 +5,7 @@
 
 Save a Blender scene and turn it into an editable TiXL project. Blender remains the source for geometry and animation; TiXL gets a graph where timing, meshes, textures, lighting, effects, and rendering can be changed without rebuilding the source scene by hand.
 
-![TiXL home graph with four Blender world branches and a shared render chain](docs/screenshots/tixl-graph.png)
+![Zoomed TiXL world branch showing Blender animation, mesh replacement, and texture editing](docs/screenshots/tixl-graph.png)
 
 ## Main features
 
