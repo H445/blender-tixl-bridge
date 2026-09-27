@@ -17,6 +17,12 @@ Before relying on the catalogs below, read `../../CAPABILITIES.md`. The Blender 
 - If Blender MCP lacks a required capability, or TiXL is not running with its debug server, stop and ask the end user to perform the unsupported bootstrap step.
 - After every mutation, read the resulting state back through the same API. A successful call alone is not verification.
 
+## Documentation structure
+
+When documentation changes are in scope, keep the root `README.md` as a concise human landing page. It should communicate the project purpose, main capabilities, a minimal quick start, links to deeper documents, and important limitations. Do not accumulate exhaustive operator lists, JSON examples, CLI reference, graph-editing recipes, troubleshooting catalogs, or agent instructions there.
+
+Put human setup and procedures in `docs/USER_GUIDE.md`, technical behavior and graph ownership in `docs/BRIDGE_REFERENCE.md`, example-specific material in `examples/README.md`, and AI-agent workflows under `.agents/`. Prefer links over copying the same explanation into several files.
+
 ## Capability router
 
 | Goal | Required interface | Preferred capability |

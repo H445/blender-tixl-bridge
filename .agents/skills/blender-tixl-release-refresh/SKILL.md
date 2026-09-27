@@ -14,6 +14,7 @@ Use this workflow whenever a monitored component version changes. Read the opera
 - Use `blender_tixl_bridge/source/tixl_bridge.py` for every TiXL action and screenshot.
 - If an application API cannot arrange a legible view, ask the end user to arrange it, then resume through the API. Do not substitute generic UI automation.
 - Preserve the user's Blender scene, TiXL project, time, playback state, selection, and output pin. Use the bundled example for release evidence.
+- Keep the root README brief and approachable. Move procedural, technical, troubleshooting, and agent-only detail to the appropriate linked document instead of expanding the landing page.
 - Do not commit, tag, publish, or push unless the user explicitly asks.
 
 ## 1. Establish the version set
@@ -48,7 +49,15 @@ Visually inspect every image. Text and wires must be legible, the intended contr
 
 ## 4. Audit documentation
 
-Review every claim affected by the new version, including:
+Treat documentation as a small hierarchy rather than one exhaustive README:
+
+- `README.md`: short human overview, main capabilities, minimal quick start, document links, and important limitations.
+- `docs/USER_GUIDE.md`: first run, installation, configuration, daily use, modes, multi-world setup, updates, CLI use, and troubleshooting.
+- `docs/BRIDGE_REFERENCE.md`: transferred data, generated/editable ownership, graph behavior, reusable operators, files, and technical limitations.
+- `examples/README.md`: example-specific instructions and output evidence.
+- `.agents/`: agent-only installation, operation, and capability details.
+
+Review every claim affected by the new version across the appropriate files, including:
 
 - supported and tested Blender/TiXL versions;
 - install/update wording and first-run behavior;
@@ -58,7 +67,7 @@ Review every claim affected by the new version, including:
 - reusable operator count, names, wiring, cache/project locations, and preservation behavior;
 - screenshot captions and example links.
 
-Keep the main README user-focused. It should link to `.agents/README.md` rather than duplicating the full agentic procedure.
+Do not move detail back into the root README merely because it changed. Update the focused document and keep a short link or summary in the landing page only when it helps a first-time reader understand the project.
 
 ## 5. Rebuild and verify
 
