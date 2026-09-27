@@ -1,0 +1,199 @@
+{
+  "schema": 1,
+  "benchmark": "TiXL bridge diagnostics consumer-output and protocol-token comparison",
+  "computedUtc": "2026-09-27T07:17:21.343081+00:00",
+  "method": {
+    "liveCalls": "Receipts were captured by direct collect_diagnostics calls using the official TiXL debug bridge; this benchmark only analyzes saved receipts.",
+    "tokenizer": {
+      "package": "tiktoken",
+      "version": "0.11.0",
+      "encoding": "o200k_base"
+    },
+    "tokens": "Exact request/response wire lines, complete saved receipt JSON, and the default CLI JSON serialization of the returned summary plus trailing newline are tokenized independently.",
+    "inputScope": "CLI recipe tokens are a reproducible command-line argument template, not a captured model prompt or process transcript; machine paths, interpreter location, task prompt, and system instructions are excluded.",
+    "sourceHashes": {
+      "diagnosticsHelperSha256": "ab7f6f8a697dbbbbe486261525f55fb3452a2734ab0592300f8dd3d5c8c54d1d",
+      "inspectReceiptSha256": "b840ee830a8ff2aa745f66588fe262b46697f936ce04116f00f9d9ea68a25a77",
+      "logsReceiptSha256": "48b969f82df039b7e0dc1a33ded0575b750f20c1122950613fb40e749abccd05"
+    }
+  },
+  "options": {
+    "port": 9042,
+    "inspect": {
+      "nodeLimit": 12,
+      "logLimit": 12,
+      "full": false,
+      "cache": null,
+      "captureTimes": []
+    },
+    "logs": {
+      "nodeLimit": 12,
+      "logLimit": 12,
+      "full": false,
+      "cache": null,
+      "captureTimes": []
+    },
+    "logCapacity": 4096,
+    "tokenizerDependencyDirectory": "ignored local dependency bundle; path omitted"
+  },
+  "cliInput": {
+    "recipeWasExecuted": false,
+    "inspectRecipe": ".agents/bridge_diagnostics.py --mode inspect --output <private-output-directory>",
+    "inspectRecipeTokens": 17,
+    "logsFollowRecipe": ".agents/bridge_diagnostics.py --mode logs --output <same-private-output-directory>",
+    "logsFollowRecipeTokens": 18
+  },
+  "captures": {
+    "inspect": {
+      "captureUtc": "2026-09-27T07:15:50.860992+00:00",
+      "mode": "inspect",
+      "calls": 7,
+      "methods": [
+        "getVersion",
+        "getContext",
+        "getStructureVersion",
+        "getGraphState",
+        "getLogTail",
+        "getStructureVersion",
+        "getContext"
+      ],
+      "status": "diagnostic findings present",
+      "protocol": {
+        "requestTokens": 191,
+        "responseTokens": 199045,
+        "combinedTokens": 199236,
+        "requestBytes": 537,
+        "responseBytes": 633960
+      },
+      "savedFullReceipt": {
+        "tokens": 759718,
+        "bytes": 2957043,
+        "sha256": "b840ee830a8ff2aa745f66588fe262b46697f936ce04116f00f9d9ea68a25a77"
+      },
+      "compactCliStdout": {
+        "tokens": 3658,
+        "bytes": 9466,
+        "reconstructedFromReturnedSummary": true,
+        "includesEvidencePathInTokenCount": true
+      },
+      "consumerOutputReductionVsFullReceiptPercent": 99.52,
+      "consumerOutputReductionVsWireResponsePercent": 98.16,
+      "fullReceiptComparisonBasis": "Stored forensic receipt includes raw wire and parsed response details; it is not normal CLI stdout.",
+      "errors": {
+        "retainedCount": 2,
+        "rawErrorRecords": [
+          {
+            "seq": 14,
+            "messageSha256": "15733890c19cb7700f73a1e3b5ec0aad025637265a1878cf67db06c00a7b5238"
+          },
+          {
+            "seq": 560,
+            "messageSha256": "f73db45d3b81f92163ac73de8d90327866f88623d672aef8b594b8923a2bf10c"
+          }
+        ],
+        "summaryErrorRecords": [
+          {
+            "seq": 14,
+            "messageSha256": "15733890c19cb7700f73a1e3b5ec0aad025637265a1878cf67db06c00a7b5238"
+          },
+          {
+            "seq": 560,
+            "messageSha256": "f73db45d3b81f92163ac73de8d90327866f88623d672aef8b594b8923a2bf10c"
+          }
+        ],
+        "allRetainedErrorsPreserved": true
+      },
+      "retainedWarningCount": 753,
+      "graph": {
+        "validation": "captured",
+        "childCount": 56,
+        "connectionCount": 103,
+        "unresolved": {
+          "missingChildren": {
+            "count": 0,
+            "sample": [],
+            "omitted": 0
+          },
+          "missingConnections": {
+            "count": 0,
+            "sample": [],
+            "omitted": 0
+          }
+        }
+      },
+      "renderValidation": "not measured; diagnostic evidence does not prove rendered output",
+      "cursorContinuity": "reset"
+    },
+    "logsFollow": {
+      "captureUtc": "2026-09-27T07:15:51.095391+00:00",
+      "mode": "logs",
+      "calls": 4,
+      "methods": [
+        "getContext",
+        "getLogTail",
+        "getLogTail",
+        "getContext"
+      ],
+      "status": "diagnostic findings present",
+      "protocol": {
+        "requestTokens": 123,
+        "responseTokens": 55399,
+        "combinedTokens": 55522,
+        "requestBytes": 330,
+        "responseBytes": 196258
+      },
+      "savedFullReceipt": {
+        "tokens": 198453,
+        "bytes": 794329,
+        "sha256": "48b969f82df039b7e0dc1a33ded0575b750f20c1122950613fb40e749abccd05"
+      },
+      "compactCliStdout": {
+        "tokens": 1705,
+        "bytes": 5209,
+        "reconstructedFromReturnedSummary": true,
+        "includesEvidencePathInTokenCount": true
+      },
+      "consumerOutputReductionVsFullReceiptPercent": 99.14,
+      "consumerOutputReductionVsWireResponsePercent": 96.92,
+      "fullReceiptComparisonBasis": "Stored forensic receipt includes raw wire and parsed response details; it is not normal CLI stdout.",
+      "errors": {
+        "retainedCount": 2,
+        "rawErrorRecords": [
+          {
+            "seq": 14,
+            "messageSha256": "15733890c19cb7700f73a1e3b5ec0aad025637265a1878cf67db06c00a7b5238"
+          },
+          {
+            "seq": 560,
+            "messageSha256": "f73db45d3b81f92163ac73de8d90327866f88623d672aef8b594b8923a2bf10c"
+          }
+        ],
+        "summaryErrorRecords": [
+          {
+            "seq": 14,
+            "messageSha256": "15733890c19cb7700f73a1e3b5ec0aad025637265a1878cf67db06c00a7b5238"
+          },
+          {
+            "seq": 560,
+            "messageSha256": "f73db45d3b81f92163ac73de8d90327866f88623d672aef8b594b8923a2bf10c"
+          }
+        ],
+        "allRetainedErrorsPreserved": true
+      },
+      "retainedWarningCount": 753,
+      "graph": {
+        "validation": "not repeated in logs-only follow; earlier graph snapshot is not current graph evidence"
+      },
+      "renderValidation": "not measured; diagnostic evidence does not prove rendered output",
+      "cursorContinuity": "inferred from anchor; server session ID unavailable"
+    }
+  },
+  "comparisonScope": {
+    "inspect": "A fresh graph/log inspection at the inspect capture time.",
+    "logsFollow": "A later log-only follow on the same persisted cursor. It does not revalidate the graph and is not a repeated graph-inspection baseline.",
+    "timeDeltaSeconds": 0.234399,
+    "warningsMayDiffer": "The snapshots are separated in time; newly retained warning counts may change.",
+    "sharedErrorCoverage": "Both captures include the same retained error records, checked by sequence and canonical message hash. The helper reports historical retained errors and does not claim they belong to the current task.",
+    "transportScope": "Wire token/byte totals include actual protocol requests and responses; they are separate from CLI input and caller-facing output tokens."
+  }
+}

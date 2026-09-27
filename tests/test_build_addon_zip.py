@@ -39,7 +39,7 @@ class BuildAddonZipTest(unittest.TestCase):
 
             files = [
                 "AGENTS.md", ".agents/CAPABILITIES.md", ".agents/CAPABILITIES_DETAIL.md",
-                ".agents/README.md", ".agents/capability_automation.py",
+                ".agents/README.md", ".agents/capability_automation.py", ".agents/bridge_diagnostics.py",
                 ".agents/capability_automation.example.json", ".agents/rebuild_capabilities.py",
                 ".agents/probes/blender_runtime_probe.py",
                 ".agents/skills/blender-tixl-bridge/SKILL.md",

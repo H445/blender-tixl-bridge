@@ -12,7 +12,7 @@
 | Blender MCP | complete | 1 tool; Blender MCP TCP extension 1.0.3 |
 | TiXL installation | complete | TiXL 4.3.0.2 |
 | TiXL source | complete | matching `Editor/App/DebugProtocol/DebugServer.cs`; SHA-256 `1b3dae492cd919b4` |
-| TiXL debug bridge | complete | client `1bcfd6fcf391b5ec`; server `1b3dae492cd919b4` |
+| TiXL debug bridge | complete | client `1fef203b064fecf4`; server `1b3dae492cd919b4` |
 | Live TiXL debug server | complete | {"capabilityDiscovery": "not supported by this protocol version", "port": 9042, "version": {"editorVersion": "4.3.0.2", "protocolVersion": 1}} |
 
 The automation keeps retrying unavailable live probes. A `missing` row means its component is not configured or discoverable and is not yet monitored.

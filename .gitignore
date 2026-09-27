@@ -6,6 +6,7 @@ __pycache__/
 .agents/*
 !.agents/*.md
 !.agents/capability_automation.py
+!.agents/bridge_diagnostics.py
 !.agents/capability_automation.example.json
 !.agents/rebuild_capabilities.py
 !.agents/probes/

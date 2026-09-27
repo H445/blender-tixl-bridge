@@ -16,6 +16,7 @@ Load only the reference required for the current task; follow conditional links 
 | Add-on configuration / precise scene recipes | [Blender](references/blender.md) |
 | TiXL graph edits | [Edit](references/edit.md) and [operator semantics](references/operators.md) |
 | Stale/blank output | [Troubleshooting](references/troubleshoot.md) |
+| Bounded snapshots, log follow, or opt-in output capture | [Diagnostics](references/diagnostics.md) |
 | Capability refresh failure / transport setup | [Discovery](references/discovery.md) |
 | Unfamiliar debug command / exact parameters | [Protocol](references/protocol.md) and detailed inventory |
 | Component upgrade / release evidence | [Release refresh](../blender-tixl-release-refresh/SKILL.md) |

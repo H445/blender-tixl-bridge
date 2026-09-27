@@ -8,3 +8,5 @@
 6. Restore original project, graph view, selection, pin, time and playback (playing mode before exact speed). Report the failing layer and evidence. Unsupported API/bootstrap steps need a manual user handoff, never UI automation.
 
 For stale/missing capabilities load [discovery details](discovery.md). Refresh through the add-on's one-shot operator; verify both generated files and logs. Do not fabricate inputs, install a watcher, or infer safety from method names.
+
+For a compact repeatable protocol snapshot, retained-log follow, or explicitly requested state-restoring output capture, see [bounded diagnostics](diagnostics.md). The default CLI modes do not inspect a graph during log follow and do not capture or change playback/time unless capture times are supplied.

@@ -59,6 +59,7 @@ def build_archive(root=ROOT):
             root / ".agents" / "CAPABILITIES_DETAIL.md",
             root / ".agents" / "README.md",
             root / ".agents" / "capability_automation.py",
+            root / ".agents" / "bridge_diagnostics.py",
             root / ".agents" / "capability_automation.example.json",
             root / ".agents" / "rebuild_capabilities.py",
             root / ".agents" / "probes" / "blender_runtime_probe.py",

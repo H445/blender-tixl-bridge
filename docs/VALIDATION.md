@@ -213,7 +213,9 @@ conditional references outside the selected task, and runtime usage or cost.
 | Stale or blank output diagnosis | 8,148 | 2,048 | 74.86% |
 | Component upgrade and release evidence | 14,481 | 3,971 | 72.58% |
 
-The report records exact readsets and per-file hashes. First-run namespace and
+The report records exact readsets and per-file hashes at commit
+`daa7c356bdfb7416a4e5d7d17ca346ba0b37f2fa`; subsequent reference or capability
+updates can change the current counts. First-run namespace and
 preference choices remain required; upgrade work reads onboarding only when
 first-run behavior is affected. Detailed protocol, operator, Blender and
 discovery references remain available for their respective subtasks.
@@ -237,3 +239,74 @@ be present locally. Optional `--tokenizer-dependencies` and `--tokenizer-cache`
 arguments support an isolated installation and cached encoding data. The
 tokenizer is an evidence-generation dependency; normal CI needs no network or
 tokenizer installation.
+
+## Bounded diagnostics evidence
+
+The diagnostics helper keeps full graph values, protocol envelopes, exact wire
+responses, and log messages in private immutable receipts. Its default JSON
+summary is limited to 16 KiB, focuses stable child IDs and neighboring nodes, and
+preserves global unresolved counts and retained error counts. Detailed output is
+explicit. Log follow rescans retained warnings/errors while avoiding repeated
+graph and structure queries; it does not claim a new graph validation.
+
+Protocol 1 has no server session identifier. Sequence continuity is inferred
+from a saved entry hash; restart, missing-anchor and discarded-history cases
+remain visible. Two historical errors in the running editor were retained in
+the live measurements, so those diagnostic summaries correctly returned failure
+instead of presenting a clean result. This is retained history, not a finding
+that the current change introduced those errors.
+
+The [live diagnostics report](benchmarks/diagnostics-2026-09-27.json) records
+actual protocol lines using `tiktoken==0.11.0`, `o200k_base`:
+
+| Observation | Fresh inspection | Subsequent log follow |
+| --- | ---: | ---: |
+| Protocol calls | 7 | 4 |
+| Protocol request tokens | 191 | 123 |
+| Raw protocol response tokens | 199,045 | 55,399 |
+| Default summary tokens | 3,658 | 1,705 |
+
+The fresh inspection summary reduces caller-facing output by 98.16% compared
+with its own raw protocol responses; the log-follow summary reduces it by
+96.92%. Request tokens fall by 35.60% for the narrower log-follow task. These
+snapshots were taken 0.234 seconds apart, retained the same two errors, and
+covered 56 graph children and 103 connections in the inspection only. Log follow
+does not repeat that graph validation. No runtime billing or whole-conversation
+token savings are claimed. Full receipts duplicate parsed data and exact wire
+lines for auditability, so their separate size comparison is not a raw-response
+baseline.
+
+To reproduce, collect one inspection and one subsequent log-follow receipt
+using the same private output directory, then run:
+
+```powershell
+python tests/benchmark_bridge_diagnostics.py --inspect-receipt '<inspect-run>/receipt.json' --logs-receipt '<follow-run>/receipt.json' --tokenizer-deps '<local-tiktoken-install>' --output diagnostics-report.json
+```
+
+Private paths contribute to the measured summary counts but are omitted from
+the portable report. Command recipe counts are templates, not executed prompt
+measurements. New logs and local paths can change repeat-run counts.
+
+Committed-cache checks verified a real four-world, 28-file generation and its
+authored source hash. Tests cover tampered payloads, changed sources, incompatible
+generations, invalid asset bindings, interrupted captures, restoration readback,
+and oversized summary evidence preservation. A legacy flat cache is rejected
+when committed-generation evidence is requested.
+
+Opt-in native output captures at 0, 4, 8 and 12 seconds were visually inspected.
+All four 3840×2160 PNG hashes matched the prior fresh baseline exactly: cube,
+sphere, prism and cylinder remained visible with their expected lighting and
+background. The project, selection, output pin, paused time and speed were
+restored. This covers four world starts, not every intermediate animation frame.
+The helper itself leaves each capture marked as requiring visual review.
+
+The updated add-on installation verified 57 package files with one client file
+updated, preserved the foreground Blender scene, and retained saved preferences
+in a fresh background Blender process. The official one-shot capability refresh
+completed. The rebuilt archive includes the helper and its conditional guide;
+the extracted helper imports and displays its CLI help successfully.
+
+See the [diagnostics guide](../.agents/skills/blender-tixl-bridge/references/diagnostics.md)
+for commands, evidence scope and failure interpretation. The tokenizer used for
+measurements is an optional evidence-generation dependency, not a runtime or CI
+dependency.
