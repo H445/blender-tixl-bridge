@@ -176,13 +176,17 @@ def editor_running() -> bool:
     return result.stdout.strip().lower() == "true"
 
 
-def stop_editor() -> bool:
-    if not editor_running():
-        return False
-    subprocess.run(["powershell", "-NoProfile", "-Command",
-                    "Get-Process TiXL -ErrorAction SilentlyContinue | ForEach-Object { $_.CloseMainWindow() | Out-Null }; "
-                    "Start-Sleep -Seconds 2; Get-Process TiXL -ErrorAction SilentlyContinue | Stop-Process -Force"], check=True)
-    return True
+def require_editor_closed() -> None:
+    """Defer installation rather than closing an editor with unknown save state.
+
+    The debug protocol cannot confirm that all editor work has been saved.
+    A paused transport or a successful CloseMainWindow is not that evidence.
+    The user closes TiXL after saving; the next sync resumes installation.
+    """
+    if editor_running():
+        raise RuntimeError(
+            "TiXL installation deferred: save your editor work, close TiXL manually, "
+            "then retry sync. The bridge will not close or terminate TiXL.")
 
 
 def start_editor(debug: bool = False) -> bool:
@@ -216,7 +220,7 @@ def wait_for_editor_pause() -> None:
     if not editor_running():
         return
     if not bridge_available():
-        raise RuntimeError(f"Close TiXL or launch it with --debug-server {BRIDGE_PORT} before publishing a Blender cache")
+        raise RuntimeError(f"Save your editor work and close TiXL manually, or launch it with --debug-server {BRIDGE_PORT}, before publishing a Blender cache")
     announced = False
     while True:
         try:
@@ -338,7 +342,7 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
         bridge_call("reload", project=project_state["name"])
         open_project(project_state["name"])
         return
-    was_running = stop_editor()
+    require_editor_closed()
     success = False
     try:
         if needs_copy:
@@ -348,7 +352,7 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
         ensure_generic_project(blend, cache, files)
         success = True
     finally:
-        if was_running or (success and needs_project) or (success and wants_debug):
+        if success and (needs_project or wants_debug):
             started = start_editor(debug=wants_debug)
             if started and success and wants_debug:
                 project = json.loads((cache / "tixl_project.json").read_text(encoding="utf-8"))

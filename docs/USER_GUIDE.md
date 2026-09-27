@@ -57,7 +57,7 @@ The `.blend` must be saved and must have either an active camera or camera-bound
 
 The first sync installs the reusable operators, creates a TiXL project beside the operator project, and records its exact location in `.tixl_cache/<blend name>/tixl_project.json`. Later syncs replace generated imports while preserving the project home, TimeClips, editable mesh and texture routes, and render graph.
 
-Daily use is simply: work in Blender and save. A failed rebuild retains the previous validated cache. Save unrelated TiXL work before a sync that may restart or reload the editor.
+Daily use is simply: work in Blender and save. A failed export retains the previous validated cache. When installation requires TiXL to be closed, sync reports a manual handoff: save your editor work, close TiXL yourself, and retry sync. The bridge never closes or forcibly terminates a running editor. It can launch TiXL after a successful installation when no editor was running.
 
 ## Connection modes
 
@@ -112,5 +112,5 @@ python blender_tixl_bridge/source/blend_sync.py sync --blend C:\path\scene.blend
 - In Offline mode, select a newly generated project once in TiXL.
 - If TiXL opens while transport is running, pause once so the project can preload every world.
 - If a bridge update changes loaded `.t3` or `.t3ui` structure, save editor work and restart TiXL. `reload` can leave the old graph in memory.
-- If TiXL is open without the debug bridge, close it before publishing changed cache files.
+- If TiXL is open without the debug bridge, save your editor work and close it manually before publishing changed cache files. Retry sync afterward; the bridge will not close it for you.
 - On a manual ZIP update, disable the former add-on before enabling the new package and transfer its preferences.
