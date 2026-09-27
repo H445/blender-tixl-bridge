@@ -8,6 +8,7 @@ import shutil
 import sys
 import traceback
 import uuid
+from unittest.mock import patch
 from pathlib import Path
 
 import bpy
@@ -16,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "blender_tixl_bridge" / "source"))
 import blend_sync
 import blend_sync_graph
+import cache_publication
 
 
 def main():
@@ -45,17 +47,43 @@ def main():
     source_sha = blend_sync.digest(blend)
     cache = folder / "cache"
     first = blend_sync.sync(blend, "generic", cache, Path(bpy.app.binary_path), False, False)
-    first_glb_sha = blend_sync.digest(cache / "worlds" / "main_opaque.glb")
+    first_glb_sha = blend_sync.digest(blend_sync.active_root(cache) / "worlds" / "main_opaque.glb")
     second = blend_sync.sync(blend, "generic", cache, Path(bpy.app.binary_path), False, False)
     assert first["status"] == "rebuilt" and second["status"] == "up_to_date"
-    assert blend_sync.digest(cache / "worlds" / "main_opaque.glb") == first_glb_sha
+    assert blend_sync.digest(blend_sync.active_root(cache) / "worlds" / "main_opaque.glb") == first_glb_sha
+    first_root = blend_sync.active_root(cache)
+    # A failed commit leaves the old complete generation and generated graph usable.
+    failed_stage = folder / "injected_failure"
+    shutil.copytree(first_root, failed_stage)
+    first_manifest = cache_publication.read_manifest(cache)
+    first_graph = next((cache / "native_source").glob("*.t3")).read_bytes()
+    original_commit = cache_publication._atomic_json
+    def fail_commit(path, value):
+        if path.name == cache_publication.POINTER:
+            raise OSError("injected publication failure")
+        return original_commit(path, value)
+    with patch.object(cache_publication, "_atomic_json", side_effect=fail_commit):
+        try:
+            blend_sync.publish(failed_stage, cache, first_manifest, "generic", blend, source_sha)
+        except OSError:
+            pass
+        else:
+            raise AssertionError("Publication injection did not fail")
+    assert blend_sync.active_root(cache) == first_root
+    assert next((cache / "native_source").glob("*.t3")).read_bytes() == first_graph
     # Change an external resource without saving or modifying the .blend.
     image.pixels.foreach_set([0.8, 0.2, 0.1, 1.0] * 4)
     image.save()
     assert blend_sync.digest(blend) == source_sha
     third = blend_sync.sync(blend, "generic", cache, Path(bpy.app.binary_path), False, False)
     assert third["status"] == "rebuilt"
-    assert blend_sync.digest(cache / "worlds" / "main_opaque.glb") != first_glb_sha
+    assert blend_sync.digest(blend_sync.active_root(cache) / "worlds" / "main_opaque.glb") != first_glb_sha
+    assert blend_sync.digest(first_root / "worlds" / "main_opaque.glb") == first_glb_sha
+    cache_publication.verify_generation(cache, first_root.name)
+    graph = json.loads(next((cache / "native_source").glob("*.t3")).read_text())
+    data_paths = [value["Value"] for child in graph["Children"] for value in child.get("InputValues", [])
+                  if isinstance(value.get("Value"), str) and str(cache) in value["Value"]]
+    assert data_paths and all(Path(value).is_relative_to(blend_sync.active_root(cache)) for value in data_paths)
     # A private graph-template change changes generated graph output while
     # exported geometry stays reusable. Production templates are untouched.
     private_templates = folder / "templates"
@@ -72,6 +100,7 @@ def main():
     report = {"status": "passed", "blenderVersion": bpy.app.version_string,
               "statuses": [result["status"] for result in (first, second, third, fourth)],
               "externalTextureRebuilt": True, "sourceBlendUnchanged": True,
+              "publicationFailureRetainedPrevious": True, "graphPathsPinnedToOneGeneration": True,
               "graphOnlyChangeReusedGeometry": True, "fixture": str(folder)}
     (folder / "report.json").write_text(json.dumps(report, indent=2))
     print("CACHE_CONTRACT_SMOKE_OK " + json.dumps(report), flush=True)

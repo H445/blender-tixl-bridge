@@ -19,6 +19,8 @@ def _write_if_changed(path: Path, content: str) -> None:
 
 
 def generate(blend: Path, cache: Path, manifest: dict) -> list[Path]:
+    from cache_publication import verify_generation
+    data = verify_generation(cache, manifest["generation"]) if "generation" in manifest else cache
     worlds = manifest["worlds"]
     if not worlds:
         raise ValueError("The Blender export contains no worlds")
@@ -62,8 +64,8 @@ def generate(blend: Path, cache: Path, manifest: dict) -> list[Path]:
                                      ("scene" if key == "world" else key.removeprefix("world_").replace("_", " ")))
         values = {v["Id"]: v for v in child.get("InputValues", [])}
         if key == "timeline":
-            values["0713a026-3b7b-5ddf-ac49-e585d8248fa6"]["Value"] = str(cache / "camera_60hz.bin")
-            values["70bceb8e-15a0-592f-a01b-ff73dfac2a59"]["Value"] = str(cache / "camera_timeline.json")
+            values["0713a026-3b7b-5ddf-ac49-e585d8248fa6"]["Value"] = str(data / "camera_60hz.bin")
+            values["70bceb8e-15a0-592f-a01b-ff73dfac2a59"]["Value"] = str(data / "camera_timeline.json")
             values["2748faa0-a40e-5a5e-8810-1170aff75f74"] = {
                 "Id": "2748faa0-a40e-5a5e-8810-1170aff75f74", "Type": "System.String",
                 "Value": ",".join(str((w["active_clip"][0] - 1) / manifest["fps"]) for w in worlds),
@@ -71,17 +73,17 @@ def generate(blend: Path, cache: Path, manifest: dict) -> list[Path]:
             child["InputValues"] = list(values.values())
         elif key.endswith("_load"):
             part = "glass" if "_glass_" in key else "opaque"
-            values["292e80cf-ba31-4a50-9bf4-83712430f811"]["Value"] = str(cache / "worlds" / f"{name}_{part}.glb")
+            values["292e80cf-ba31-4a50-9bf4-83712430f811"]["Value"] = str(data / "worlds" / f"{name}_{part}.glb")
         elif key.endswith("_motion"):
             part = "glass" if "_glass_" in key else "opaque"
-            values["ca02f7a3-a03a-4db0-a05d-3a66b0c9ab11"]["Value"] = str(cache / "worlds" / f"{name}_animation.bin")
-            values["3a4c36f9-e8c1-4ab7-b370-0f548b054933"]["Value"] = str(cache / "worlds" / f"{name}_{part}.glb")
+            values["ca02f7a3-a03a-4db0-a05d-3a66b0c9ab11"]["Value"] = str(data / "worlds" / f"{name}_animation.bin")
+            values["3a4c36f9-e8c1-4ab7-b370-0f548b054933"]["Value"] = str(data / "worlds" / f"{name}_{part}.glb")
         elif key == "lights":
             for value in child["InputValues"]:
                 if value["Id"] == "a17e4d92-6c38-4f0b-b5d1-2e9a7c8f6043":
                     value["Value"] = ",".join(w["world"] for w in worlds)
                 elif value["Id"] == "e0a26c9d-fc85-59a7-88b5-1d1b0d8c5c3f":
-                    value["Value"] = str(cache / "worlds")
+                    value["Value"] = str(data / "worlds")
         children.append(child)
         ui = copy.deepcopy(template_uis[old])
         ui["ChildId"] = new
@@ -192,7 +194,7 @@ internal sealed class {class_name} : Instance<{class_name}>
     [Output(Guid="{new_output}")] public readonly Slot<Texture2D> Output = new();
 }}
 ''')
-    timeline = json.loads((cache / "camera_timeline.json").read_text(encoding="utf-8"))
+    timeline = json.loads((data / "camera_timeline.json").read_text(encoding="utf-8"))
     duration = (max(w["active_clip"][1] for w in worlds) - 1) / manifest["fps"]
     shots = sorted(timeline.get("shots", []), key=lambda shot: shot["start"])
     starts = [float(shot["start"]) for shot in shots] or [

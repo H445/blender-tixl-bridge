@@ -21,6 +21,7 @@ import uuid
 from contextlib import contextmanager
 from collections import Counter
 from pathlib import Path
+from cache_publication import active_root, generation_root, read_manifest, publish_generation
 
 ROOT = Path(__file__).resolve().parents[1]
 BLENDER = Path(os.environ.get("TIXL_BRIDGE_BLENDER", shutil.which("blender") or "blender"))
@@ -76,32 +77,36 @@ def cache_for(blend: Path, profile: str, requested: Path | None) -> Path:
     return blend.parent / ".tixl_cache" / blend.stem
 
 
-def valid_cache(cache: Path, sha: str, blender: Path | None = None) -> bool:
+def cached_manifest(cache: Path, sha: str, blender: Path | None = None) -> dict | None:
     from export_contract import valid_contract
-    manifest_path = cache / "worlds" / "manifest.json"
-    if not manifest_path.is_file() or not (cache / "camera_60hz.bin").is_file():
-        return False
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        data = active_root(cache)
+        manifest = json.loads((data / "worlds" / "manifest.json").read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict) or manifest.get("generation") != data.name:
+            return None
         if manifest.get("source_sha256") != sha:
-            return False
+            return None
         if not valid_contract(manifest.get("export_contract"), blender or BLENDER):
-            return False
+            return None
         for world in manifest["worlds"]:
             name = world["world"]
             for suffix in ("animation.bin", "animation.json", "channels.json", "manifest.json"):
-                if not (cache / "worlds" / f"{name}_{suffix}").is_file():
-                    return False
+                if not (data / "worlds" / f"{name}_{suffix}").is_file():
+                    return None
             for pass_name in world["glbs"]:
-                if not (cache / "worlds" / f"{name}_{pass_name}.glb").is_file():
-                    return False
-        return True
+                if not (data / "worlds" / f"{name}_{pass_name}.glb").is_file():
+                    return None
+        return manifest
     except (ValueError, KeyError, OSError, TypeError):
-        return False
+        return None
 
+
+def valid_cache(cache: Path, sha: str, blender: Path | None = None) -> bool:
+    return cached_manifest(cache, sha, blender) is not None
 
 def validate_stage(stage: Path, sha: str, blender: Path | None = None) -> dict:
     from export_contract import valid_contract
+    from cache_validation import validate_export_payload
     worlds = stage / "worlds"
     manifest = json.loads((worlds / "manifest.json").read_text(encoding="utf-8"))
     if manifest["source_sha256"] != sha or not manifest["worlds"]:
@@ -142,38 +147,13 @@ def validate_stage(stage: Path, sha: str, blender: Path | None = None) -> dict:
         samples = struct.unpack("<i", stream.read(4))[0]
         if samples < 2 or stream.seek(0, os.SEEK_END) != 4 + samples * 48:
             raise ValueError("Invalid camera rail")
+    validate_export_payload(stage, manifest)
     return manifest
 
 
-def publish(stage: Path, cache: Path, manifest: dict, profile: str) -> None:
-    # Staging and live paths share a parent volume, so directory replacement is
-    # atomic from the reader's perspective. Preserve the previous good cache.
-    live = cache / "worlds"
-    archive = cache / ".previous" / time.strftime("%Y%m%d_%H%M%S")
-    archive.parent.mkdir(parents=True, exist_ok=True)
-    if live.exists():
-        live.replace(archive)
-    try:
-        (stage / "worlds").replace(live)
-    except Exception:
-        if archive.exists() and not live.exists():
-            archive.replace(live)
-        raise
-    # The manifest is descriptive; graph loaders use stable paths in `worlds`.
-    path = live / "manifest.json"
-    for world in manifest["worlds"]:
-        world["glbs"] = {part: str(live / f'{world["world"]}_{part}.glb') for part in world["glbs"]}
-    path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    shutil.copy2(stage / "camera_60hz.bin", cache / "camera_60hz.bin")
-    shutil.copy2(stage / "camera_timeline.json", cache / "camera_timeline.json")
-    (cache / "blend_sync_state.json").write_text(json.dumps({
-        "source_blend": manifest["source_blend"],
-        "source_sha256": manifest["source_sha256"],
-        "profile": profile,
-        "worlds": [w["world"] for w in manifest["worlds"]],
-        "camera_rail": str(cache / "camera_60hz.bin"),
-        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    }, indent=2), encoding="utf-8")
+def publish(stage: Path, cache: Path, manifest: dict, profile: str,
+            source: Path | None = None, expected_sha: str | None = None) -> dict:
+    return publish_generation(stage, cache, manifest, profile, source, expected_sha)
 
 
 def editor_running() -> bool:
@@ -445,7 +425,7 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
         if needs_copy:
             install_operators()
             bridge_call("reload", project=csproj.stem)
-        ensure_generic_project(blend, cache, files, build=False)
+        ensure_generic_project(blend, cache, files, build=False, manifest=manifest)
         bridge_call("reload", project=project_state["name"])
         # Reload must preserve the current composition, selection and output
         # pin. Reopening can discard unsaved graph edits, even on a data sync.
@@ -458,7 +438,7 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
             install_operators()
             subprocess.run(["dotnet", "build", str(csproj),
                             f"-p:T3_ASSEMBLY_PATH={TIXL_EDITOR}", "--nologo"], check=True)
-        ensure_generic_project(blend, cache, files)
+        ensure_generic_project(blend, cache, files, manifest=manifest)
         success = True
     finally:
         if success and (needs_project or wants_debug):
@@ -468,7 +448,8 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
                 open_project_when_ready(project["name"])
 
 
-def ensure_generic_project(blend: Path, cache: Path, files: list[Path], build: bool = True) -> None:
+def ensure_generic_project(blend: Path, cache: Path, files: list[Path], build: bool = True,
+                           manifest: dict | None = None) -> None:
     from blend_sync_project import create_scaffold, populate, project_name_for
     marker = cache / "tixl_project.json"
     graph_sha = hashlib.sha256(("world-clip-lanes-v6|" + "|".join(digest(file) for file in files)).encode()).hexdigest()
@@ -490,7 +471,13 @@ def ensure_generic_project(blend: Path, cache: Path, files: list[Path], build: b
         probe.write_text("probe", encoding="utf-8")
     finally:
         probe.unlink(missing_ok=True)
-    populate(path, files, cache / "project_backups", TIXL_EDITOR, build=build)
+    populate(path, files, cache / "project_backups", TIXL_EDITOR, build=False)
+    manifest = read_manifest(cache) if manifest is None else manifest
+    from cache_bindings import rebind_project_paths
+    rebind_project_paths(path, cache, manifest["generation"])
+    if build:
+        subprocess.run(["dotnet", "build", str(next(path.glob("*.csproj"))),
+                        f"-p:T3_ASSEMBLY_PATH={TIXL_EDITOR}", "--nologo"], check=True)
     marker.write_text(json.dumps({"name": name, "path": str(path), "source_blend": str(blend),
                                   "graph_sha256": graph_sha}, indent=2), encoding="utf-8")
 
@@ -506,8 +493,9 @@ def sync(blend: Path, requested_profile: str, requested_cache: Path | None,
     sha = digest(blend)
     if stat_before != (blend.stat().st_size, blend.stat().st_mtime_ns):
         raise RuntimeError("Blender save was still changing; retry sync shortly")
-    if not force and valid_cache(cache, sha, blender):
-        generic_finish(blend, cache, json.loads((cache / "worlds" / "manifest.json").read_text()), install)
+    reusable = None if force else cached_manifest(cache, sha, blender)
+    if reusable is not None:
+        generic_finish(blend, cache, reusable, install)
         return {"status": "up_to_date", "blend": str(blend), "cache": str(cache), "profile": profile}
     if not blender.is_file():
         raise FileNotFoundError(f"Blender executable not found: {blender}")
@@ -517,8 +505,9 @@ def sync(blend: Path, requested_profile: str, requested_cache: Path | None,
         sha = digest(blend)
         if stable != (blend.stat().st_size, blend.stat().st_mtime_ns):
             raise RuntimeError("Blender save changed during sync; retry on the next save")
-        if not force and valid_cache(cache, sha, blender):
-            generic_finish(blend, cache, json.loads((cache / "worlds" / "manifest.json").read_text()), install)
+        reusable = None if force else cached_manifest(cache, sha, blender)
+        if reusable is not None:
+            generic_finish(blend, cache, reusable, install)
             return {"status": "up_to_date", "blend": str(blend), "cache": str(cache), "profile": profile}
         stage = cache / ".staging" / uuid.uuid4().hex
         stage.mkdir(parents=True)
@@ -531,7 +520,8 @@ def sync(blend: Path, requested_profile: str, requested_cache: Path | None,
             raise RuntimeError(f"Blender export failed; prior cache retained. See {log}")
         manifest = validate_stage(stage, sha, blender)
         wait_for_editor_pause()
-        publish(stage, cache, manifest, profile)
+        manifest = publish(stage, cache, manifest, profile, blend, sha)
+        log = generation_root(cache, manifest["generation"]) / "export.log"
         generic_finish(blend, cache, manifest, install, refresh_runtime=True)
         return {"status": "rebuilt", "blend": str(blend), "cache": str(cache),
                 "profile": profile, "worlds": len(manifest["worlds"]), "log": str(log)}
@@ -560,9 +550,10 @@ def main() -> None:
         blend = options.blend.resolve()
         profile = profile_for(blend, options.profile)
         cache = cache_for(blend, profile, options.cache_root)
-        if profile != "generic" or not valid_cache(cache, digest(blend), options.blender):
+        manifest = cached_manifest(cache, digest(blend), options.blender)
+        if profile != "generic" or manifest is None:
             raise ValueError("Install requires an up-to-date generic Blender cache")
-        generic_finish(blend, cache, json.loads((cache / "worlds" / "manifest.json").read_text()), True)
+        generic_finish(blend, cache, manifest, True)
         print(json.dumps({"status": "installed", "blend": str(blend)}))
         return
     if options.action == "sync":

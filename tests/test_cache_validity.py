@@ -26,9 +26,14 @@ class CacheValidityTest(unittest.TestCase):
         for suffix in ("animation.bin", "animation.json", "channels.json", "manifest.json", "opaque.glb"):
             (worlds / ("main_" + suffix)).write_bytes(b"data")
         contract = build_contract(blender, gltf, {"sampleRate": 60, "profile": "generic"}, [{"kind": "file", "path": str(texture)}])
-        manifest = {"source_sha256": blend_sync.digest(blend), "export_contract": contract,
+        manifest = {"source_blend": str(blend), "source_sha256": blend_sync.digest(blend), "export_contract": contract,
                     "worlds": [{"world": "main", "glbs": {"opaque": "main_opaque.glb"}}]}
         (worlds / "manifest.json").write_text(json.dumps(manifest))
+        (cache / "camera_timeline.json").write_text("{}")
+        stage = root / "stage"
+        cache.rename(stage)
+        cache.mkdir()
+        manifest = blend_sync.publish(stage, cache, manifest, "generic")
         return blend, blender, texture, cache, manifest
 
     def test_unchanged_valid_export_reuses_cache_without_starting_blender(self):
@@ -54,10 +59,11 @@ class CacheValidityTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             blend, blender, texture, cache, manifest = self.fixture(Path(folder))
             sha = blend_sync.digest(blend)
-            (cache / "worlds" / "main_opaque.glb").unlink()
+            (blend_sync.active_root(cache) / "worlds" / "main_opaque.glb").unlink()
             self.assertFalse(blend_sync.valid_cache(cache, sha, blender))
+            # Corrupt committed payloads always fail generation verification.
             manifest.pop("export_contract")
-            (cache / "worlds" / "manifest.json").write_text(json.dumps(manifest))
+            (cache / "legacy_manifest.json").write_text(json.dumps(manifest))
             self.assertFalse(blend_sync.valid_cache(cache, sha, blender))
 
 

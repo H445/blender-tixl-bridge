@@ -142,7 +142,7 @@ result = bpy.ops.tixl_bridge.sync_saved_blend()
 print({"result": sorted(result), "file": bpy.data.filepath})
 ```
 
-The operator queues a background process; `FINISHED` means queued, not completed. Follow `<blend folder>/.tixl_cache/<blend name>/sync_logs/latest.log`. Then inspect `tixl_project.json`, `worlds/manifest.json`, per-world manifests and channels, `camera_timeline.json`, and generated graph files before moving to TiXL verification.
+The operator queues a background process; `FINISHED` means queued, not completed. Follow `<blend folder>/.tixl_cache/<blend name>/sync_logs/latest.log`. Then inspect `tixl_project.json` and `current_generation.json`. Use `cache_publication.active_root(cache)` to verify the committed generation (including recovery fallback), then inspect its `worlds/manifest.json`, per-world manifests and channels, and `camera_timeline.json`, plus the cache-root generated graph files before moving to TiXL verification. New generations change saved graph path inputs, so installation defers until the end user saves editor work and closes TiXL; never terminate it automatically.
 
 `scene.tixl_bridge_autosync` controls sync-after-save. Enable it only when the end user asks for continuing automatic syncs.
 

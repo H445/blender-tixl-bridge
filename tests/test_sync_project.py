@@ -31,9 +31,19 @@ class SyncProjectTest(unittest.TestCase):
                 cache.mkdir()
                 (cache / 'camera_timeline.json').write_text(json.dumps({
                     'shots': [{'id': 1, 'start': 0, 'label': 'Cube'}], 'passages': []}))
-                files = generate(blend, cache, {'fps': 60, 'project_name': 'BlendShapeExample',
+                manifest = {'fps': 60, 'project_name': 'BlendShapeExample',
+                    'source_blend': str(blend), 'source_sha256': blend_sync.digest(blend),
                     'worlds': [{'world': 'cube', 'active_clip': [1, 241],
-                                'opaque_count': 1, 'glass_count': 0}]})
+                                'opaque_count': 1, 'glass_count': 0, 'glbs': {'opaque': ''}}]}
+                (cache / 'worlds').mkdir()
+                for filename in ('cube_opaque.glb', 'cube_animation.bin'):
+                    (cache / 'worlds' / filename).write_bytes(b'data')
+                (cache / 'camera_60hz.bin').write_bytes(b'camera')
+                stage = root / f'stage{index}'
+                cache.rename(stage)
+                cache.mkdir()
+                manifest = blend_sync.publish(stage, cache, manifest, 'generic')
+                files = generate(blend, cache, manifest)
                 with patch.object(blend_sync, 'TIXL_PROJECT', template), patch.object(blend_sync, 'TIXL_EDITOR', root):
                     if index:
                         with self.assertRaises(FileExistsError):
