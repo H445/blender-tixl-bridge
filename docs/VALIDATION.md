@@ -126,3 +126,71 @@ python tests/tixl_glb_loading_validation.py --baseline path/to/baseline --repeti
 It clones private data generations and restores each run before proceeding.
 PNG byte equality is deliberately strict for this fixed example and environment;
 use the same versions, resolution, hardware, and source data when comparing.
+
+## Animation baking measurements (2026-09-27)
+
+The measured exporter bottleneck was per-record seeking: a disposable Blender
+scene with 100 animated objects and 600 shared output frames issued 60,000
+matrix seeks. Bounded contiguous batches reduced that count to 100, while the
+binary, metadata, and channel files remained byte-identical. The exploratory
+profile decreased from 1.118 to 0.867 seconds; profiler overhead is included.
+
+Five unprofiled complete bakes, including cache preparation, file closure, and
+channel JSON output, measured medians of 0.927 seconds before and 0.612 seconds
+after batching, about 34% lower for this workload. The baseline group ran before
+the optimized group in one disposable Blender process. These are exporter
+measurements; they do not establish faster complete syncs or playback. See the
+portable [measurement report](benchmarks/animation-baking-2026-09-27.json).
+
+A separate fixture started at source frame 11 with a 24 fps source and retained
+60 Hz output sampling. Its three overlapping/disjoint world windows exercised
+parented and static transforms, morphs, visibility, static/dynamic opaque and
+transparent PBR/emission channels, and animated lights. All three worlds matched
+the previous exporter byte for byte, and both versions set the shared scene
+frame exactly 61 times. Fresh bakes of all four bundled-example worlds also
+matched byte for byte and retained the existing GLB export names.
+
+The live TiXL comparison used a complete private payload for each phase and
+updated native GLB loaders last, after animation paths. This avoids reinitializing
+from mutable dispatch counts between individual debug requests. Twelve captures
+covered the cube, a deformed morph, and both sides of cuts at 4, 8, and 12 seconds.
+Every baseline/optimized PNG matched exactly at 3840×2160. Unsaturated scene-load,
+GLB-read, and JSON-parse counters stayed constant during source-time steps;
+held-frame uploads were zero. Graph, timeline, selection, and view were restored,
+then the original native scenes were refreshed with their restored paths.
+The original project subsequently rendered all four worlds at 0, 4, 8, and
+12 seconds with PNG bytes identical to the fresh baseline captures.
+
+A private BLEND fixture also compared freshly baked cube and deformed-morph
+data at 0 and 3.5 seconds. Material-channel alpha was set to 0.35 identically
+in both fixtures. PNG bytes matched exactly with zero RGB error; alpha-zero
+control captures proved a visible transparent-path contribution. Representative
+opaque and transparent images were visually inspected.
+
+The writer keeps the existing version 1 binary layout and uses an 8 MiB total
+matrix-payload budget, at most 1,024 samples per batch, with direct writes when
+only one sample fits. Object/allocator overhead is outside that payload budget.
+Cache fingerprints include the writer module. Failure checks cover sampling,
+buffer flush, writer construction, and stream-close errors; every stream receives
+a close attempt and the original failure remains primary. All 162 Python tests
+passed locally. The updated add-on verified 57 installed package files, preserved
+the foreground Blender scene, and rebuilt its ZIP.
+
+To repeat the Blender comparison, retain the previous exporter source (the
+`a841ccd` revision is the baseline for these measurements). Launch
+`tests/blender_animation_bake_validation.py` in a disposable Blender background
+process through Blender MCP, passing arguments after Blender's `--` separator:
+
+```text
+--baseline path/to/previous/tixl_animation_export.py --example examples/BlendShapeExample.blend
+```
+
+The helper reports its private output folder. With the bundled example already
+open and paused, use its `example_baseline` and `example_current` folders:
+
+```powershell
+python tests/tixl_animation_bake_validation.py --baseline path/to/example_baseline --optimized path/to/example_current --output path/to/new/private/render_folder
+```
+
+The live helper requires Pillow locally. Its offline fixture, counter, and
+restoration tests use only the standard library and run in the normal CI suite.

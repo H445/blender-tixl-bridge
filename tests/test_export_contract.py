@@ -25,7 +25,7 @@ class ExportContractTest(unittest.TestCase):
         self.blender.write_bytes(b"binary-v1")
         self.source = self.root / "source"
         self.source.mkdir()
-        for name in ("export_contract.py", "blend_sync_worker.py", "tixl_animation_export.py"):
+        for name in ("export_contract.py", "blend_sync_worker.py", "tixl_animation_export.py", "animation_writer.py"):
             (self.source / name).write_text(f"# {name} v1\n", encoding="utf-8")
         self.gltf = self.root / "gltf"
         (self.gltf / "nested").mkdir(parents=True)
@@ -114,6 +114,15 @@ class ExportContractTest(unittest.TestCase):
         contract = self.contract()
         path = self.source / "tixl_animation_export.py"
         path.write_text("# exporter changed\n", encoding="utf-8")
+        self.assertFalse(self.valid(contract))
+
+    def test_matrix_writer_changes_invalidate_contract(self):
+        contract = self.contract()
+        path = self.source / "animation_writer.py"
+        before = path.stat()
+        payload = path.read_bytes()
+        path.write_bytes(payload.replace(b"v1", b"v2"))
+        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
         self.assertFalse(self.valid(contract))
 
     def test_settings_change_changes_contract_fingerprint(self):

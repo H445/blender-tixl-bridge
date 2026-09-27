@@ -1,0 +1,623 @@
+{
+  "schema": 1,
+  "date": "2026-09-27",
+  "issue": 10,
+  "versions": {
+    "blender": "5.2.2 LTS",
+    "tixl": "4.3.0.2",
+    "addon": "1.3.1"
+  },
+  "writer": {
+    "binaryFormat": "TIXLANIM version 1",
+    "matrixBytes": 64,
+    "payloadBudgetBytes": 8388608,
+    "maximumBatchSamples": 1024,
+    "minimumBatchSamples": 1,
+    "directWriteWhenOneSample": true,
+    "sampleRateHz": 60,
+    "accountingScope": "Buffered matrix payload only; Python object and allocator overhead excluded."
+  },
+  "profile": {
+    "scope": "Disposable Blender scene; 100 animated cube records, 600 shared output frames, 60000 transform samples. cProfile adds overhead; these are exploratory profiles, not unprofiled benchmark claims.",
+    "baseline": {
+      "wall": {
+        "objects": 100,
+        "frames": 600,
+        "samples": 60000,
+        "elapsedSeconds": 1.1176274999743327
+      },
+      "functions": [
+        {
+          "function": "bake_all",
+          "calls": 1,
+          "selfSeconds": 0.1090432,
+          "cumulativeSeconds": 1.1175678
+        },
+        {
+          "function": "runtime_matrix",
+          "calls": 60000,
+          "selfSeconds": 0.4301802,
+          "cumulativeSeconds": 0.4608913
+        },
+        {
+          "function": "<method 'seek' of '_io.BufferedRandom' objects>",
+          "calls": 60000,
+          "selfSeconds": 0.35443610000000003,
+          "cumulativeSeconds": 0.35443610000000003
+        },
+        {
+          "function": "<method 'write' of '_io.BufferedRandom' objects>",
+          "calls": 60000,
+          "selfSeconds": 0.017825800000000003,
+          "cumulativeSeconds": 0.017825800000000003
+        },
+        {
+          "function": "<method 'write' of '_io.TextIOWrapper' objects>",
+          "calls": 1,
+          "selfSeconds": 8.000000000000001e-07,
+          "cumulativeSeconds": 8.000000000000001e-07
+        }
+      ]
+    },
+    "optimized": {
+      "wall": {
+        "objects": 100,
+        "frames": 600,
+        "samples": 60000,
+        "elapsedSeconds": 0.8666068000020459
+      },
+      "functions": [
+        {
+          "function": "bake_all",
+          "calls": 1,
+          "selfSeconds": 0.1022591,
+          "cumulativeSeconds": 0.8665203
+        },
+        {
+          "function": "runtime_matrix",
+          "calls": 60000,
+          "selfSeconds": 0.45720700000000003,
+          "cumulativeSeconds": 0.4891302
+        },
+        {
+          "function": "<method 'seek' of '_io.BufferedRandom' objects>",
+          "calls": 100,
+          "selfSeconds": 9.21e-05,
+          "cumulativeSeconds": 9.21e-05
+        },
+        {
+          "function": "<method 'write' of '_io.BufferedRandom' objects>",
+          "calls": 100,
+          "selfSeconds": 0.0009769000000000002,
+          "cumulativeSeconds": 0.0009769000000000002
+        },
+        {
+          "function": "<method 'write' of '_io.TextIOWrapper' objects>",
+          "calls": 1,
+          "selfSeconds": 1.2000000000000002e-06,
+          "cumulativeSeconds": 1.2000000000000002e-06
+        }
+      ]
+    },
+    "binaryMetadataChannelsEqual": true
+  },
+  "wholeBakeBenchmark": {
+    "scope": "Single disposable Blender process; prepare_cache plus complete bake, file close and JSON output; five unprofiled runs for each version, baseline group followed by optimized group. Not complete sync or playback timing.",
+    "baseline": {
+      "objects": 100,
+      "frames": 600,
+      "samples": 5,
+      "unprofiledSeconds": [
+        0.9198766999761574,
+        0.9352178000262938,
+        0.9173509999527596,
+        0.9509981000446714,
+        0.9274300000397488
+      ],
+      "medianSeconds": 0.9274300000397488,
+      "minimumSeconds": 0.9173509999527596,
+      "maximumSeconds": 0.9509981000446714,
+      "payloadBytes": 3841213
+    },
+    "optimized": {
+      "objects": 100,
+      "frames": 600,
+      "samples": 5,
+      "unprofiledSeconds": [
+        0.6076707000029273,
+        0.6133550999802537,
+        0.6066533999983221,
+        0.6117859000223689,
+        0.6123924999847077
+      ],
+      "medianSeconds": 0.6117859000223689,
+      "minimumSeconds": 0.6066533999983221,
+      "maximumSeconds": 0.6133550999802537,
+      "payloadBytes": 3841213
+    }
+  },
+  "comprehensive": {
+    "fixture": {
+      "worlds": {
+        "overlap_a": {
+          "collection": "World_A",
+          "clip": [
+            1,
+            32
+          ],
+          "animatedObjects": [
+            "overlap_a_animated_opaque",
+            "overlap_a_animated_water"
+          ],
+          "staticObjects": [
+            "overlap_a_static_opaque",
+            "overlap_a_static_glass"
+          ],
+          "parent": "overlap_a_keyed_parent",
+          "animatedLight": "overlap_a_animated_key",
+          "staticLight": "overlap_a_static_fill"
+        },
+        "overlap_b": {
+          "collection": "World_B",
+          "clip": [
+            20,
+            48
+          ],
+          "animatedObjects": [
+            "overlap_b_animated_opaque",
+            "overlap_b_animated_water"
+          ],
+          "staticObjects": [
+            "overlap_b_static_opaque",
+            "overlap_b_static_glass"
+          ],
+          "parent": "overlap_b_keyed_parent",
+          "animatedLight": "overlap_b_animated_key",
+          "staticLight": "overlap_b_static_fill"
+        },
+        "disjoint_c": {
+          "collection": "World_C",
+          "clip": [
+            49,
+            61
+          ],
+          "animatedObjects": [
+            "disjoint_c_animated_opaque",
+            "disjoint_c_animated_water"
+          ],
+          "staticObjects": [
+            "disjoint_c_static_opaque",
+            "disjoint_c_static_glass"
+          ],
+          "parent": "disjoint_c_keyed_parent",
+          "animatedLight": "disjoint_c_animated_key",
+          "staticLight": "disjoint_c_static_fill"
+        }
+      },
+      "staticSourceNames": [
+        "disjoint_c_static_glass",
+        "disjoint_c_static_opaque",
+        "overlap_a_static_glass",
+        "overlap_a_static_opaque",
+        "overlap_b_static_glass",
+        "overlap_b_static_opaque"
+      ],
+      "source": {
+        "frameStart": 11,
+        "frameEnd": 35,
+        "sourceFps": 24,
+        "outputFps": 60,
+        "outputEnd": 61
+      }
+    },
+    "baselineCurrentBytesEqual": {
+      "overlap_a": true,
+      "overlap_b": true,
+      "disjoint_c": true
+    },
+    "worldValidation": {
+      "overlap_a": {
+        "recordCount": 4,
+        "matrixSamples": 66,
+        "clip": [
+          1,
+          32
+        ],
+        "clipSampleCount": 32,
+        "animatedRecords": 2,
+        "staticRecords": 2,
+        "morphChannels": 1,
+        "visibilityChannels": 1,
+        "materialChannels": 4,
+        "animatedLightChannels": 1,
+        "animationBytes": 4285,
+        "metadataBytes": 1045,
+        "channelsBytes": 14009
+      },
+      "overlap_b": {
+        "recordCount": 4,
+        "matrixSamples": 60,
+        "clip": [
+          20,
+          48
+        ],
+        "clipSampleCount": 29,
+        "animatedRecords": 2,
+        "staticRecords": 2,
+        "morphChannels": 1,
+        "visibilityChannels": 1,
+        "materialChannels": 4,
+        "animatedLightChannels": 1,
+        "animationBytes": 3901,
+        "metadataBytes": 1049,
+        "channelsBytes": 12843
+      },
+      "disjoint_c": {
+        "recordCount": 4,
+        "matrixSamples": 28,
+        "clip": [
+          49,
+          61
+        ],
+        "clipSampleCount": 13,
+        "animatedRecords": 2,
+        "staticRecords": 2,
+        "morphChannels": 1,
+        "visibilityChannels": 1,
+        "materialChannels": 4,
+        "animatedLightChannels": 1,
+        "animationBytes": 1853,
+        "metadataBytes": 1059,
+        "channelsBytes": 6337
+      }
+    },
+    "baselineFrameSetCalls": 61,
+    "optimizedFrameSetCalls": 61,
+    "optimizedMatrixSampleCalls": 154,
+    "sharedFrameEvaluationVerified": true
+  },
+  "bundledExample": {
+    "worldValidation": {
+      "cube": {
+        "recordCount": 1,
+        "matrixSamples": 241,
+        "clip": [
+          1,
+          241
+        ],
+        "clipSampleCount": 241,
+        "animatedRecords": 1,
+        "staticRecords": 0,
+        "morphChannels": 1,
+        "visibilityChannels": 1,
+        "materialChannels": 1,
+        "animatedLightChannels": 1,
+        "animationBytes": 15449,
+        "metadataBytes": 371,
+        "channelsBytes": 23516
+      },
+      "sphere": {
+        "recordCount": 1,
+        "matrixSamples": 241,
+        "clip": [
+          241,
+          481
+        ],
+        "clipSampleCount": 241,
+        "animatedRecords": 1,
+        "staticRecords": 0,
+        "morphChannels": 1,
+        "visibilityChannels": 1,
+        "materialChannels": 1,
+        "animatedLightChannels": 1,
+        "animationBytes": 15449,
+        "metadataBytes": 377,
+        "channelsBytes": 23637
+      },
+      "prism": {
+        "recordCount": 1,
+        "matrixSamples": 241,
+        "clip": [
+          481,
+          721
+        ],
+        "clipSampleCount": 241,
+        "animatedRecords": 1,
+        "staticRecords": 0,
+        "morphChannels": 1,
+        "visibilityChannels": 1,
+        "materialChannels": 1,
+        "animatedLightChannels": 1,
+        "animationBytes": 15449,
+        "metadataBytes": 375,
+        "channelsBytes": 23636
+      },
+      "cylinder": {
+        "recordCount": 1,
+        "matrixSamples": 241,
+        "clip": [
+          721,
+          961
+        ],
+        "clipSampleCount": 241,
+        "animatedRecords": 1,
+        "staticRecords": 0,
+        "morphChannels": 1,
+        "visibilityChannels": 1,
+        "materialChannels": 1,
+        "animatedLightChannels": 1,
+        "animationBytes": 15449,
+        "metadataBytes": 381,
+        "channelsBytes": 23643
+      }
+    },
+    "baselineCurrentBytesEqual": {
+      "cube": true,
+      "sphere": true,
+      "prism": true,
+      "cylinder": true
+    },
+    "exportNamesMatchExistingGlbNodes": true,
+    "sourceBlendSha256": "b724615bafb3afeb48b3c931f3ab86f31eea08e56ed213f7f36161fe318b538e",
+    "files": {
+      "cube": {
+        "animation.bin": {
+          "bytes": 15449,
+          "sha256": "e4cd1441fc768d4389fee1e0d8cd5e7cb4138af418ac56cd603d4297d262d887"
+        },
+        "animation.json": {
+          "bytes": 371,
+          "sha256": "a8a9535d4cfb4a855ea93a6298979ad3f6040746477ee3a59af63ac509395cf1"
+        },
+        "channels.json": {
+          "bytes": 23516,
+          "sha256": "ecc585ba12b629c0093d2e9de07a12eeb30d32ec0612544fca75306737fd2ce4"
+        }
+      },
+      "sphere": {
+        "animation.bin": {
+          "bytes": 15449,
+          "sha256": "5f13223d0a4baca44e0cd3d16cd670c2ecb1d44d78f44c83ed48345ce736e8d6"
+        },
+        "animation.json": {
+          "bytes": 377,
+          "sha256": "f58290b6764bcaac04a5df06d1434d08eed94d99f22acfb71b5343a9a17abbc0"
+        },
+        "channels.json": {
+          "bytes": 23637,
+          "sha256": "ce28c467202f5805812399134f2905eda0c42012d3805627176682d86b95a67d"
+        }
+      },
+      "prism": {
+        "animation.bin": {
+          "bytes": 15449,
+          "sha256": "3d2d0c40f9b48748c8ada8f210856da3a70fa28bd87048637e1bbb327fef03a6"
+        },
+        "animation.json": {
+          "bytes": 375,
+          "sha256": "0e608e37d45d6b9153921c8fa0094bc0dfdd74799b40f01eb3ab21a3bf8d54cc"
+        },
+        "channels.json": {
+          "bytes": 23636,
+          "sha256": "35b8b08ac6b7443d4bfad14dd9c0f3f3ecc613ed29de755bc7f874cc390d467a"
+        }
+      },
+      "cylinder": {
+        "animation.bin": {
+          "bytes": 15449,
+          "sha256": "81adf245d29c651d929f3ce35acb232f4a812c4d0a6a65c7b214fd74d476e3c5"
+        },
+        "animation.json": {
+          "bytes": 381,
+          "sha256": "51efc79c7702fc042cf90937a4f0188b8b0ddc806fe02181df4c308319ee4f5c"
+        },
+        "channels.json": {
+          "bytes": 23643,
+          "sha256": "136478d32d194c57b39ecdfd1e7a2115eb891a7011487568dfa439ca3d4c20e4"
+        }
+      }
+    }
+  },
+  "renderedCuts": {
+    "scope": "complete private payload per phase: identical GLB copies, existing camera cuts and graph, freshly baked baseline/current animation and channels",
+    "times": [
+      0,
+      3.5,
+      3.999,
+      4,
+      4.001,
+      7.999,
+      8,
+      8.001,
+      11.999,
+      12,
+      12.001,
+      15.999
+    ],
+    "comparisons": [
+      {
+        "seconds": 0,
+        "exactPngMatch": true,
+        "sha256": "b0c7e40cda0d03dbc5a0230998b74b03403ba259f078d97e4cae67076e0e581c"
+      },
+      {
+        "seconds": 3.5,
+        "exactPngMatch": true,
+        "sha256": "2a3c511ab2c4076dcf1296aea86123663a0291f0882fa5c61d8e9098fad78c85"
+      },
+      {
+        "seconds": 3.999,
+        "exactPngMatch": true,
+        "sha256": "20532dee25be21af014cc5306750d6b194fd2c309c586bcdc1d2679d8fbd73fc"
+      },
+      {
+        "seconds": 4,
+        "exactPngMatch": true,
+        "sha256": "1367a66c21086dc5d63b067663dc9b05bf846a2d68d0466c3e026837d0673b8d"
+      },
+      {
+        "seconds": 4.001,
+        "exactPngMatch": true,
+        "sha256": "1367a66c21086dc5d63b067663dc9b05bf846a2d68d0466c3e026837d0673b8d"
+      },
+      {
+        "seconds": 7.999,
+        "exactPngMatch": true,
+        "sha256": "6a31c915bf372ce9cb6b18f8f73e72f471be4d6e84c8470506d85d66cfbbce69"
+      },
+      {
+        "seconds": 8,
+        "exactPngMatch": true,
+        "sha256": "cdf31c7c77403dee7105395988c2bfab3df30c015e3894bd749772d39f9ee2b2"
+      },
+      {
+        "seconds": 8.001,
+        "exactPngMatch": true,
+        "sha256": "83bbe859009a70d85844d69e38a2ed53b9c9ae6e2b24e78bfe70ba2df62e3109"
+      },
+      {
+        "seconds": 11.999,
+        "exactPngMatch": true,
+        "sha256": "fd67cf516e361b1cfdf73b77bbc28364b6e41131906840f6219c352ee8cd0693"
+      },
+      {
+        "seconds": 12,
+        "exactPngMatch": true,
+        "sha256": "d93bb81e53f902881547e654d068e7c86381b9ccd47839dd01e2defc543cc58e"
+      },
+      {
+        "seconds": 12.001,
+        "exactPngMatch": true,
+        "sha256": "d93bb81e53f902881547e654d068e7c86381b9ccd47839dd01e2defc543cc58e"
+      },
+      {
+        "seconds": 15.999,
+        "exactPngMatch": true,
+        "sha256": "2bd661607f52920f18e63b8ffe9062fe17a5dac95124c106c5d2f4dbc33995b8"
+      }
+    ],
+    "resolution": [
+      3840,
+      2160
+    ],
+    "phases": {
+      "baseline": {
+        "graphVerified": true,
+        "loadCountersStable": true,
+        "heldUploadsZero": true,
+        "initialLoadCounters": {
+          "Blender cumulative scene loads": 226,
+          "Blender cumulative GLB reads": 226,
+          "Blender cumulative GLB JSON parses": 226
+        },
+        "finalLoadCounters": {
+          "Blender cumulative scene loads": 226,
+          "Blender cumulative GLB reads": 226,
+          "Blender cumulative GLB JSON parses": 226
+        }
+      },
+      "optimized": {
+        "graphVerified": true,
+        "loadCountersStable": true,
+        "heldUploadsZero": true,
+        "initialLoadCounters": {
+          "Blender cumulative scene loads": 238,
+          "Blender cumulative GLB reads": 238,
+          "Blender cumulative GLB JSON parses": 238
+        },
+        "finalLoadCounters": {
+          "Blender cumulative scene loads": 238,
+          "Blender cumulative GLB reads": 238,
+          "Blender cumulative GLB JSON parses": 238
+        }
+      }
+    },
+    "minimumVisibleBluePixels": 467461,
+    "graphContextSelectionViewRestored": true,
+    "originalNativeScenesRefreshed": 4,
+    "representativeImagesVisuallyInspected": true,
+    "originalWorldRenderRestoration": {
+      "samples": [
+        {
+          "seconds": 0,
+          "visibleBluePixels": 1832562,
+          "sha256": "b0c7e40cda0d03dbc5a0230998b74b03403ba259f078d97e4cae67076e0e581c",
+          "matchesFreshBaseline": true
+        },
+        {
+          "seconds": 4,
+          "visibleBluePixels": 467461,
+          "sha256": "1367a66c21086dc5d63b067663dc9b05bf846a2d68d0466c3e026837d0673b8d",
+          "matchesFreshBaseline": true
+        },
+        {
+          "seconds": 8,
+          "visibleBluePixels": 694327,
+          "sha256": "cdf31c7c77403dee7105395988c2bfab3df30c015e3894bd749772d39f9ee2b2",
+          "matchesFreshBaseline": true
+        },
+        {
+          "seconds": 12,
+          "visibleBluePixels": 1029270,
+          "sha256": "d93bb81e53f902881547e654d068e7c86381b9ccd47839dd01e2defc543cc58e",
+          "matchesFreshBaseline": true
+        }
+      ],
+      "graphRestored": true,
+      "contextRestored": true
+    }
+  },
+  "transparent": {
+    "scope": "Same private BLEND GLB for both versions; only freshly baked material-channel alpha adjusted to 0.35 in both fixtures. Native loader and transparent draw use the same GLB.",
+    "samples": [
+      {
+        "seconds": 0.0,
+        "meanRgbError": 0.0,
+        "maxRgbError": 0
+      },
+      {
+        "seconds": 3.5,
+        "meanRgbError": 0.0,
+        "maxRgbError": 0
+      }
+    ],
+    "pngBytesExactlyEqual": true,
+    "captures": [
+      {
+        "seconds": 0.0,
+        "sha256": "f1dd163b8229e59a2bd40b96b1bf1e928a5e34b9550477f2fe100141f2879e63",
+        "transparentPathContribution": {
+          "meanRgbDifference": 35.489536795910496,
+          "changedPixels": 2572421
+        }
+      },
+      {
+        "seconds": 3.5,
+        "sha256": "ec7f7e87a465eccb96b98b8791d8dadbb2cb4581da961b6378400538ac60ffe0",
+        "transparentPathContribution": {
+          "meanRgbDifference": 20.575279787165638,
+          "changedPixels": 1336626
+        }
+      }
+    ],
+    "graphContextSelectionViewRestored": true,
+    "representativeImagesVisuallyInspected": true
+  },
+  "integration": {
+    "pythonTestsPassed": 162,
+    "installedPackageFilesVerified": 57,
+    "packageFilesUpdated": 3,
+    "foregroundBlenderFilePreserved": true,
+    "addonZipRebuilt": true,
+    "officialCapabilityRefreshComplete": true,
+    "capabilityRefreshUtc": "2026-09-27T06:09:57+00:00"
+  },
+  "rawArtifacts": {
+    "blenderBake": "examples/.tixl_cache/issue10_validation/20260927T015627_10ec9f5f/animation_bake_report.json",
+    "profile": "examples/.tixl_cache/issue10_validation/profile_comparison.json",
+    "renderedCuts": "examples/.tixl_cache/issue10_validation/render_verified/render_comparison.json",
+    "transparent": "examples/.tixl_cache/issue10_validation/render_transparent/optimized_comparison.json",
+    "installation": "examples/.tixl_cache/issue10_validation/addon_install.json",
+    "originalWorldRestoration": "examples/.tixl_cache/issue10_validation/restored_original/restoration_report.json"
+  }
+}

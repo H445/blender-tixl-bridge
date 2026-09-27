@@ -15,6 +15,8 @@ import struct
 import time
 from pathlib import Path
 
+from animation_writer import MatrixRecordWriter, batch_samples
+
 import bpy
 from mathutils import Matrix
 
@@ -200,32 +202,49 @@ def material_values(mat):
 
 def bake_all(scene, jobs):
     started = time.monotonic()
-    for frame in range(1, END+1):
-        set_output_frame(scene, frame)
+    try:
+        record_count = sum(len(job["animated"]) + len(job["static"]) for job in jobs)
+        samples_per_batch = batch_samples(record_count)
+        writers = {id(rec): MatrixRecordWriter(job["stream"], rec["offset"],
+                                              rec["start"], samples_per_batch)
+                   for job in jobs for rec in job["animated"] + job["static"]}
+        for frame in range(1, END+1):
+            set_output_frame(scene, frame)
+            for job in jobs:
+                start,end = job["clip"]
+                if not start <= frame <= end: continue
+                entries=job["animated"]+job["static"] if frame==start else job["animated"]
+                for rec in entries:
+                    if not rec["start"] <= frame <= rec["end"]: continue
+                    writers[id(rec)].append(frame, struct.pack("<16f", *runtime_matrix(rec["source"])))
+                for keys,ch in job["morphs"]:
+                    ch["weights"].append([float(k.value) for k in keys[1:]])
+                for src,ch in job["visibility"]:
+                    ch["values"].append(not src.hide_render)
+                for mat,dynamic,ch in job["materials"]:
+                    if frame==start or dynamic:
+                        base,emission=material_values(mat)
+                        if transparent(mat): base[3]=0.12 if "water" in mat.name.lower() else 0.18
+                        ch["base_color"].append(base);ch["emission"].append(emission)
+                for light,ch in job["lights"]:
+                    ch["samples"].append({"frame":frame,"energy":float(light.data.energy),"color":list(light.data.color),"position":list(light.matrix_world.translation)})
+            if frame%600==0:
+                print(f"BAKE_PROGRESS {frame}/{END} elapsed={time.monotonic()-started:.1f}s",flush=True)
         for job in jobs:
-            start,end = job["clip"]
-            if not start <= frame <= end: continue
-            stream=job["stream"]
-            entries=job["animated"]+job["static"] if frame==start else job["animated"]
-            for rec in entries:
-                if not rec["start"] <= frame <= rec["end"]: continue
-                stream.seek(rec["offset"]+(frame-rec["start"])*64)
-                stream.write(struct.pack("<16f", *runtime_matrix(rec["source"])))
-            for keys,ch in job["morphs"]:
-                ch["weights"].append([float(k.value) for k in keys[1:]])
-            for src,ch in job["visibility"]:
-                ch["values"].append(not src.hide_render)
-            for mat,dynamic,ch in job["materials"]:
-                if frame==start or dynamic:
-                    base,emission=material_values(mat)
-                    if transparent(mat): base[3]=0.12 if "water" in mat.name.lower() else 0.18
-                    ch["base_color"].append(base);ch["emission"].append(emission)
-            for light,ch in job["lights"]:
-                ch["samples"].append({"frame":frame,"energy":float(light.data.energy),"color":list(light.data.color),"position":list(light.matrix_world.translation)})
-        if frame%600==0:
-            print(f"BAKE_PROGRESS {frame}/{END} elapsed={time.monotonic()-started:.1f}s",flush=True)
+            for rec in job["animated"] + job["static"]:
+                writers[id(rec)].flush()
+    finally:
+        active_error = sys.exc_info()[0] is not None
+        close_error = None
+        for job in jobs:
+            try:
+                job["stream"].close()
+            except BaseException as error:
+                if not active_error and close_error is None:
+                    close_error = error
+        if close_error is not None:
+            raise close_error
     for job in jobs:
-        job["stream"].close()
         (OUT/f'{job["world"]}_channels.json').write_text(json.dumps(job["channels"], separators=(",",":")), encoding="utf-8")
         print("CACHE_COMPLETE",job["world"],flush=True)
 

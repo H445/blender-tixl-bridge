@@ -11,6 +11,14 @@ Blender owns the source scene. The bridge produces replaceable caches and instal
 
 Procedural Blender shaders, arbitrary World-node networks, and physical refraction are not guaranteed to match. Build TiXL-side equivalents when glTF cannot represent the source.
 
+Transform baking groups consecutive samples for each record into contiguous writes.
+The writer shares an 8 MiB buffered-payload budget across all world records, with
+at most 1,024 samples per batch. When only one sample fits per record, it writes
+directly without retaining payload buffers. Python object and allocator overhead
+are outside this payload budget. The record-major `TIXLANIM` version 1 format,
+float32 matrices, sparse static records, channel ordering, and shared 60 Hz frame
+sampling remain unchanged; batching does not introduce runtime disk loading.
+
 ## Generated and editable ownership
 
 The authored `.blend` stays in place. Generated data, logs, manifests, camera samples, animation caches, and the TiXL project link live in `.tixl_cache/<blend name>/` beside it. A generated TiXL project is created beside the configured operator project.

@@ -16,6 +16,7 @@ _EXPORT_SOURCES = (
     "export_contract.py",
     "blend_sync_worker.py",
     "tixl_animation_export.py",
+    "animation_writer.py",
 )
 
 
