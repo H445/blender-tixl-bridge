@@ -131,6 +131,9 @@ def publish_generation(stage: Path, cache: Path, manifest: dict, profile: str,
     _json(stage / MARKER, {"schema": SCHEMA, "generation": generation, "files": files})
     # This rename is preparation, not publication. Readers never scan orphan roots.
     stage.replace(root)
+    # Record a prepared orphan too: publication can still fail after rename.
+    from retention_lifecycle import track_generation
+    track_generation(generation)
     verify_generation(cache, generation)
     if previous is not None:
         _atomic_json(cache / RECOVERY, {"schema": SCHEMA, "generation": previous})

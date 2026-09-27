@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -28,13 +29,34 @@ def write_status_file(path: os.PathLike[str] | str, status: dict[str, Any]) -> N
 
 
 def get_or_create_queue(registry: dict[str, Any], key: str,
-                        factory: Callable[[], "LatestRequestQueue"]) -> "LatestRequestQueue":
+                        factory: Callable[[], "LatestRequestQueue"], *,
+                        launch: Callable[[dict[str, Any]], Any] | None = None) -> "LatestRequestQueue":
     """Keep one coordinator in a host-owned registry across add-on reloads."""
     queue = registry.get(key)
     if queue is None:
         queue = factory()
         registry[key] = queue
+    if launch is not None:
+        if not callable(launch):
+            raise TypeError("launch must be callable")
+        # An add-on upgrade changes launch code without discarding active
+        # ownership or the final pending save held by the retained manager.
+        queue._launch = launch
     return queue
+
+
+def normalize_pending_log_paths(queue) -> None:
+    """Migrate owned pending metadata even when the retained queue has old methods."""
+    for state in queue._sources.values():
+        request = state.get("pending")
+        if not request or not isinstance(request.get("runId"), str) or not re.fullmatch(r"[0-9a-f]{32}", request["runId"]):
+            continue
+        if not isinstance(request.get("logPath"), str):
+            continue
+        path = str(Path(request["logPath"]).parent / (request["runId"] + ".log"))
+        if path != request["logPath"]:
+            request["logPath"] = path
+            queue._publish(state)
 
 
 class LatestRequestQueue:
@@ -203,8 +225,9 @@ class LatestRequestQueue:
             return
         state["status"] = "queued"
         self._publish(state)
+        launch_request = dict(request)
         try:
-            process = self._launch(dict(request))
+            process = self._launch(launch_request)
         except Exception as exc:
             state["status"] = "error"
             state["launch_error"] = f"Could not start sync child: {type(exc).__name__}: {exc}"
@@ -221,7 +244,7 @@ class LatestRequestQueue:
             return
         state["active"] = process
         self.total_launches += 1
-        state["active_request"] = request
+        state["active_request"] = launch_request
         state["pending"] = None
         state["status"] = "running"
         state["launch_error"] = None

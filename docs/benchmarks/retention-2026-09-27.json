@@ -1,0 +1,114 @@
+{
+  "schema": 1,
+  "scope": "private unloaded cache; TiXL editor closure is simulated; no live TiXL claim",
+  "blenderVersion": "5.2.2 LTS",
+  "status": "passed",
+  "assertions": {
+    "fiveForcedExports": true,
+    "realNoCameraFailureRecovered": true,
+    "currentAndPreviousInventoriesValid": true,
+    "latestFailedEvidenceRetained": true,
+    "homeTimingAndCustomFlagPreserved": true,
+    "unmarkedLegacyBackupAndUserGraphPreserved": true,
+    "generationCountWithinLimit": true,
+    "backupCountWithinLimit": true,
+    "storageConvergedAfterTwoCleanupPasses": true,
+    "artifactsConfinedToUniqueScope": true
+  },
+  "successfulExports": 5,
+  "successfulExportSeconds": [
+    6.200875999988057,
+    6.5869961000280455,
+    6.794205499987584,
+    6.840162300039083,
+    6.821132000011858
+  ],
+  "failedExport": {
+    "case": "no active camera",
+    "status": "failed-as-expected",
+    "exportLogBytes": 2118,
+    "parentAndWorkerMetricsRetained": true
+  },
+  "storageConvergence": [
+    {
+      "pass": 1,
+      "generationBytes": 68055,
+      "backupBytes": 50293,
+      "generationCount": 2,
+      "backupCount": 2,
+      "retentionStatus": "pruned"
+    },
+    {
+      "pass": 2,
+      "generationBytes": 68055,
+      "backupBytes": 50293,
+      "generationCount": 2,
+      "backupCount": 2,
+      "retentionStatus": "pruned"
+    },
+    {
+      "pass": 3,
+      "generationBytes": 68055,
+      "backupBytes": 50293,
+      "generationCount": 2,
+      "backupCount": 2,
+      "retentionStatus": "pruned"
+    }
+  ],
+  "backupCountMeaning": "two total directories: one owned retained backup and one unmarked legacy backup outside cleanup scope",
+  "installedQueue": {
+    "schema": 1,
+    "scope": "installed add-on queue with real bounded Python children; no Blender scene export or TiXL mutation",
+    "status": "passed",
+    "submissions": 5,
+    "launched": 2,
+    "finished": 2,
+    "timerRegistered": false,
+    "upgradePreservedOwnership": true,
+    "pendingLogNormalized": true,
+    "foregroundFilePreserved": true,
+    "failedLogBytes": 907,
+    "failedLogMetadata": {
+      "schema": 1,
+      "exitCode": 7,
+      "outputBytes": 200017,
+      "retainedBytes": 907,
+      "maxBytes": 1024,
+      "omittedBytes": 199185
+    },
+    "latestCompletedLog": "FINAL_SUCCESS",
+    "lastOutcomePathMatchesActualLog": true,
+    "generatedLogFiles": 3
+  },
+  "queueArchiveRetention": {
+    "status": "pruned",
+    "bytesBefore": 1262,
+    "bytesAfter": 1142,
+    "budgetExceeded": {
+      "count": 0,
+      "bytes": 0,
+      "ageProtected": []
+    },
+    "limits": {
+      "count": 4,
+      "bytes": 4096,
+      "ageDays": 30.0
+    }
+  },
+  "liveTiXL": {
+    "editorVersion": "4.3.0.2",
+    "children": 56,
+    "missingChildren": 0,
+    "missingConnections": 0,
+    "exactGraphAndContextPreserved": true,
+    "outputScreenshotVisuallyChecked": "blue cube at paused time zero"
+  },
+  "artifacts": {
+    "privateFixture": "examples/.tixl_cache/issue8_validation/81c50fb64c2942228cba3dc8bb6e8b43/r.json",
+    "installedQueue": "examples/.tixl_cache/issue8_validation/queue/queue_validation.json",
+    "liveState": "examples/.tixl_cache/issue8_validation/live/",
+    "outputScreenshot": "examples/.tixl_cache/issue8_validation/live/output.png"
+  },
+  "tests": 138,
+  "packageFilesVerified": 56
+}

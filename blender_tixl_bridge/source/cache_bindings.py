@@ -69,7 +69,8 @@ def rebind_project_paths(project: Path, cache: Path, generation: str) -> int:
     prepared = []
     try:
         if changes:
-            backup = cache / "project_backups" / ("generation_bindings_" + uuid.uuid4().hex)
+            from retention_lifecycle import new_backup
+            backup = new_backup(cache / "project_backups", "generation_bindings")
             for path, original, _ in changes:
                 destination = backup / path.relative_to(project)
                 destination.parent.mkdir(parents=True, exist_ok=True)

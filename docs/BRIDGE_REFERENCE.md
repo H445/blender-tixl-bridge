@@ -33,6 +33,14 @@ Exports use a kernel-owned advisory lock in `.blend_sync.process.lock`. The lock
 
 External resources come from Blender's path inventory, including linked libraries and their resources. Unpacked files are content-hashed; packed resources are covered by the `.blend` hash. Numbered image sequences and tiled textures track matching filenames as well as content, so added or removed files invalidate reuse. Missing resources, unrecognized directories, and unsupported sequence paths cannot be reused. Old caches without this contract require one fresh export. The worker checks that code, runtime, and dependencies remain unchanged through export before declaring the stage complete.
 
+## Generated storage retention
+
+Sync and explicit install share the publication lease through graph activation, retention, and recovery-summary publication. Retention policy and recovery procedures are in the [user guide](USER_GUIDE.md#generated-storage-and-recovery). Cleanup operates only on validated direct generated entries below the cache root, rechecks each tree immediately before removal, and rejects linked/reparse paths. New staging and backup directories carry ownership markers; legacy unmarked directories are excluded.
+
+The current/previous commit pointers, latest successful/failed summaries, saved project graph references, and retained graph backups determine pins. Graph scanning uses checked non-following directory traversal and rejects malformed evidence before pruning. References from a backup removed in the current pass remain conservatively pinned until the next pass. Generation pruning is deferred while TiXL is open because the protocol cannot enumerate all unsaved or undo references. Manual pins cover copies of graphs or cache uses outside the recorded project. Protected entries can exceed the configured limits; the report makes that excess explicit.
+
+Blender-launched sync and discovery children drain output through one-shot wrappers with a log-group lease. Active writers cannot be pruned. A logging interruption waits for its orchestration child, including the export worker it owns, before returning. Full output is scanned for completion while only bounded head/tail evidence is stored. `latest.log` is atomically updated after completion; queue status links to the per-run active log. Discovery keeps up to forty log/metadata files within 64 MiB and 30 days, with latest failure protection; the short automation status trail trims at 1 MiB.
+
 ## Home graph
 
 The generated home has one row per world and a shared world switch and render chain. This zoomed view shows one world's animation, mesh, and texture path:

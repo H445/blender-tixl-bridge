@@ -635,6 +635,7 @@ def _make_portless_home(home: dict, ui: dict) -> None:
 
 def populate(project: Path, graph_files: list[Path], backup_root: Path, editor: Path,
              build: bool = True) -> None:
+    from retention_lifecycle import new_backup
     project = project.resolve()
     csproj = next(project.glob("*.csproj"), None)
     if csproj is None:
@@ -682,8 +683,7 @@ def populate(project: Path, graph_files: list[Path], backup_root: Path, editor: 
                                                  "BlenderCameraTimeline", "LoadGltfScene"))
         for child in existing_home.get("Children", []))
     if old_import or has_scene_wrapper:
-        backup = backup_root / time.strftime("%Y%m%d_%H%M%S")
-        backup.mkdir(parents=True, exist_ok=True)
+        backup = new_backup(backup_root, "home")
         for path in home_files:
             if path.is_file():
                 shutil.copy2(path, backup / path.name)
@@ -702,8 +702,7 @@ def populate(project: Path, graph_files: list[Path], backup_root: Path, editor: 
         changed |= _add_world_preloader(existing_home, home_ui)
         changed |= _link_world_clips(existing_home, home_ui, plan, graph["Id"])
         if changed:
-            backup = backup_root / time.strftime("%Y%m%d_%H%M%S")
-            backup.mkdir(parents=True, exist_ok=True)
+            backup = new_backup(backup_root, "home")
             for path in home_files:
                 if path.is_file():
                     shutil.copy2(path, backup / path.name)
@@ -711,8 +710,7 @@ def populate(project: Path, graph_files: list[Path], backup_root: Path, editor: 
             home_files[2].write_text(json.dumps(home_ui, indent=2), encoding="utf-8")
     else:
         if any(path.is_file() for path in home_files):
-            backup = backup_root / time.strftime("%Y%m%d_%H%M%S")
-            backup.mkdir(parents=True, exist_ok=True)
+            backup = new_backup(backup_root, "home")
             for path in home_files:
                 if path.is_file():
                     shutil.copy2(path, backup / path.name)
@@ -750,8 +748,7 @@ public sealed class ShareDefinition : IShareResources
     for path in graph_files[:3]:
         legacy = symbols / path.name
         if legacy_is_import and legacy.is_file():
-            backup = backup_root / ("generated_root_duplicate_" + uuid.uuid4().hex[:8])
-            backup.mkdir(parents=True, exist_ok=True)
+            backup = new_backup(backup_root, "generated_root_duplicate")
             shutil.copy2(legacy, backup / path.name)
             legacy.unlink()
         shutil.copy2(path, generated_dir / path.name)

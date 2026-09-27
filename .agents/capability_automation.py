@@ -68,8 +68,15 @@ def log(message: str, path: Path = DEFAULT_LOG) -> None:
     print(line, flush=True)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
+        # This is a small status trail, not the detailed per-run probe log.
+        # Retain its latest half-megabyte when the file reaches one megabyte.
+        if path.exists() and path.stat().st_size >= 1024 * 1024:
+            with path.open("rb") as stream:
+                stream.seek(-512 * 1024, os.SEEK_END)
+                tail = stream.read()
+            path.write_bytes(b"[bounded status trail; earlier entries omitted]\n" + tail)
         with path.open("a", encoding="utf-8") as stream:
-            stream.write(line + "\n")
+            stream.write(line[:4096] + "\n")
     except OSError:
         pass
 

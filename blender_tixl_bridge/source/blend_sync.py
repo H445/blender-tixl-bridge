@@ -23,6 +23,8 @@ from collections import Counter
 from pathlib import Path
 from cache_publication import active_root, generation_root, read_manifest, publish_generation
 from sync_metrics import count, current_run, measured_sync, phase, timed
+from logged_process import configured_log_bytes, run_to_log
+from retention_lifecycle import new_backup, retention_run, track_generation, track_stage
 
 ROOT = Path(__file__).resolve().parents[1]
 BLENDER = Path(os.environ.get("TIXL_BRIDGE_BLENDER", shutil.which("blender") or "blender"))
@@ -65,7 +67,7 @@ def profile_for(blend: Path, requested: str) -> str:
 
 def cache_for(blend: Path, profile: str, requested: Path | None) -> Path:
     if requested:
-        return requested.resolve()
+        return Path(os.path.abspath(requested))
     return blend.parent / ".tixl_cache" / blend.stem
 
 
@@ -394,11 +396,12 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
                                      for file in changed_operators)
     def install_operators() -> None:
         operator_target.mkdir(parents=True, exist_ok=True)
-        backup = cache / "project_backups" / ("operator_root_duplicates_" + uuid.uuid4().hex[:8])
+        backup = None
         for file in install_files:
             legacy = target / file.name
             if legacy.is_file():
-                backup.mkdir(parents=True, exist_ok=True)
+                if backup is None:
+                    backup = new_backup(cache / "project_backups", "operator_root_duplicates")
                 shutil.copy2(legacy, backup / file.name)
                 legacy.unlink()
             destination = operator_target / file.name
@@ -500,8 +503,7 @@ def ensure_generic_project(blend: Path, cache: Path, files: list[Path], build: b
                                   "graph_sha256": graph_sha}, indent=2), encoding="utf-8")
 
 
-@measured_sync
-def sync(blend: Path, requested_profile: str, requested_cache: Path | None,
+def _sync(blend: Path, requested_profile: str, requested_cache: Path | None,
          blender: Path, force: bool, install: bool) -> dict:
     blend = blend.resolve()
     if not blend.is_file() or blend.suffix.lower() != ".blend":
@@ -514,42 +516,77 @@ def sync(blend: Path, requested_profile: str, requested_cache: Path | None,
         raise RuntimeError("Blender save was still changing; retry sync shortly")
     reusable = None if force else cached_manifest(cache, sha, blender)
     if reusable is not None:
+        track_generation(reusable["generation"])
         generic_finish(blend, cache, reusable, install)
         return {"status": "up_to_date", "blend": str(blend), "cache": str(cache), "profile": profile}
     if not blender.is_file():
         raise FileNotFoundError(f"Blender executable not found: {blender}")
     wait_for_editor_pause()
+    stable = (blend.stat().st_size, blend.stat().st_mtime_ns)
+    sha = digest(blend)
+    if stable != (blend.stat().st_size, blend.stat().st_mtime_ns):
+        raise RuntimeError("Blender save changed during sync; retry on the next save")
+    reusable = None if force else cached_manifest(cache, sha, blender)
+    if reusable is not None:
+        track_generation(reusable["generation"])
+        generic_finish(blend, cache, reusable, install)
+        return {"status": "up_to_date", "blend": str(blend), "cache": str(cache), "profile": profile}
+    stage = cache / ".staging" / uuid.uuid4().hex
+    stage.mkdir(parents=True)
+    track_stage(stage)
+    cmd = [str(blender), "--background", str(blend), "--python", str(ROOT / "source" / "blend_sync_worker.py"),
+           "--", "--staging", str(stage)]
+    log = stage / "export.log"
+    env = dict(os.environ)
+    env.update(current_run().environment())
+    count("blenderProcesses")
+    with phase("blender_process"):
+        completed = run_to_log(cmd, log, env=env, max_bytes=configured_log_bytes(cache),
+                               completion_marker=b"BLEND_SYNC_STAGE_COMPLETE")
+        if completed.returncode or not completed.completion_marker_seen:
+            raise RuntimeError(f"Blender export failed; prior cache retained. See {log}")
+    manifest = validate_stage(stage, sha, blender)
+    wait_for_editor_pause()
+    manifest = publish(stage, cache, manifest, profile, blend, sha)
+    track_generation(manifest["generation"])
+    data = generation_root(cache, manifest["generation"])
+    log = data / "export.log"
+    count("cacheBytes", sum(p.stat().st_size for p in data.rglob("*") if p.is_file()))
+    generic_finish(blend, cache, manifest, install, refresh_runtime=True)
+    return {"status": "rebuilt", "blend": str(blend), "cache": str(cache),
+            "profile": profile, "worlds": len(manifest["worlds"]), "log": str(log)}
+
+
+@measured_sync
+def sync(blend: Path, requested_profile: str, requested_cache: Path | None,
+         blender: Path, force: bool, install: bool) -> dict:
+    cache = cache_for(blend.resolve(), profile_for(blend, requested_profile), requested_cache)
+    # Cleanup shares the same kernel lease as publication, including cache hits.
     with export_lock(cache):
-        stable = (blend.stat().st_size, blend.stat().st_mtime_ns)
-        sha = digest(blend)
-        if stable != (blend.stat().st_size, blend.stat().st_mtime_ns):
-            raise RuntimeError("Blender save changed during sync; retry on the next save")
-        reusable = None if force else cached_manifest(cache, sha, blender)
-        if reusable is not None:
-            generic_finish(blend, cache, reusable, install)
-            return {"status": "up_to_date", "blend": str(blend), "cache": str(cache), "profile": profile}
-        stage = cache / ".staging" / uuid.uuid4().hex
-        stage.mkdir(parents=True)
-        cmd = [str(blender), "--background", str(blend), "--python", str(ROOT / "source" / "blend_sync_worker.py"),
-               "--", "--staging", str(stage)]
-        log = stage / "export.log"
-        env = dict(os.environ)
-        env.update(current_run().environment())
-        count("blenderProcesses")
-        with phase("blender_process"):
-            with log.open("w", encoding="utf-8") as output:
-                completed = subprocess.run(cmd, stdout=output, stderr=subprocess.STDOUT, env=env)
-            if completed.returncode or "BLEND_SYNC_STAGE_COMPLETE" not in log.read_text(encoding="utf-8", errors="replace"):
-                raise RuntimeError(f"Blender export failed; prior cache retained. See {log}")
-        manifest = validate_stage(stage, sha, blender)
-        wait_for_editor_pause()
-        manifest = publish(stage, cache, manifest, profile, blend, sha)
-        data = generation_root(cache, manifest["generation"])
-        log = data / "export.log"
-        count("cacheBytes", sum(p.stat().st_size for p in data.rglob("*") if p.is_file()))
-        generic_finish(blend, cache, manifest, install, refresh_runtime=True)
-        return {"status": "rebuilt", "blend": str(blend), "cache": str(cache),
-                "profile": profile, "worlds": len(manifest["worlds"]), "log": str(log)}
+        with retention_run(cache, current_run().run_id, editor_is_running=editor_running):
+            result = _sync(blend, requested_profile, requested_cache, blender, force, install)
+            result["summary"] = str(cache / "sync_logs" / "latest_run.json")
+            result["retention"] = str(cache / "sync_logs" / "retention.json")
+            return result
+
+
+@measured_sync
+def install_cache(blend: Path, requested_profile: str, requested_cache: Path | None,
+                  blender: Path, force: bool = False, install: bool = True) -> dict:
+    """An explicit install uses the same ownership and recovery boundary as sync."""
+    blend = blend.resolve()
+    profile = profile_for(blend, requested_profile)
+    cache = cache_for(blend, profile, requested_cache)
+    with export_lock(cache):
+        with retention_run(cache, current_run().run_id, editor_is_running=editor_running):
+            manifest = cached_manifest(cache, digest(blend), blender)
+            if profile != "generic" or manifest is None:
+                raise ValueError("Install requires an up-to-date generic Blender cache")
+            track_generation(manifest["generation"])
+            generic_finish(blend, cache, manifest, True)
+            return {"status": "installed", "blend": str(blend), "cache": str(cache),
+                    "summary": str(cache / "sync_logs" / "latest_run.json"),
+                    "retention": str(cache / "sync_logs" / "retention.json")}
 
 
 def main() -> None:
@@ -572,14 +609,8 @@ def main() -> None:
         print(json.dumps(result, indent=2))
         return
     if options.action == "install":
-        blend = options.blend.resolve()
-        profile = profile_for(blend, options.profile)
-        cache = cache_for(blend, profile, options.cache_root)
-        manifest = cached_manifest(cache, digest(blend), options.blender)
-        if profile != "generic" or manifest is None:
-            raise ValueError("Install requires an up-to-date generic Blender cache")
-        generic_finish(blend, cache, manifest, True)
-        print(json.dumps({"status": "installed", "blend": str(blend)}))
+        print(json.dumps(install_cache(options.blend, options.profile, options.cache_root,
+                                      options.blender, False, True), indent=2))
         return
     if options.action == "sync":
         print(json.dumps(sync(options.blend, options.profile, options.cache_root,

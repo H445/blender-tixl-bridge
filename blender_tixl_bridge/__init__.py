@@ -20,7 +20,7 @@ from pathlib import Path
 
 import bpy
 from .source.sync_metrics import RunMetrics, count, phase
-from .source.sync_queue import LatestRequestQueue, get_or_create_queue
+from .source.sync_queue import LatestRequestQueue, get_or_create_queue, normalize_pending_log_paths
 from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
@@ -103,37 +103,37 @@ def queue_capability_refresh(force=False, metrics_env=None):
     except (KeyError, AttributeError, TypeError):
         pass
     log = repository / ".agents" / "capability_plugin.log"
-    output = log.open("a", encoding="utf-8")
-    try:
-        subprocess.Popen(command, cwd=str(repository), env=env, stdout=output,
-                         stderr=subprocess.STDOUT,
-                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                         close_fds=True)
-        count("discoveryProcesses")
-    finally:
-        output.close()
+    detail = repository / ".agents" / "capability_logs" / (uuid.uuid4().hex + ".log")
+    command = [str(python), str(ROOT / "source" / "logged_process.py"),
+               "--log", str(detail), "--latest-log", str(log), "--prune-logs", "--", *command]
+    subprocess.Popen(command, cwd=str(repository), env=env, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL,
+                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), close_fds=True)
+    count("discoveryProcesses")
     return True, f"Agent capability refresh queued; log: {log}"
 
 
 def _launch_sync_request(request):
     """Launch one sync child when the per-source queue makes it active."""
-    output = Path(request["logPath"]).open("a", encoding="utf-8")
-    try:
-        env = dict(request["env"])
-        with RunMetrics(Path(request["metricsDirectory"]), "queue", request["runId"]) as run:
-            env.update(run.environment())
-            env["TIXL_SYNC_QUEUED_AT"] = str(request["queuedAt"])
-            with phase("discovery_launch"):
-                queue_capability_refresh(metrics_env=env)
-            with phase("queue"):
-                child = subprocess.Popen(request["command"], cwd=request["cwd"], env=env,
-                                         stdout=output, stderr=subprocess.STDOUT,
-                                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-                                         close_fds=True)
-                count("orchestratorProcesses")
-        return child
-    finally:
-        output.close()
+    # Pending requests can have been captured by a previous add-on version.
+    request["logPath"] = str(Path(request["logPath"]).parent / (request["runId"] + ".log"))
+    env = dict(request["env"])
+    env["TIXL_SYNC_LOG"] = request["logPath"]
+    with RunMetrics(Path(request["metricsDirectory"]), "queue", request["runId"]) as run:
+        env.update(run.environment())
+        env["TIXL_SYNC_QUEUED_AT"] = str(request["queuedAt"])
+        with phase("discovery_launch"):
+            queue_capability_refresh(metrics_env=env)
+        with phase("queue"):
+            command = [request["command"][0], str(ROOT / "source" / "logged_process.py"),
+                       "--log", request["logPath"], "--latest-log",
+                       str(Path(request["logPath"]).parent / "latest.log"), "--prune-logs", "--", *request["command"]]
+            child = subprocess.Popen(command, cwd=request["cwd"], env=env,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), close_fds=True)
+            count("orchestratorProcesses")
+    return child
+
 
 
 def _sync_queue():
@@ -142,8 +142,11 @@ def _sync_queue():
     if runtime is None:
         runtime = types.ModuleType(_SYNC_RUNTIME_MODULE)
         sys.modules[_SYNC_RUNTIME_MODULE] = runtime
-    return get_or_create_queue(runtime.__dict__, _SYNC_QUEUE_KEY,
-                               lambda: LatestRequestQueue(_launch_sync_request, max_launch_attempts=3))
+    queue = get_or_create_queue(runtime.__dict__, _SYNC_QUEUE_KEY,
+                               lambda: LatestRequestQueue(_launch_sync_request, max_launch_attempts=3),
+                               launch=_launch_sync_request)
+    normalize_pending_log_paths(queue)
+    return queue
 
 
 def _poll_sync_queue():
@@ -201,15 +204,16 @@ def queue_sync():
                TIXL_BRIDGE_BLENDER=bpy.app.binary_path,
                TIXL_BRIDGE_MODE=prefs.connection_mode.lower(),
                TIXL_BRIDGE_PORT=str(prefs.debug_port))
+    run_id = uuid.uuid4().hex
     request = {
         "source": str(blend.resolve()),
         "command": [str(python), str(SYNC), "sync", "--blend", str(blend)],
         "cwd": str(ROOT),
         "env": env,
         "queuedAt": queued_at,
-        "runId": uuid.uuid4().hex,
+        "runId": run_id,
         "metricsDirectory": str(logdir.parent / "sync_metrics"),
-        "logPath": str(logdir / "latest.log"),
+        "logPath": str(logdir / (run_id + ".log")),
         "statusPath": str(logdir / "sync_status.json"),
     }
     queue = _sync_queue()
@@ -307,6 +311,7 @@ CLASSES = (TIXLBRIDGE_preferences, TIXLBRIDGE_OT_sync_now,
 
 
 def register():
+    _sync_queue()  # Refresh launch code while retaining in-flight save ownership.
     bpy.types.Scene.tixl_bridge_autosync = BoolProperty(name="Sync after save", default=False)
     for cls in CLASSES:
         bpy.utils.register_class(cls)

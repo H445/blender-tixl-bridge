@@ -51,7 +51,7 @@ The `.blend` must be saved and must have either an active camera or camera-bound
 
 1. Open **Scene Properties → TiXL Bridge**.
 2. Click **Sync saved .blend to TiXL**, or enable **Sync after save** for continuing automatic builds.
-3. Follow `<blend folder>/.tixl_cache/<blend name>/sync_logs/latest.log` during the first build.
+3. Open `<blend folder>/.tixl_cache/<blend name>/sync_logs/sync_status.json` during the first build. Its active entry links to the current detailed log.
 
 Repeated saves share one active sync per source file. While it runs, another save replaces the pending request with the latest saved revision. The Scene panel and `sync_logs/sync_status.json` report running, pending, completed, and error states. A failed job does not discard a newer pending save. Launch failures retry three times, then remain available for the next save or manual sync. Keep Blender open until pending work finishes.
 
@@ -108,9 +108,34 @@ python blender_tixl_bridge/source/blend_sync.py sync --blend C:\path\scene.blend
 
 `status --blend ...` checks whether the cache matches the saved file. `--force` rebuilds unchanged input. A full command-line install also uses `TIXL_BRIDGE_OPERATOR_PROJECT`, `TIXL_BRIDGE_EDITOR`, `TIXL_BRIDGE_MODE`, and `TIXL_BRIDGE_PORT`. Set `TIXL_BRIDGE_LAUNCH_EDITOR=0` to build without starting TiXL.
 
+## Generated storage and recovery
+
+`sync_logs/latest_run.json` summarizes the last completed sync or explicit install. It links to metrics, the detailed sync log when launched from Blender, and the export log when available. `last_successful_run.json` and `failed_run.json` retain the latest successful and failed evidence separately. `latest.log` is a compatibility copy of the most recently completed Blender-launched sync log; use the status file to follow an active run.
+
+Detailed logs keep up to 4 MiB each. Larger output retains the beginning and latest tail with an explicit omitted-byte marker. The matching `.meta.json` records output and omitted bytes. Small logs remain complete. Export success is checked while reading the full output, before trimming.
+
+Retention runs at the end of a serialized sync or install. Defaults retain up to three export generations (1 GiB), ten owned project backups (256 MiB), two owned failed/incomplete stages (512 MiB), eighty metrics files (16 MiB), and twenty sync-log/metadata files (64 MiB). Maximum age is 30 days, or seven days for stages. Protected recovery evidence takes precedence over these budgets. `sync_logs/retention.json` reports removals, deferrals, and excess caused by protected entries.
+
+The active and previous committed generations, latest failed evidence, saved graph references, retained backup references, and the newest entry remain protected. Generation deletion defers while TiXL is open because unsaved graphs and undo history can reference old data. After saving editor work and closing TiXL, the next sync applies the policy. Missing or malformed recovery evidence, unreadable graph directories, and linked/reparse paths defer cleanup. Legacy unmarked backup and staging folders remain untouched.
+
+To adjust limits, create `retention_policy.json` in the scene's cache directory. Omitted categories keep their defaults; each supplied category accepts `max_count`, `max_bytes`, and `max_age_days`. For example:
+
+```json
+{
+  "generations": {"max_count": 5, "max_bytes": 2147483648, "max_age_days": 60},
+  "backups": {"max_count": 20, "max_bytes": 536870912, "max_age_days": 60},
+  "max_log_bytes": 8388608,
+  "protected_generations": []
+}
+```
+
+`max_log_bytes` must be at least 1024. Add generation IDs to `protected_generations` before copying graph references to another project or using cache data outside the recorded project. Those external uses cannot be discovered automatically. Invalid policy values defer cleanup without changing the sync result.
+
+For recovery, save and close TiXL first. Inspect the failed summary and the corresponding owned backup under `project_backups/`; copy needed saved graph files back into the recorded project only after preserving its current files. Do not edit committed generation payloads. An incomplete active cache automatically falls back to the previous committed generation; a fresh sync can rebuild it from the authored `.blend`.
+
 ## Troubleshooting
 
-- Start with `.tixl_cache/<blend name>/sync_logs/latest.log`. It reports missing cameras, missing collections, and invalid project metadata.
+- Start with `.tixl_cache/<blend name>/sync_logs/latest_run.json`, or `sync_status.json` while a job is active. Follow their detailed log links for missing cameras, missing collections, and invalid project metadata.
 - In Offline mode, select a newly generated project once in TiXL.
 - If TiXL opens while transport is running, pause once so the project can preload every world.
 - If a bridge update changes loaded `.t3` or `.t3ui` structure, save editor work and restart TiXL. `reload` can leave the old graph in memory.

@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "blender_tixl_bridge" / "source"))
-from sync_queue import LatestRequestQueue, get_or_create_queue
+from sync_queue import LatestRequestQueue, get_or_create_queue, normalize_pending_log_paths
 
 
 class FakeClock:
@@ -29,6 +29,76 @@ class FakeProcess:
 
 
 class LatestRequestQueueTests(unittest.TestCase):
+    def test_upgrade_normalizes_owned_pending_metadata_without_changing_active_writer(self):
+        active, following = FakeProcess(1), FakeProcess(2)
+        launched = []
+        def launch(request):
+            launched.append(dict(request))
+            return active if len(launched) == 1 else following
+        queue = LatestRequestQueue(launch)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "scene.blend"
+            initial = self.make_request(source, 1)
+            initial.update(runId="a" * 32, logPath=str(Path(directory) / "latest.log"))
+            queued = self.make_request(source, 2)
+            queued.update(runId="b" * 32, logPath=initial["logPath"])
+            queue.submit(initial)
+            queue.submit(queued)
+            state = next(iter(queue._sources.values()))
+            owned_pending = state["pending"]
+            normalize_pending_log_paths(queue)
+            expected = str(Path(directory) / (("b" * 32) + ".log"))
+            self.assertIs(state["pending"], owned_pending)
+            self.assertEqual(owned_pending["logPath"], expected)
+            self.assertEqual(queue.snapshot(source)["active"]["logPath"], initial["logPath"])
+            self.assertEqual(queue.snapshot(source)["pending"]["logPath"], expected)
+            active.return_code = 0
+            queue.poll()
+            self.assertEqual(launched[1]["logPath"], expected)
+            self.assertEqual(queue.snapshot(source)["active"]["logPath"], expected)
+
+    def test_launcher_normalized_log_path_is_used_by_active_and_completed_status(self):
+        process = FakeProcess(1)
+        def launch(request):
+            request["logPath"] = "actual-archive.log"
+            return process
+        queue = LatestRequestQueue(launch)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "scene.blend"
+            queue.submit(self.make_request(source, 1))
+            self.assertEqual(queue.snapshot(source)["active"]["logPath"], "actual-archive.log")
+            process.return_code = 0
+            queue.poll()
+            self.assertEqual(queue.snapshot(source)["lastOutcome"]["logPath"], "actual-archive.log")
+
+    def test_reload_refreshes_launcher_without_losing_active_or_final_pending_save(self):
+        old, new = [], []
+        active = FakeProcess(1)
+        following = FakeProcess(2)
+        def old_launch(request):
+            old.append(request["revision"])
+            return active
+        def new_launch(request):
+            new.append(request["revision"])
+            return following
+        registry = {}
+        queue = get_or_create_queue(registry, "queue", lambda: LatestRequestQueue(old_launch))
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "scene.blend"
+            queue.submit(self.make_request(source, 1))
+            queue.submit(self.make_request(source, 2))
+            queue.submit(self.make_request(source, 3))
+            retained = get_or_create_queue(registry, "queue", lambda: self.fail("must retain manager"), launch=new_launch)
+            self.assertIs(retained, queue)
+            self.assertEqual(queue.active_count, 1)
+            self.assertEqual(queue.snapshot(source)["pending"]["queuedAt"], 3)
+            active.return_code = 0
+            queue.poll()
+            self.assertEqual(old, [1])
+            self.assertEqual(new, [3])
+            following.return_code = 0
+            self.assertFalse(queue.poll())
+
     def make_request(self, source, revision, status_path=None):
         return {
             "source": str(source),

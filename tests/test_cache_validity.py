@@ -39,7 +39,8 @@ class CacheValidityTest(unittest.TestCase):
     def test_unchanged_valid_export_reuses_cache_without_starting_blender(self):
         with tempfile.TemporaryDirectory() as folder:
             blend, blender, texture, cache, manifest = self.fixture(Path(folder))
-            with patch.object(blend_sync, "generic_finish") as finish, \
+            with patch.object(blend_sync, "editor_running", return_value=False), \
+                    patch.object(blend_sync, "generic_finish") as finish, \
                     patch.object(blend_sync.subprocess, "run") as worker:
                 result = blend_sync.sync(blend, "generic", cache, blender, False, False)
                 self.assertEqual(result["status"], "up_to_date")

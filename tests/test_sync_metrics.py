@@ -109,11 +109,11 @@ class MetricsTest(unittest.TestCase):
             code = ("import sys,time; sys.path.insert(0," + repr(source) + "); "
                     "from sync_metrics import worker_metrics; time.sleep(.1)\n"
                     "with worker_metrics():\n raise RuntimeError('worker fixture rejected')\n")
-            real_run = subprocess.run
-            def failed_worker(command, **kwargs):
-                return real_run([sys.executable, "-c", code], **kwargs)
+            from logged_process import run_to_log
+            def failed_worker(command, path, **kwargs):
+                return run_to_log([sys.executable, "-c", code], path, **kwargs)
             with patch.object(blend_sync, "wait_for_editor_pause"), \
-                    patch.object(blend_sync.subprocess, "run", side_effect=failed_worker), \
+                    patch.object(blend_sync, "run_to_log", side_effect=failed_worker), \
                     patch("sync_metrics.sys.stderr") as stderr:
                 with self.assertRaisesRegex(RuntimeError, "Blender export failed") as raised:
                     blend_sync.sync(blend, "generic", root / "cache", Path(sys.executable), False, False)
