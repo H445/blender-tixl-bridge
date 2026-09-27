@@ -6,7 +6,7 @@
 
 | Source | Status | Evidence |
 | --- | --- | --- |
-| Bridge checkout | complete | add-on 1.3.1; source SHA-256 `4916b3e4ca4a0a56` |
+| Bridge checkout | complete | add-on 0.4.0; source SHA-256 `314e1edf575e8c4c` |
 | Blender installation | complete | Blender 5.2.2 LTS via MCP runtime |
 | Blender runtime via MCP | complete | 5.2.2 LTS |
 | Blender MCP | complete | 1 tool(s); Blender MCP TCP extension 1.0.3 |
@@ -19,7 +19,7 @@ Unavailable live probes are retried on refresh. A `missing` component is not con
 
 ## Available surface
 
-- Blender bridge add-on: **Prismal Labs Blender → TiXL Bridge 1.3.1** (minimum Blender 4.3.0).
+- Blender bridge add-on: **Prismal Labs Blender → TiXL Bridge 0.4.0** (minimum Blender 4.3.0).
 - Blender MCP tools: **1** discovered.
 - TiXL protocol methods: **33** discovered.
 - Reusable TiXL bridge operators: **11** discovered.

@@ -1,5 +1,5 @@
 > [!WARNING]
-> This is an early experimental project and is not ready for production use. Back up existing projects first.
+> This is an early alpha project and is not ready for production use. Back up existing projects first.
 
 # Blender–TiXL Bridge
 

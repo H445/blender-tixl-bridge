@@ -98,7 +98,8 @@ class CapabilityRenderBundleTest(unittest.TestCase):
     def test_missing_inventories_remain_explicit_in_summary_and_detail(self):
         with tempfile.TemporaryDirectory() as temporary:
             args = self._args(temporary)
-            with patch.object(self.rebuild, "probe_tixl", return_value=None):
+            with patch.object(self.rebuild, "infer_tixl_source", return_value=None), \
+                    patch.object(self.rebuild, "probe_tixl", return_value=None):
                 summary, detail = self.rebuild.render_bundle(args)
             self.assertIn("| Blender runtime via MCP | unavailable |", summary)
             self.assertIn("| Blender MCP | missing |", summary)
