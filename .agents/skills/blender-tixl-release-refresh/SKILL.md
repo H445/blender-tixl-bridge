@@ -74,7 +74,8 @@ Do not move detail back into the root README merely because it changed. Update t
 ## 5. Rebuild and verify
 
 1. Run the repository tests appropriate to the change.
-2. Run `python build_addon_zip.py` and confirm the archive includes both skills and the capability automation.
-3. Validate this skill with the skill-creator `quick_validate.py` script.
-4. Run `git diff --check`, inspect `git diff --stat`, and review the final README and binary screenshot diff list.
-5. Report the exact versions, refreshed files, capability coverage, tests, and any limitation that still needs end-user action.
+2. Run `python build_addon_zip.py` and confirm it creates `blender-tixl-bridge-<bl_info version>.zip` containing both skills and the capability automation.
+3. Before a requested release, confirm the tag is exactly `v<bl_info version>`; the release workflow rejects a mismatched tag and uploads the versioned ZIP as a GitHub Release asset.
+4. Validate this skill with the skill-creator `quick_validate.py` script.
+5. Run `git diff --check`, inspect `git diff --stat`, and review the final README and binary screenshot diff list.
+6. Report the exact versions, refreshed files, capability coverage, tests, and any limitation that still needs end-user action.

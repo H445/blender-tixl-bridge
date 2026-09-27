@@ -130,7 +130,7 @@ Do not manufacture a project by copying only a `.csproj`. The bridge can clone a
 
 ### Universal UI method
 
-From this repository, first build the ZIP if necessary:
+Prefer the release asset named `blender-tixl-bridge-<version>.zip` from <https://github.com/H445/blender-tixl-bridge/releases/latest>. From a source checkout, build the same versioned ZIP if necessary:
 
 ```powershell
 python build_addon_zip.py
@@ -140,7 +140,7 @@ Then ask the end user to perform these steps in Blender if Blender MCP is not ye
 
 1. Open **Edit → Preferences**.
 2. Open **Add-ons**. In Blender versions that use **Get Extensions**, use its **Install from Disk** command.
-3. Select `blender_tixl_bridge.zip`.
+3. Select `blender-tixl-bridge-<version>.zip`.
 4. Enable **Prismal Labs Blender → TiXL Bridge**.
 5. Remove or disable the legacy `tixl_blender_bridge` add-on if present.
 

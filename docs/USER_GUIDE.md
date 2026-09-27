@@ -26,7 +26,9 @@ Keep the operator-project directory and the directory that directly contains `Ti
 
 ## Install the Blender add-on
 
-From this repository, build the installable package:
+Download `blender-tixl-bridge-<version>.zip` from the [latest GitHub release](https://github.com/H445/blender-tixl-bridge/releases/latest).
+
+To build the same versioned package from a source checkout instead, run:
 
 ```powershell
 python build_addon_zip.py
@@ -35,7 +37,7 @@ python build_addon_zip.py
 In Blender:
 
 1. Open **Edit → Preferences → Add-ons**.
-2. Choose **Install from Disk** and select `blender_tixl_bridge.zip`. Blender versions that use **Get Extensions** expose the same command there.
+2. Choose **Install from Disk** and select `blender-tixl-bridge-<version>.zip`. Blender versions that use **Get Extensions** expose the same command there.
 3. Enable **Prismal Labs Blender → TiXL Bridge**.
 4. Set **TiXL operator project** to the dedicated project directory.
 5. Set **TiXL Editor folder** to the directory containing `TiXL.exe`.
@@ -92,7 +94,7 @@ Close Blender, then run:
 & "<path-to-blender.exe>" --background --python install_blender_addon.py
 ```
 
-The installer copies and hashes the add-on, enables it, migrates the former `tixl_blender_bridge` module, preserves existing settings on updates, and saves preferences. Restart Blender afterward. Rebuild the distributable ZIP with `python build_addon_zip.py` whenever package files change.
+The installer copies and hashes the add-on, enables it, migrates the former `tixl_blender_bridge` module, preserves existing settings on updates, and saves preferences. Restart Blender afterward. Rebuild the distributable ZIP with `python build_addon_zip.py` whenever package files change; its filename is derived from `bl_info["version"]`.
 
 ## Command-line cache build
 

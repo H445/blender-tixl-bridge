@@ -34,8 +34,8 @@ Before installing the bridge:
 
 The current release is tested with Blender 5.2.2 LTS and TiXL 4.3.0.2.
 
-1. Run `python build_addon_zip.py`.
-2. In Blender, install `blender_tixl_bridge.zip` from **Preferences → Add-ons → Install from Disk** and enable **Prismal Labs Blender → TiXL Bridge**.
+1. Download `blender-tixl-bridge-<version>.zip` from the [latest GitHub release](https://github.com/H445/blender-tixl-bridge/releases/latest).
+2. In Blender, install that ZIP from **Preferences → Add-ons → Install from Disk** and enable **Prismal Labs Blender → TiXL Bridge**.
 3. In the add-on preferences, select the TiXL operator-project folder and the folder containing `TiXL.exe`. Leave the connection mode on **Auto** for normal use.
 4. Open a saved `.blend` with an active camera, then use **Scene Properties → TiXL Bridge → Sync saved .blend to TiXL**.
 
