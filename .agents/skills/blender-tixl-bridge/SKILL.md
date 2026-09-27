@@ -21,7 +21,9 @@ Before relying on the catalogs below, read `../../CAPABILITIES.md`. The Blender 
 
 When documentation changes are in scope, keep the root `README.md` as a concise human landing page. It should communicate the project purpose, main capabilities, a minimal quick start, links to deeper documents, and important limitations. Do not accumulate exhaustive operator lists, JSON examples, CLI reference, graph-editing recipes, troubleshooting catalogs, or agent instructions there.
 
-Put human setup and procedures in `docs/USER_GUIDE.md`, technical behavior and graph ownership in `docs/BRIDGE_REFERENCE.md`, example-specific material in `examples/README.md`, and AI-agent workflows under `.agents/`. Prefer links over copying the same explanation into several files.
+Put human setup and procedures in `docs/USER_GUIDE.md`, the human-facing comparison and advantages of plug-in-only versus agentic-workspace use in `docs/AGENTIC_WORKFLOW.md`, technical behavior and graph ownership in `docs/BRIDGE_REFERENCE.md`, example-specific material in `examples/README.md`, and agent-only instructions under `.agents/`. Prefer links over copying the same explanation into several files.
+
+Do not imply that an agent is required to use the bridge. The plug-in-only mode is a complete manual workflow. In agentic-workspace mode, the repository root provides shared context for Blender MCP, the TiXL debug bridge, filesystem artifacts, builds, tests, capability discovery, and validation.
 
 ## Capability router
 

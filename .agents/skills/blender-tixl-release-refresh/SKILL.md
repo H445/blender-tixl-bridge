@@ -53,6 +53,7 @@ Treat documentation as a small hierarchy rather than one exhaustive README:
 
 - `README.md`: short human overview, main capabilities, minimal quick start, document links, and important limitations.
 - `docs/USER_GUIDE.md`: first run, installation, configuration, daily use, modes, multi-world setup, updates, CLI use, and troubleshooting.
+- `docs/AGENTIC_WORKFLOW.md`: human-facing comparison of plug-in-only and agentic-workspace use, including current benefits, setup, and boundaries.
 - `docs/BRIDGE_REFERENCE.md`: transferred data, generated/editable ownership, graph behavior, reusable operators, files, and technical limitations.
 - `examples/README.md`: example-specific instructions and output evidence.
 - `.agents/`: agent-only installation, operation, and capability details.
@@ -60,6 +61,7 @@ Treat documentation as a small hierarchy rather than one exhaustive README:
 Review every claim affected by the new version across the appropriate files, including:
 
 - supported and tested Blender/TiXL versions;
+- the distinction between optional plug-in-only use and agentic-workspace use, without implying that an agent is required;
 - install/update wording and first-run behavior;
 - add-on control labels, paths, connection modes, ports, and automatic capability refresh;
 - Blender MCP transport and advertised tools;

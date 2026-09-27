@@ -17,6 +17,13 @@ Save a Blender scene and turn it into an editable TiXL project. Blender remains 
 - **Release and development modes:** build offline against a normal TiXL release or use the optional debug bridge for live reload, inspection, and screenshots.
 - **Agent-ready tooling:** capabilities for Blender MCP and the TiXL debug bridge are discovered automatically after installs and upgrades.
 
+## Two ways to use the project
+
+1. **Blender plug-in only:** install the add-on, configure TiXL once, and sync scenes from Blender. This is the simplest option for routine manual work and requires no AI agent.
+2. **Agentic workspace:** open this repository root in Codex, Claude, or another compatible coding agent. The agent can coordinate Blender MCP, the TiXL debug bridge, builds, caches, logs, graph inspection, and screenshots from one workspace. This reduces application switching and makes cross-application setup, editing, validation, and troubleshooting faster and more repeatable.
+
+See [Agentic workspace workflow](docs/AGENTIC_WORKFLOW.md) for the advantages, boundaries, and recommended setup.
+
 ## Quick start on Windows
 
 Before installing the bridge:
@@ -39,6 +46,7 @@ The first build creates a TiXL project beside the operator project. After that, 
 ## Documentation
 
 - [Setup and usage guide](docs/USER_GUIDE.md) — first run, installation, connection modes, multi-world scenes, updates, and troubleshooting.
+- [Agentic workspace workflow](docs/AGENTIC_WORKFLOW.md) — when to use the repository as an agent workspace and what it improves.
 - [Bridge reference](docs/BRIDGE_REFERENCE.md) — transferred data, generated files, graph ownership, editable operator paths, and limitations.
 - [BlendShapeExample](examples/README.md) — bundled scene and rendered results.
 - [Agent installation and operation guide](.agents/README.md) — required workflow for Claude, Codex, and other AI agents.

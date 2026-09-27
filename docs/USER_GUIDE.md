@@ -1,6 +1,6 @@
 # Setup and usage guide
 
-This guide covers the human installation and daily workflow for the Blender–TiXL bridge. For graph structure and supported data, see the [bridge reference](BRIDGE_REFERENCE.md).
+This guide covers the human installation and daily workflow for the Blender–TiXL bridge. You can use the add-on by itself or open the repository as an agent workspace; see [Agentic workspace workflow](AGENTIC_WORKFLOW.md) for that option. For graph structure and supported data, see the [bridge reference](BRIDGE_REFERENCE.md).
 
 ## Requirements
 
