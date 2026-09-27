@@ -95,3 +95,42 @@ The bridge installs eleven shared operators under `PrismalLabs.BlenderExport`:
 - `install_blender_addon.py` — verified checkout installer and preference migration.
 
 The background exporter never runs during TiXL render frames. Generated cache publication waits for a safe paused frame when a debug connection is active.
+
+## Scene loading and shared animation memory
+
+`BlenderAnimationScene` opens and parses each GLB once during paused initialization.
+Morph geometry, material defaults, and primitive centers come from the same JSON
+document and binary chunk. The document and raw binary bytes are released after
+those projections finish; there is no additional shared GLB cache. A malformed
+projection fails the load atomically and reports a cache warning instead of
+applying only part of the GLB data.
+
+Transform, visibility, morph-weight, and material tracks share a cache within the
+loaded operator type. Keys include the resolved animation path and the size and
+UTC modification time of its binary, metadata, and channel files. Immutable
+export generation paths therefore have independent entries. On the next paused scene initialization, direct file edits
+must change their modification time to invalidate an existing entry.
+
+The cache retains at most 16 entries and 64 MiB of conservatively accounted
+managed data. Accounting includes track arrays, names, cache keys, records, and
+dictionary entries; it is an estimate rather than a measurement of the entire
+managed heap. Entries are evicted in insertion order until both limits hold.
+An export larger than the byte budget still loads for its requesting scene but
+is not retained by the shared cache. Live scene bindings can continue using
+tracks after cache eviction, so their memory is outside the shared-cache limit.
+
+Debug render statistics report GLB file opens and successful JSON parses at the
+operations themselves, including loads that later fail projection. Shared cache
+entry and accounted-byte gauges are reported by one live instance to avoid
+double counting when several worlds are connected. These gauges are separate
+from the debug protocol's whole-editor managed-memory and GPU-memory readings.
+
+Morph bindings own their replacement vertex buffers. Native glTF scenes own the
+original vertex, index, and chunk buffers. Releasing a binding restores its
+original mesh wrapper while that scene is alive. If the native scene was
+disposed first, the binding requires a cleared dispatch list together with
+disposed replacement, index, and chunk resource views before releasing the
+original vertex buffer that its replacement had hidden. An empty filtered
+scene alone does not release borrowed buffers. Shared index and chunk buffers
+remain under native scene ownership.
+This handles either disposal order without retaining a vertex buffer per resync.

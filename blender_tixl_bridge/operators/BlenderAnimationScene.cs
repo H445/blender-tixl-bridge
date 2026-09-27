@@ -161,9 +161,10 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
             _maxFrame = cached.MaxFrame;
             if (!string.IsNullOrWhiteSpace(requestedGlbPath))
             {
-                morphMeshes = GlbReader.LoadMorphs(Resolve(requestedGlbPath));
-                materialDefaults = GlbReader.LoadMaterialDefaults(Resolve(requestedGlbPath));
-                primitiveCenters = GlbReader.LoadPrimitiveCenters(Resolve(requestedGlbPath));
+                var glb = GlbReader.LoadAllMeasured(Resolve(requestedGlbPath), _stats.GlbRead, _stats.GlbJsonParse);
+                morphMeshes = glb.Morphs;
+                materialDefaults = glb.MaterialDefaults;
+                primitiveCenters = glb.PrimitiveCenters;
             }
         }
         catch (Exception e)
@@ -195,7 +196,7 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
                 missing++;
             if (morphMeshes.TryGetValue(name, out var meshes) && primitive < meshes.Count && meshes[primitive].Targets.Length > 0)
             {
-                binding.Morph = new MorphBinding(dispatch, meshes[primitive], morphTrack, weightCount, _stats);
+                binding.Morph = new MorphBinding(dispatch, meshes[primitive], morphTrack, weightCount, _stats, scene);
                 weightCount += meshes[primitive].Targets.Length;
             }
             _bindings[i] = binding;
@@ -315,7 +316,8 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
         public readonly Dictionary<string, TransformTrack> Transforms;
         public readonly ChannelSet Channels;
         public readonly int MaxFrame;
-        public CachedAnimation(Dictionary<string, TransformTrack> transforms, ChannelSet channels)
+        public readonly long RetainedBytes;
+        public CachedAnimation(Dictionary<string, TransformTrack> transforms, ChannelSet channels, string cacheKey = "")
         {
             Transforms = transforms;
             Channels = channels;
@@ -331,9 +333,31 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
             foreach (var track in channels.Materials.Values)
                 last = Math.Max(last, track.Start + Math.Max(track.Emission.Length, track.BaseColor.Length) - 1);
             MaxFrame = last;
+            // Conservative accounting for retained track payload, arrays, names,
+            // records and dictionary entries; excludes live scene/GPU resources.
+            static long array(long count, int stride) => 64 + count * stride;
+            static long entry(string name) => 256 + 2L * name.Length;
+            long bytes = 512 + 192 + 2L * cacheKey.Length;
+            foreach (var item in transforms)
+                bytes += entry(item.Key) + array(item.Value.Samples.LongLength, 64);
+            foreach (var item in channels.Visibility)
+                bytes += entry(item.Key) + array(item.Value.Values.LongLength, 1);
+            foreach (var item in channels.Morphs)
+            {
+                bytes += entry(item.Key) + array(item.Value.Weights.LongLength, 8);
+                foreach (var row in item.Value.Weights)
+                    bytes += array(row.LongLength, 4);
+            }
+            foreach (var item in channels.Materials)
+                bytes += entry(item.Key) + array(item.Value.Emission.LongLength, 16)
+                         + array(item.Value.BaseColor.LongLength, 16);
+            RetainedBytes = bytes;
         }
     }
 
+    private const int SharedCacheEntryLimit = 16;
+    private const long SharedCacheByteBudget = 64L * 1024 * 1024;
+    private static long SharedCacheRetainedBytes;
     private static readonly object SharedCacheLock = new();
     private static readonly Dictionary<string, CachedAnimation> SharedCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Queue<string> SharedCacheOrder = new();
@@ -351,13 +375,21 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
         {
             if (SharedCache.TryGetValue(key, out var cached))
                 return cached;
-            cached = new CachedAnimation(LoadTransforms(fullPath), ChannelSet.Load(fullPath));
+            cached = new CachedAnimation(LoadTransforms(fullPath), ChannelSet.Load(fullPath), key);
+            // An oversized export remains usable by this scene without keeping
+            // a second process-wide reference after the scene releases it.
+            if (cached.RetainedBytes > SharedCacheByteBudget)
+                return cached;
             SharedCache[key] = cached;
             SharedCacheOrder.Enqueue(key);
-            // Bound the process-wide cache when other Blender exports are used
-            // in the same TiXL session. Scene bindings keep their own tracks.
-            while (SharedCacheOrder.Count > 16)
-                SharedCache.Remove(SharedCacheOrder.Dequeue());
+            SharedCacheRetainedBytes += cached.RetainedBytes;
+            while (SharedCacheOrder.Count > SharedCacheEntryLimit
+                   || SharedCacheRetainedBytes > SharedCacheByteBudget)
+            {
+                var oldest = SharedCacheOrder.Dequeue();
+                SharedCacheRetainedBytes -= SharedCache[oldest].RetainedBytes;
+                SharedCache.Remove(oldest);
+            }
             return cached;
         }
     }
@@ -374,12 +406,20 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
         {
             ReleaseMorphs();
             RenderStatsCollector.UnregisterProvider(_stats);
+            _stats.Detach();
         }
         base.Dispose(disposing);
     }
 
     private sealed class RuntimeStats : IRenderStatsProvider
     {
+        private static readonly LinkedList<RuntimeStats> Providers = new();
+        private readonly LinkedListNode<RuntimeStats> _providerNode;
+        private long _totalGlbReads, _totalGlbJsonParses;
+        public RuntimeStats() { _providerNode = Providers.AddLast(this); }
+        public void Detach() { Providers.Remove(_providerNode); }
+        public void GlbRead() { _totalGlbReads++; }
+        public void GlbJsonParse() { _totalGlbJsonParses++; }
         private int _morphUploads, _materialUploads, _sceneLoads;
         private long _morphBytes, _materialBytes, _loadUs;
         private long _totalMorphUploads, _totalMaterialUploads, _totalMorphBytes, _totalMaterialBytes;
@@ -405,6 +445,18 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
         private static int Bound(long value) => (int)Math.Min(int.MaxValue, value);
         public IEnumerable<(string, int)> GetStats()
         {
+            yield return ("Blender cumulative GLB reads", Bound(_totalGlbReads));
+            yield return ("Blender cumulative GLB JSON parses", Bound(_totalGlbJsonParses));
+            // RenderStatsCollector sums providers: report process-wide gauges
+            // once, and hand ownership to the next instance on disposal.
+            if (ReferenceEquals(Providers.First?.Value, this))
+            {
+                int count;
+                long bytes;
+                lock (SharedCacheLock) { count = SharedCache.Count; bytes = SharedCacheRetainedBytes; }
+                yield return ("Blender shared animation cache entries", count);
+                yield return ("Blender shared animation cache accounted bytes", Bound(bytes));
+            }
             yield return ("Blender scene loads", _sceneLoads);
             yield return ("Blender scene load us", Bound(_loadUs));
             yield return ("Blender cumulative scene loads", Bound(_totalSceneLoads));
@@ -600,6 +652,7 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
     private sealed class MorphBinding : IDisposable
     {
         private readonly SceneSetup.SceneDrawDispatch _dispatch;
+        private readonly SceneSetup _ownerScene;
         private readonly MeshBuffers _originalBuffers;
         private readonly MeshBuffers _ownedWrapper;
         private readonly MorphMesh _mesh;
@@ -611,9 +664,10 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
         private bool _uploaded;
 
         private readonly RuntimeStats _stats;
-        public MorphBinding(SceneSetup.SceneDrawDispatch dispatch, MorphMesh mesh, MorphTrack? track, int weightOffset, RuntimeStats stats)
+        public MorphBinding(SceneSetup.SceneDrawDispatch dispatch, MorphMesh mesh, MorphTrack? track, int weightOffset, RuntimeStats stats, SceneSetup ownerScene)
         {
             _dispatch = dispatch; _mesh = mesh; _track = track; _weightOffset = weightOffset;
+            _ownerScene = ownerScene;
             _stats = stats;
             _vertices = new PbrVertex[mesh.Base.Length];
             _lastWeights = new float[mesh.Targets.Length];
@@ -686,7 +740,19 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
         {
             if (ReferenceEquals(_dispatch.MeshBuffers, _ownedWrapper))
                 _dispatch.MeshBuffers = _originalBuffers;
-            // Index and chunk buffers belong to LoadGltfScene; only the replacement vertex buffer is owned here.
+            // Native scene disposal can encounter our replacement wrapper,
+            // hiding its original vertex buffer. A cleared dispatch list alone
+            // can also mean filtering, so require an uploaded replacement and
+            // disposed replacement/shared views before reclaiming that original.
+            // In the reverse disposal order the native owner still releases it.
+            if (_ownerScene.Dispatches.Count == 0 && _uploaded
+                && _vertexBuffer?.Buffer == null && _vertexBuffer?.Srv == null && _vertexBuffer?.Uav == null
+                && _originalBuffers.IndicesBuffer?.Buffer == null
+                && _originalBuffers.IndicesBuffer?.Srv == null && _originalBuffers.IndicesBuffer?.Uav == null
+                && _originalBuffers.ChunkDefsBuffer?.Buffer == null
+                && _originalBuffers.ChunkDefsBuffer?.Srv == null && _originalBuffers.ChunkDefsBuffer?.Uav == null)
+                _originalBuffers.VertexBuffer?.Dispose();
+            // Shared index/chunk buffers remain under the native owner's control.
             _vertexBuffer?.Dispose();
         }
     }
@@ -699,15 +765,45 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
         private readonly byte[] _binary;
         private GlbReader(JsonElement root, byte[] binary) { _root = root; _binary = binary; }
 
-        public static Dictionary<string, List<Vector3>> LoadPrimitiveCenters(string path)
+        public sealed class SceneData
+        {
+            public readonly Dictionary<string, List<MorphMesh>> Morphs;
+            public readonly Dictionary<string, MaterialDefaults> MaterialDefaults;
+            public readonly Dictionary<string, List<Vector3>> PrimitiveCenters;
+            public SceneData(GlbReader reader)
+            {
+                Morphs = reader.LoadMorphs();
+                MaterialDefaults = reader.LoadMaterialDefaults();
+                PrimitiveCenters = reader.LoadPrimitiveCenters();
+            }
+        }
+
+        public static SceneData LoadAll(string path) => LoadAllMeasured(path, null, null);
+
+        public static SceneData LoadAllMeasured(string path, Action? onRead, Action? onJsonParse)
         {
             using var stream = File.OpenRead(path);
+            onRead?.Invoke();
             using var reader = new BinaryReader(stream);
-            stream.Position = 12;
-            var length = reader.ReadInt32();
+            if (reader.ReadUInt32() != 0x46546c67 || reader.ReadUInt32() != 2)
+                throw new InvalidDataException("Expected a glTF 2 binary.");
             reader.ReadUInt32();
-            using var document = JsonDocument.Parse(reader.ReadBytes(length));
-            var root = document.RootElement;
+            var jsonLength = reader.ReadInt32();
+            if (reader.ReadUInt32() != 0x4e4f534a)
+                throw new InvalidDataException("Missing glTF JSON chunk.");
+            using var document = JsonDocument.Parse(reader.ReadBytes(jsonLength));
+            onJsonParse?.Invoke();
+            var binaryLength = reader.ReadInt32();
+            if (reader.ReadUInt32() != 0x004e4942)
+                throw new InvalidDataException("Missing glTF binary chunk.");
+            // All projections consume the same document and immutable binary
+            // bytes. Neither the document nor the raw GLB survives initialization.
+            return new SceneData(new GlbReader(document.RootElement, reader.ReadBytes(binaryLength)));
+        }
+
+        private Dictionary<string, List<Vector3>> LoadPrimitiveCenters()
+        {
+            var root = _root;
             var result = new Dictionary<string, List<Vector3>>(StringComparer.Ordinal);
             foreach (var node in root.GetProperty("nodes").EnumerateArray())
             {
@@ -727,16 +823,10 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
             return result;
         }
 
-        public static Dictionary<string, MaterialDefaults> LoadMaterialDefaults(string path)
+        private Dictionary<string, MaterialDefaults> LoadMaterialDefaults()
         {
-            using var stream = File.OpenRead(path);
-            using var reader = new BinaryReader(stream);
-            stream.Position = 12;
-            var length = reader.ReadInt32();
-            reader.ReadUInt32();
-            using var document = JsonDocument.Parse(reader.ReadBytes(length));
             var result = new Dictionary<string, MaterialDefaults>(StringComparer.Ordinal);
-            if (!document.RootElement.TryGetProperty("materials", out var materials))
+            if (!_root.TryGetProperty("materials", out var materials))
                 return result;
             foreach (var material in materials.EnumerateArray())
             {
@@ -761,21 +851,9 @@ public sealed class BlenderAnimationScene : Instance<BlenderAnimationScene>, ISt
             return result;
         }
 
-        public static Dictionary<string, List<MorphMesh>> LoadMorphs(string path)
+        private Dictionary<string, List<MorphMesh>> LoadMorphs()
         {
-            using var stream = File.OpenRead(path);
-            using var reader = new BinaryReader(stream);
-            if (reader.ReadUInt32() != 0x46546c67 || reader.ReadUInt32() != 2)
-                throw new InvalidDataException("Expected a glTF 2 binary.");
-            reader.ReadUInt32();
-            var jsonLength = reader.ReadInt32();
-            if (reader.ReadUInt32() != 0x4e4f534a)
-                throw new InvalidDataException("Missing glTF JSON chunk.");
-            using var document = JsonDocument.Parse(reader.ReadBytes(jsonLength));
-            var binaryLength = reader.ReadInt32();
-            if (reader.ReadUInt32() != 0x004e4942)
-                throw new InvalidDataException("Missing glTF binary chunk.");
-            var glb = new GlbReader(document.RootElement, reader.ReadBytes(binaryLength));
+            var glb = this;
             var result = new Dictionary<string, List<MorphMesh>>(StringComparer.Ordinal);
             foreach (var node in glb._root.GetProperty("nodes").EnumerateArray())
             {

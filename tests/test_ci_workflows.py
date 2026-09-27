@@ -27,8 +27,12 @@ class WorkflowConfigurationTest(unittest.TestCase):
         self.assertIn("runs-on: ${{ matrix.os }}", jobs)
         self.assertRegex(jobs, r"(?m)^        os: \[.*ubuntu-latest.*windows-latest.*\]$")
         self.assertIn("actions/setup-python@v5", jobs)
+        self.assertIn("actions/setup-dotnet@v4", jobs)
+        self.assertIn('dotnet-version: "8.0.x"', jobs)
         self.assertIn("python -m unittest discover", jobs)
         self.assertIn("test_*.py", jobs)
+        self.assertIn("python tests/glb_reader_validation.py --require-single-parse --iterations 40", jobs)
+        self.assertIn("python tests/animation_cache_validation.py", jobs)
 
     def test_release_job_waits_for_reusable_unit_workflow(self):
         workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")

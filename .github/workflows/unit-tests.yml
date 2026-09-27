@@ -1,4 +1,4 @@
-name: Python unit tests
+name: Bridge regression tests
 
 on:
   pull_request:
@@ -26,5 +26,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
       - name: Run Python unit tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Validate production GLB reader numerics
+        run: python tests/glb_reader_validation.py --require-single-parse --iterations 40
+
+      - name: Validate animation cache and buffer ownership
+        run: python tests/animation_cache_validation.py

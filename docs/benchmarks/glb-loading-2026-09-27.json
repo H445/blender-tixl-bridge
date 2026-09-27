@@ -1,0 +1,259 @@
+{
+  "schema": 1,
+  "date": "2026-09-27",
+  "issue": 9,
+  "versions": {
+    "blender": "5.2.2 LTS",
+    "tixl": "4.3.0.2",
+    "debugProtocol": 1,
+    "runtimeHarnessTarget": "net8.0"
+  },
+  "numericReader": {
+    "scope": "warmed synthetic multi-mesh GLB with opaque/BLEND materials, sparse/interleaved/indexed morph accessors and primitive centers; allocation is per-thread transient load allocation, not retained heap",
+    "baseline": {
+      "warmupIterations": 5,
+      "measuredIterations": 40,
+      "readsPerIteration": 3,
+      "parsesPerIteration": 3,
+      "allocatedBytesMedian": 27808,
+      "allocatedBytesP95": 27808,
+      "elapsedMillisecondsMedian": 0.5399,
+      "elapsedMillisecondsP95": 0.6208
+    },
+    "optimized": {
+      "warmupIterations": 5,
+      "measuredIterations": 40,
+      "readsPerIteration": 1,
+      "parsesPerIteration": 1,
+      "allocatedBytesMedian": 11552,
+      "allocatedBytesP95": 11552,
+      "elapsedMillisecondsMedian": 0.2302,
+      "elapsedMillisecondsP95": 0.2873
+    },
+    "numericOutputsEqual": true,
+    "samePathReloadEqual": true,
+    "atomicMalformedFailures": [
+      {
+        "path": "missing_material_name.glb",
+        "failure": "KeyNotFoundException",
+        "readCallback": 1,
+        "parseCallback": 1,
+        "fileReadCalls": 1,
+        "jsonParseCalls": 1,
+        "returnedPartialData": false
+      },
+      {
+        "path": "invalid_center_accessor.glb",
+        "failure": "IndexOutOfRangeException",
+        "readCallback": 1,
+        "parseCallback": 1,
+        "fileReadCalls": 1,
+        "jsonParseCalls": 1,
+        "returnedPartialData": false
+      }
+    ]
+  },
+  "livePausedInitialization": {
+    "scope": "bundled opaque BlendShapeExample; 12 bridge initializations per fresh-path load, debug scene-load counters exclude RPC and rendering; hardware/output identical",
+    "baselineMicroseconds": [
+      29544,
+      28821,
+      31468
+    ],
+    "optimizedMicroseconds": [
+      29653,
+      27608,
+      26405,
+      24879,
+      27111,
+      26915,
+      25030,
+      28877
+    ],
+    "baselineMedianMicroseconds": 29544,
+    "optimizedMedianMicroseconds": 27013.0,
+    "baselineRuns": 3,
+    "optimizedRuns": 8,
+    "allStatesRestored": true,
+    "allBaselinePngBytesEqual": true,
+    "allHeldFrameUploadBytesZero": true,
+    "glbReadAndParseCountsPerRun": [
+      {
+        "reads": 12,
+        "parses": 12,
+        "initializations": 12
+      },
+      {
+        "reads": 12,
+        "parses": 12,
+        "initializations": 12
+      },
+      {
+        "reads": 12,
+        "parses": 12,
+        "initializations": 12
+      },
+      {
+        "reads": 12,
+        "parses": 12,
+        "initializations": 12
+      },
+      {
+        "reads": 12,
+        "parses": 12,
+        "initializations": 12
+      },
+      {
+        "reads": 12,
+        "parses": 12,
+        "initializations": 12
+      },
+      {
+        "reads": 12,
+        "parses": 12,
+        "initializations": 12
+      },
+      {
+        "reads": 12,
+        "parses": 12,
+        "initializations": 12
+      }
+    ]
+  },
+  "sharedCache": {
+    "entryLimit": 16,
+    "accountedByteBudget": 67108864,
+    "scope": "conservative cache retained managed-data accounting, excludes scene-held tracks and whole-editor managed/native/GPU memory",
+    "liveTailEntries": [
+      16,
+      16,
+      16,
+      16
+    ],
+    "liveTailAccountedBytes": [
+      587160,
+      587160,
+      587160,
+      587160
+    ],
+    "isolatedHarness": {
+      "status": "passed",
+      "cacheEntries": 16,
+      "retainedBytes": 43888,
+      "sharedByteBudget": 67108864,
+      "entryLimit": 16,
+      "repeatPathSharesObject": true,
+      "differentGenerationsSeparate": true,
+      "changedStampReloads": true,
+      "entryLimitEvictsOldest": true,
+      "oversizedBypassesProcessCache": true,
+      "byteBudgetEvictsAndReconciles": true,
+      "repeatedGenerationsPlateau": true,
+      "exactRetainedAccounting": true,
+      "statsGaugeTransfersExactlyOnce": true,
+      "cacheGaugeExcludesWholeEditorHeap": true,
+      "morphNativeFirstDisposal": true,
+      "morphBridgeFirstDisposal": true,
+      "morphClearedListWithLiveResourcesIsSafe": true,
+      "morphRepeatedReinitialization": true,
+      "morphHeldFrameZeroUploads": true,
+      "morphSharedIndexChunkOwnership": true,
+      "memoryScope": "cache-accounted managed payload estimate; excludes unrelated editor/process heap and GPU/native resources",
+      "oversizedBytes": 68801726,
+      "finalPlateauBytes": 43888,
+      "runtime": {
+        "targetFramework": "net8.0",
+        "harness": "production source extraction"
+      },
+      "fixtureCounts": {
+        "entryLimit": 22,
+        "byteBudgetEntries": 4,
+        "oversizedTransformSamples": 1000000,
+        "oversizedMorphFrames": 60000,
+        "plateauGenerations": 48
+      }
+    }
+  },
+  "gpuOwnership": {
+    "scope": "debug-reported whole-editor GPU usage after restoration; allocation trends rather than GPU timestamps",
+    "beforeFixUsageMb": [
+      672.9,
+      677.1,
+      677.1,
+      681.4,
+      685.6,
+      689.9,
+      694.1,
+      698.4
+    ],
+    "afterFixUsageMb": [
+      666.5,
+      666.5,
+      666.5,
+      666.5,
+      666.5,
+      666.5,
+      666.5,
+      666.5
+    ],
+    "afterFixRangeMb": [
+      666.5,
+      666.5
+    ],
+    "bufferDisposalOrdersVerified": true,
+    "emptyLiveSceneKeepsOriginalBuffers": true
+  },
+  "integration": {
+    "actualTixlDependencyCompilePassed": true,
+    "pythonUnitTestsPassed": 142,
+    "installedPackageFilesVerified": 56,
+    "foregroundBlenderFilePreserved": true,
+    "zipRebuilt": true,
+    "capabilityRefresh": "official installer queued complete one-shot refresh"
+  },
+  "rawArtifacts": {
+    "readerBaseline": "examples/.tixl_cache/issue9_validation/glb_reader_harness/baseline.json",
+    "readerOptimized": "examples/.tixl_cache/issue9_validation/glb_reader_harness/production.json",
+    "numericIndependentRun": "examples/.tixl_cache/issue9_validation/glb_reader_root/production.json",
+    "cache": "examples/.tixl_cache/issue9_validation/animation-cache.log",
+    "runtime": "examples/.tixl_cache/issue9_validation/repeated_loads_final/loading_report.json",
+    "earlierOwnershipFailure": "examples/.tixl_cache/issue9_validation/repeated_loads/loading_report.json",
+    "safeReload": "examples/.tixl_cache/issue9_validation/live/guard_reload.json",
+    "compile": "examples/.tixl_cache/issue9_validation/compile.log",
+    "transparentBaseline": "examples/.tixl_cache/issue9_validation/transparent_fixture/render/baseline_morph_report.json",
+    "transparentOptimized": "examples/.tixl_cache/issue9_validation/transparent_fixture/render/optimized_morph_report.json",
+    "transparentComparison": "examples/.tixl_cache/issue9_validation/transparent_fixture/render/optimized_morph_comparison.json"
+  },
+  "transparentRender": {
+    "scope": "private Cube GLB with BLEND alpha0.35 and matching sampled channels; native loader and animation use the same private fixture; standalone alpha-blended draw appended via debug protocol, existing edges preserved and all edits undone",
+    "sourceSeconds": [
+      0.0,
+      3.5
+    ],
+    "resolution": [
+      3840,
+      2160
+    ],
+    "baselineAndOptimizedPngBytesEqual": true,
+    "morphSamplesProduceDifferentImages": true,
+    "samples": [
+      {
+        "seconds": 0.0,
+        "meanRgbError": 0.0,
+        "maxRgbError": 0,
+        "visiblePixelContribution": 2572421,
+        "pngSha256": "f1dd163b8229e59a2bd40b96b1bf1e928a5e34b9550477f2fe100141f2879e63"
+      },
+      {
+        "seconds": 3.5,
+        "meanRgbError": 0.0,
+        "maxRgbError": 0,
+        "visiblePixelContribution": 1336626,
+        "pngSha256": "ec7f7e87a465eccb96b98b8791d8dadbb2cb4581da961b6378400538ac60ffe0"
+      }
+    ],
+    "baselineGraphContextAndViewRestored": true,
+    "optimizedGraphContextAndViewRestored": true,
+    "visuallyInspected": true
+  }
+}

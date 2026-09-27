@@ -6,7 +6,22 @@ Run the isolated Python regression suite from the repository root:
 python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
-The reusable `unit-tests.yml` workflow runs this suite on Windows and Ubuntu for pull requests and branch pushes. `release.yml` depends on that workflow; a failing matrix job prevents ZIP building and release publication. Live Blender and TiXL checks are separate because they need local application installs and a GPU.
+The reusable `unit-tests.yml` workflow runs this suite on Windows and Ubuntu for pull requests and branch pushes. It also installs the .NET 8 SDK and runs the production-source GLB reader and animation-cache regressions. `release.yml` depends on that workflow; a failing matrix job prevents ZIP building and release publication. Live Blender and TiXL checks are separate because they need local application installs and a GPU.
+
+With the .NET 8 SDK available, run the C# regressions locally:
+
+```powershell
+python tests/glb_reader_validation.py --require-single-parse --iterations 40
+python tests/animation_cache_validation.py
+```
+
+These scripts compile the actual private reader, track cache, runtime statistics,
+and morph binding source in temporary projects. Small resource doubles replace
+GPU dependencies for ownership checks. The fixtures exercise interleaved and
+sparse morph data, material defaults, primitive centers, same-path reloads,
+malformed atomic loads, cache identity and eviction, and both buffer disposal
+orders. They require no third-party packages and fail if compilation or an
+assertion fails.
 
 ## Structured sync measurements
 
@@ -54,3 +69,60 @@ The [operator hashing comparison](benchmarks/operator-hashing-2026-09-27.json) u
 The installed add-on was verified against all 56 source package files and the ZIP was rebuilt. An installed-queue check submitted five requests to real Python children. It preserved active ownership and normalized the final pending log path through disable/enable; only two children launched and completed. The failed child emitted 200,017 bytes; its retained 907-byte log preserved HEAD and FINAL_FAILURE under a 1,024-byte budget, with 199,185 omitted bytes explicitly recorded. The latest completed log and queue outcome linked to FINAL_SUCCESS; the timer stopped after drain. This checks logging and queue lifecycle, not scene-export or GPU performance.
 
 All 138 unit tests passed locally, including malformed recovery evidence, graph-directory reparse detection, interrupted nested process ownership, truncated completion markers, explicit-install recovery, and retained-queue metadata migration. TiXL 4.3.0.2's full 56-child graph and context matched before and after the checks. The output screenshot was visually inspected and still showed the paused blue cube. Raw fixture, queue, state, and image paths are recorded in the portable evidence; generated artifacts stay ignored.
+
+### GLB loading and shared memory (2026-09-27)
+
+[Portable GLB loading evidence](benchmarks/glb-loading-2026-09-27.json) compares
+the legacy three-reader implementation with one shared parse. After five warmup
+runs and 40 measured iterations of the numeric fixture, reads and JSON parses
+fell from three to one. Median per-thread load allocation fell from 27,808 to
+11,552 bytes; fixture elapsed-time median fell from 0.540 to 0.230 milliseconds.
+These are synthetic reader measurements, not full-scene or rendering timings.
+All numeric projections and same-path reload results matched exactly.
+
+Three live paused example baselines measured a median 29,544 microseconds across
+12 bridge scene initializations. Eight subsequent distinct-generation loads
+measured a median 27,013 microseconds. Each initialization opened and parsed its
+GLB once. Every run restored the complete graph and context, rendered a PNG
+byte-identical to the baseline, and uploaded zero bytes on held source frames.
+The existing example exercises opaque rendering; transparent material factors
+and centers are also covered by the numeric fixture.
+
+A separate private cube fixture set glTF BLEND alpha and sampled material alpha
+to 0.35. Both the native loader and animation operator used that fixture. A
+temporary alpha-blended draw node rendered `TransparentResult` at source times
+0 and 3.5 seconds, showing the cube and its deformed rounded shape. Baseline and
+optimized PNG bytes matched exactly at both times, with zero RGB error.
+Alpha-zero control captures confirmed the transparent path contributed
+2,572,421 and 1,336,626 visible pixels. Both phases preserved existing graph
+edges and restored the complete graph, context, selection, and graph view.
+The screenshots were visually inspected. The repeatable
+`tests/transparent_render_equivalence.py` helper requires Pillow locally;
+its offline route/fixture regressions use only the standard library.
+
+The shared track cache reached 16 entries and plateaued at 587,160 accounted
+bytes in the live fixture. Independent regressions exercised 48 generations,
+the 64 MiB byte limit, oversized bypass, and gauge ownership transfer. This
+accounting excludes tracks retained by live scenes and the whole editor heap.
+Whole-editor managed memory continued to cycle with garbage collection.
+
+Repeated loads exposed an original vertex buffer hidden by the morph replacement
+wrapper when native scene disposal ran first. After correcting that ownership
+case, debug-reported GPU usage stayed at 666.5 MiB across all eight resyncs;
+the preceding run had risen from 672.9 to 698.4 MiB. Ownership regressions cover
+both disposal orders and shared index/chunk resources. The operator compiled
+against the installed TiXL dependencies, all 56 installed package files were
+verified, and the add-on ZIP was rebuilt.
+
+All 142 Python tests and both production-source C# harnesses passed locally.
+
+To repeat the paused-load check, first retain a successful pre-change
+`tixl_runtime_benchmark.py` run folder, then run:
+
+```powershell
+python tests/tixl_glb_loading_validation.py --baseline path/to/baseline --repetitions 8
+```
+
+It clones private data generations and restores each run before proceeding.
+PNG byte equality is deliberately strict for this fixed example and environment;
+use the same versions, resolution, hardware, and source data when comparing.
