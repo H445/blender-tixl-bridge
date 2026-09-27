@@ -65,7 +65,7 @@ Daily use is simply: work in Blender and save. A failed export retains the previ
 | --- | --- | --- |
 | **Auto** | Most users | Uses the debug bridge when available and otherwise builds offline. |
 | **Offline** | Normal release builds without a control socket | Writes and builds the project directly. Select a new generated project once in TiXL. |
-| **Debug bridge** | Bridge and TiXL development | Reloads projects and opens the generated graph without restarting on routine saves. |
+| **Debug bridge** | Bridge and TiXL development | Refreshes unchanged graph data and code through the live protocol; graph structure changes require saving work, manually closing TiXL, and retrying sync. Activation checks the saved graph against loaded children and connections. |
 
 For live development, start TiXL with `--debug-server 9042`, or select **Debug bridge** and let the bridge launch it on the first build. The port is configurable. The server listens only on the local computer and is not required for normal release use.
 

@@ -19,6 +19,7 @@ import subprocess
 import time
 import uuid
 from contextlib import contextmanager
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -262,11 +263,103 @@ def open_project_when_ready(name: str) -> None:
     for _ in range(45):
         try:
             open_project(name)
+            verify_project_graph(name)
             return
         except (OSError, ValueError, RuntimeError) as error:
             last_error = error
             time.sleep(1)
     raise RuntimeError(f"TiXL started but could not open generated project {name}: {last_error}")
+
+
+def _connection_routes(rows: list[dict], pascal_case: bool) -> dict:
+    """Preserve ordering within each target's multi-input connection list."""
+    fields = ("SourceParentOrChildId", "SourceSlotId", "TargetParentOrChildId", "TargetSlotId")
+    if not pascal_case:
+        fields = tuple(field[0].lower() + field[1:] for field in fields)
+    routes = {}
+    for row in rows:
+        edge = tuple(row[field].lower() for field in fields)
+        routes.setdefault(edge[2:], []).append(edge)
+    return routes
+
+
+def capture_project_graph(name: str) -> dict:
+    """Snapshot reachable local symbols before a live reload, including edits."""
+    from blend_sync_project import _read_tixl_json
+    symbols = TIXL_PROJECT.parent / name / "Symbols"
+    local = {_read_tixl_json(path)["Id"].lower(): path for path in symbols.rglob("*.t3")}
+    pending = [_read_tixl_json(symbols / f"{name}.t3")["Id"].lower()]
+    states = {}
+    for symbol_id in pending:
+        if symbol_id in states:
+            continue
+        state = bridge_call("getGraphState", compositionId=symbol_id, includeDefaults=False)
+        if state.get("symbolId", "").lower() != symbol_id or state.get("missingChildren") or state.get("missingConnections"):
+            raise RuntimeError("TiXL graph is unresolved before refresh; repair editor work before retrying sync")
+        states[symbol_id] = state
+        pending.extend(row["symbolId"].lower() for row in state.get("children", []) if row["symbolId"].lower() in local)
+    return states
+
+
+def verify_project_graph(name: str, home_state: dict | None = None, live_states: dict | None = None) -> None:
+    """Read back saved home/import structure before reporting activation success.
+
+    This never repairs user graphs or saves editor work. A mismatch requires
+    a saved-work restart rather than another optimistic reload.
+    """
+    from blend_sync_project import _read_tixl_json
+    symbols = TIXL_PROJECT.parent / name / "Symbols"
+    home = symbols / f"{name}.t3"
+    # Old imports can remain archived in Symbols after a project migration.
+    # Validate the active home and locally defined symbols it references,
+    # rather than treating every unused historical import as active output.
+    local_symbols = {_read_tixl_json(path)["Id"].lower(): path for path in sorted(symbols.rglob("*.t3"))}
+    expected_files = [home]
+    visited = set()
+    bridge_call("pumpFrames", count=3)
+    for path in expected_files:
+        expected = _read_tixl_json(path)
+        symbol_id = expected["Id"].lower()
+        if symbol_id in visited:
+            continue
+        visited.add(symbol_id)
+        actual = bridge_call("getGraphState", compositionId=expected["Id"], includeDefaults=False)
+        child_key = lambda row: (row["Id"].lower(), row["SymbolId"].lower())
+        expected_children = Counter(child_key(row) for row in expected.get("Children", []))
+        actual_children = Counter((row["childId"].lower(), row["symbolId"].lower()) for row in actual.get("children", []))
+        expected_edges = _connection_routes(expected.get("Connections", []), True)
+        actual_edges = _connection_routes(actual.get("connections", []), False)
+        baseline = home_state if path == home else None
+        generated = symbols / "PrismalLabs" / "BlenderExport" / "Generated"
+        if live_states is not None and not path.is_relative_to(generated):
+            baseline = live_states.get(symbol_id)
+            if baseline is None:
+                raise RuntimeError("TiXL live refresh introduced an unexpected user symbol; save editor work and restart before retrying sync")
+        if baseline is not None:
+            # Compare a live refresh against the pre-refresh editor state,
+            # including unsaved user additions, routes and input overrides.
+            # Only generated imports must agree with generated files on disk.
+            expected_children = Counter((row["childId"].lower(), row["symbolId"].lower())
+                                        for row in baseline.get("children", []))
+            expected_edges = _connection_routes(baseline.get("connections", []), False)
+            if (baseline.get("symbolId", "").lower() != expected["Id"].lower()
+                    or baseline.get("missingChildren") or baseline.get("missingConnections")):
+                raise RuntimeError("TiXL home graph is unresolved before refresh; save and repair editor work before retrying sync")
+            expected_rows = Counter(json.dumps(row, sort_keys=True) for row in baseline.get("children", []))
+            actual_rows = Counter(json.dumps(row, sort_keys=True) for row in actual.get("children", []))
+            if expected_rows != actual_rows:
+                raise RuntimeError("TiXL live refresh changed user graph state; save editor work and restart before retrying sync")
+        if (actual.get("symbolId", "").lower() != expected["Id"].lower()
+                or actual.get("missingChildren") or actual.get("missingConnections")
+                or expected_children != actual_children or expected_edges != actual_edges):
+            raise RuntimeError(
+                f"TiXL graph activation failed for {path.name}: loaded structure differs "
+                "from saved structure or has unresolved connections. Save editor work, "
+                f"close TiXL manually, and restart with --debug-server {BRIDGE_PORT} before retrying sync.")
+        for row in actual.get("children", []):
+            referenced = row["symbolId"].lower()
+            if referenced in local_symbols and referenced not in visited:
+                expected_files.append(local_symbols[referenced])
 
 
 def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refresh_runtime: bool = False) -> None:
@@ -295,10 +388,14 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
             raise FileNotFoundError(f"Incomplete TiXL operator: {stem}")
     install_files = operator_files
     operator_target = target / "PrismalLabs" / "BlenderExport"
-    needs_copy = any(not (operator_target / file.name).is_file()
-                     or digest(operator_target / file.name) != digest(file)
-                     or (target / file.name).is_file()
-                     for file in install_files)
+    changed_operators = [file for file in install_files
+                         if not (operator_target / file.name).is_file()
+                         or digest(operator_target / file.name) != digest(file)
+                         or (target / file.name).is_file()]
+    needs_copy = bool(changed_operators)
+    operator_structure_changed = any(file.suffix in {".t3", ".t3ui"}
+                                     or (target / file.name).is_file()
+                                     for file in changed_operators)
     def install_operators() -> None:
         operator_target.mkdir(parents=True, exist_ok=True)
         backup = cache / "project_backups" / ("operator_root_duplicates_" + uuid.uuid4().hex[:8])
@@ -318,13 +415,16 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
                      or not Path(project_state.get("path", "")).is_dir())
     live = MODE != "offline" and bridge_available()
     wants_debug = MODE == "debug" or live
+    # A graph written on disk cannot be safely activated by reload. Even a
+    # live paused editor may contain unsaved user edits. Defer BEFORE copying
+    # operators or populating the installed project; manual close/retry then
+    # builds with no stale graph left in memory. Code-only reload remains live.
+    if needs_project or operator_structure_changed:
+        require_editor_closed()
     if not needs_copy and not needs_project and not refresh_runtime:
         if live and project_state.get("name"):
-            context = bridge_call("getContext")
-            if context.get("compositionName") != project_state["name"]:
-                open_project(project_state["name"])
-            elif context.get("outputView", {}).get("symbolName") == project_state["name"]:
-                pin_home_output(project_state["name"])
+            before = capture_project_graph(project_state["name"])
+            verify_project_graph(project_state["name"], live_states=before)
         return
     wait_for_editor_pause()
     # Probe the destination before interrupting an open TiXL session. In a
@@ -335,12 +435,15 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
     finally:
         probe.unlink(missing_ok=True)
     if live and project_state.get("name") and Path(project_state.get("path", "")).is_dir():
+        before = capture_project_graph(project_state["name"])
         if needs_copy:
             install_operators()
             bridge_call("reload", project=csproj.stem)
         ensure_generic_project(blend, cache, files, build=False)
         bridge_call("reload", project=project_state["name"])
-        open_project(project_state["name"])
+        # Reload must preserve the current composition, selection and output
+        # pin. Reopening can discard unsaved graph edits, even on a data sync.
+        verify_project_graph(project_state["name"], live_states=before)
         return
     require_editor_closed()
     success = False
