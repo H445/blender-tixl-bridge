@@ -10,13 +10,13 @@ This repository contains the Blender add-on and eleven reusable TiXL operators: 
 
 ## Blender add-on and TiXL graph
 
-In Blender's **Scene Properties → TiXL Bridge**, enable **Sync after save** or run a sync on demand:
+In Blender's **Scene Properties → TiXL Bridge**, enable **Sync after save**, run a sync on demand, or manually refresh the capabilities recorded for AI agents:
 
-![Blender TiXL Bridge panel with Sync after save and Sync saved .blend to TiXL controls](docs/screenshots/blender-plugin.png)
+![Blender TiXL Bridge panel with save sync, on-demand sync, and agent capability refresh controls](docs/screenshots/blender-plugin.png)
 
-The add-on preferences configure the TiXL operator project, Editor folder, connection mode, and debug port:
+The add-on preferences configure the TiXL operator project, Editor folder, connection mode, debug port, and capability repository. Capability discovery runs automatically when the add-on loads and before a sync; **Refresh agent capabilities** forces it immediately:
 
-![Blender bridge add-on preferences showing TiXL paths and debug bridge settings](docs/screenshots/blender-preferences.png)
+![Blender bridge add-on preferences showing TiXL paths, debug bridge settings, and capability refresh](docs/screenshots/blender-preferences.png)
 
 After syncing, TiXL exposes an editable home graph. This overview shows four world branches feeding the shared world switch and render chain:
 
@@ -30,7 +30,7 @@ See the [example README](examples/README.md#screenshots) for screenshots of the 
 
 ## Set up once (Windows)
 
-You need Blender 4.3 or newer (tested with 5.2), a TiXL Editor build, a TiXL C# operator project, and the .NET SDK. Create the operator project once in TiXL so it has valid release metadata. You can then close TiXL; **the debug server is optional**.
+You need Blender 4.3 or newer, a TiXL Editor build, a TiXL C# operator project, and the .NET SDK. The current release was tested with Blender 5.2.2 LTS and TiXL 4.3.0.2. Create the operator project once in TiXL so it has valid release metadata. You can then close TiXL; **the debug server is optional**.
 
 1. Download or clone this repository and run `python build_addon_zip.py` to build the local add-on package. In Blender, open **Edit → Preferences → Add-ons → Install from Disk**, choose **`blender_tixl_bridge.zip`**, and enable **Prismal Labs Blender → TiXL Bridge**. (In Blender versions that call it **Get Extensions**, use **Install from Disk** there.)
 2. Open the add-on preferences and set **TiXL operator project** to the folder containing your TiXL `.csproj` and `Symbols` folder. Set **TiXL Editor folder** to the build folder containing `TiXL.exe`. Leave **TiXL connection** on **Auto** unless you want to force a mode.

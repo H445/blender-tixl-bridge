@@ -24,6 +24,8 @@ Before operating, validating, editing, or troubleshooting a bridge project, read
 
 Tool names exposed by a particular Blender MCP server may vary. Use the MCP server's advertised tools and map them to the capabilities in the skill. Never invent an unavailable tool or replace it with Computer Use.
 
+After upgrading Blender, Blender MCP, TiXL, the TiXL debug bridge, or this add-on, also read [`.agents/skills/blender-tixl-release-refresh/SKILL.md`](skills/blender-tixl-release-refresh/SKILL.md). It defines the repeatable capability, screenshot, README, package, and validation refresh for a new version.
+
 Capability discovery is automated without an AI agent. The Blender add-on starts `.agents/capability_automation.py` when the add-on is installed or updated, when it registers after Blender starts, and before a bridge sync. The add-on also exposes **Refresh agent capabilities** for an explicit manual run. Each trigger launches one fingerprinted refresh; it installs no scheduled task, watcher, or background service. The refresh rewrites `.agents/CAPABILITIES.md` only when Blender, Blender MCP, TiXL, the TiXL debug bridge, or this bridge changes.
 
 ## Agent contract

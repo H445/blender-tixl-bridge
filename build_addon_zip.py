@@ -25,6 +25,7 @@ with ZipFile(output, "w", ZIP_DEFLATED) as archive:
         root / ".agents" / "rebuild_capabilities.py",
         root / ".agents" / "probes" / "blender_runtime_probe.py",
         root / ".agents" / "skills" / "blender-tixl-bridge" / "SKILL.md",
+        root / ".agents" / "skills" / "blender-tixl-release-refresh" / "SKILL.md",
     ]
     for path in agent_files:
         archive.write(path, "blender_tixl_bridge/" + path.relative_to(root).as_posix())

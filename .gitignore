@@ -15,5 +15,7 @@ __pycache__/
 .agents/skills/*
 !.agents/skills/blender-tixl-bridge/
 !.agents/skills/blender-tixl-bridge/*.md
+!.agents/skills/blender-tixl-release-refresh/
+!.agents/skills/blender-tixl-release-refresh/*.md
 # Rebuilt locally from source; generated TiXL imports remain under .tixl_cache/.
 /blender_tixl_bridge.zip
