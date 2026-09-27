@@ -4,41 +4,13 @@ This is the canonical, vendor-neutral setup guide for any AI agent helping an en
 
 The bridge currently targets Windows. Blender is the authored source; TiXL projects, graphs, and cache files are generated from a saved `.blend`.
 
-## Mandatory tool boundary
+## Setup rules and routing
 
-- Use Blender MCP for every Blender action, including launching or attaching, reading state, opening files, running Blender Python, installing or enabling add-ons, changing preferences, saving, syncing, and verification.
-- Use `blender_tixl_bridge/source/tixl_bridge.py` and TiXL's local debug protocol for every TiXL action, including launch checks, project selection, graph inspection, evaluation, pinning, and screenshots.
-- Never use Computer Use, screen automation, accessibility automation, simulated mouse/keyboard input, coordinate clicking, or screenshots as an input-control mechanism for Blender or TiXL.
-- If Blender MCP is not installed, connected, or capable of a required bootstrap step, stop and ask the end user to perform that step manually. Do not fall back to UI automation.
-- If the TiXL debug bridge is not available during first-run setup, guide the end user through the stated UI steps and wait for confirmation. Do not fall back to UI automation.
-- Terminal and filesystem tools may be used for downloads, builds, file checks, logs, and documented command-line setup, but they are not substitutes for Blender MCP or the TiXL debug bridge when interacting with the running applications.
+Follow [repository rules](../AGENTS.md): Blender actions use MCP, TiXL actions use the debug client, and unsupported bootstrap steps require a manual user handoff. Never use UI automation. Inspect each mutation through its API.
 
-## Operational skill
+Use official sources. Explain downloads/install locations and obtain only approvals required by the active environment. Collect the first-run choices below; never invent the TiXL username or dismiss meaningful preferences blindly. Ask the user to save unrelated work before closing an editor. Use a dedicated TiXL-created operator project, with `Auto` as the normal connection mode.
 
-Before operating, validating, editing, or troubleshooting a bridge project, read [`.agents/skills/blender-tixl-bridge/SKILL.md`](skills/blender-tixl-bridge/SKILL.md). It is the canonical capability reference for:
-
-- Blender MCP discovery, Blender Python recipes, add-on configuration, scene preflight, sync, and Blender-side verification.
-- Every supported TiXL debug-protocol command, including inspection, graph navigation and editing, evaluation, screenshots, logs, metrics, and lifecycle cautions.
-- The eleven reusable TiXL bridge operators and the correct node patterns for timing, geometry, textures, lighting, camera, preloading, and output.
-- End-to-end playbooks for syncing, validating, modifying, and diagnosing a generated project.
-
-Tool names exposed by a particular Blender MCP server may vary. Use the MCP server's advertised tools and map them to the capabilities in the skill. Never invent an unavailable tool or replace it with Computer Use.
-
-After upgrading Blender, Blender MCP, TiXL, the TiXL debug bridge, or this add-on, also read [`.agents/skills/blender-tixl-release-refresh/SKILL.md`](skills/blender-tixl-release-refresh/SKILL.md). It defines the repeatable capability, screenshot, README, package, and validation refresh for a new version.
-
-Capability discovery is automated without an AI agent. The Blender add-on starts `.agents/capability_automation.py` when the add-on is installed or updated, when it registers after Blender starts, and before a bridge sync. The add-on also exposes **Refresh agent capabilities** for an explicit manual run. Each trigger launches one fingerprinted refresh; it installs no scheduled task, watcher, or background service. The refresh rewrites `.agents/CAPABILITIES.md` only when Blender, Blender MCP, TiXL, the TiXL debug bridge, or this bridge changes.
-
-## Agent contract
-
-1. Guide the end user through downloading and first-launch setup. Do not assume that an installed executable means first-run configuration is complete.
-2. Use only official download sources. Explain what will be downloaded, where it will be installed or extracted, and obtain any approval required by the active environment before downloading or installing software.
-3. Never invent the user's TiXL username/root namespace. Ask the user to choose it before completing TiXL's first-run prompt. This value becomes part of every project namespace and is costly to change later.
-4. Do not dismiss first-run dialogs blindly. Ask about meaningful preferences; otherwise state that application defaults will be kept.
-5. Before closing Blender or TiXL, ask the user to save any unrelated work. Never force-close an editor that might contain unsaved work.
-6. Prefer a dedicated, TiXL-created operator project for this bridge. Do not use TiXL's built-in `examples` project for a normal end-user installation.
-7. Keep `Auto` as the normal end-user connection mode. Use `Debug bridge` only when TiXL is intentionally launched with `--debug-server 9042`.
-8. A successful command is not sufficient verification. Complete the first sync, inspect the generated graph, and check the rendered output.
-9. Never use Computer Use or another GUI automation fallback. Use Blender MCP, the TiXL debug bridge, or an explicit end-user handoff.
+Load the [operational router](skills/blender-tixl-bridge/SKILL.md) for task-specific recipes. After upgrades, load [release refresh](skills/blender-tixl-release-refresh/SKILL.md). Capability discovery belongs to the add-on's one-shot automation, with no scheduled task, watcher or background service; no manufactured probe inputs.
 
 ## Official downloads
 
@@ -176,26 +148,9 @@ The server binds locally. Verify it with `getVersion` through `blender_tixl_brid
 
 ## 5a. Verify automatic capability discovery
 
-The checkout installer records this repository in the add-on's **Agent capability repository** preference and queues a forced refresh. Confirm that `.agents/capability_plugin.log` and `.agents/capability_automation.log` show a completed run and that `.agents/CAPABILITIES.md` reflects the installed versions.
+The checkout installer records the repository in **Agent capability repository** and queues a forced refresh. Confirm completion in `.agents/capability_plugin.log` and `.agents/capability_automation.log`. The generated `.agents/CAPABILITIES.md` summary must reflect installed versions and explicitly report missing/unavailable components. Use `.agents/CAPABILITIES_DETAIL.md` for full schemas and inventories; review unclassified capabilities before using them.
 
-No AI-generated probe file is required. The refresh process:
-
-- fingerprints the Blender executable or Windows Store package;
-- connects directly to Blender's official MCP TCP extension when it is running, or starts a configured/discovered stdio MCP server and calls `initialize` and `tools/list`;
-- runs the read-only Blender probe through an advertised Blender Python tool when Blender is connected;
-- fingerprints `TiXL.exe`, parses the matching `DebugServer.cs`, and calls the running TiXL debug protocol when available;
-- fingerprints `blender_tixl_bridge/source/tixl_bridge.py` and the TiXL server implementation;
-- preserves the last successful live inventory when an application is temporarily closed.
-
-Complete capability evidence may be reused for at most 30 seconds when a cheap screen finds no change to the config, relevant environment and endpoint settings, executable/source paths, or monitored bridge/operator file membership and metadata. The automation retries any missing or unavailable component on every trigger. A cache hit reports its age and expiry; partial probes do not advance the last fully verified time. Every cache miss, manual force, and TTL expiry performs a full probe and bypasses per-file hash reuse. Discovery remains one-shot; this freshness window does not install a watcher or background service.
-
-The official Blender MCP extension needs no separate command configuration: the add-on passes its saved host and port to each refresh. For another MCP server, copy `.agents/capability_automation.example.json` to the ignored local file `.agents/capability_automation.json` and set `blenderMcp.command`. Later updates are detected automatically from the extension/server version, command fingerprint, and tool schemas.
-
-Review newly discovered or unclassified capabilities before using them. Never infer safety or parameters from a method name alone. The user can force an immediate non-AI refresh with the add-on's **Refresh agent capabilities** button or:
-
-```powershell
-python .agents/capability_automation.py once --force
-```
+The official Blender MCP extension needs no separate command configuration; its saved host/port are passed by the add-on. For another server, configure the ignored `.agents/capability_automation.json` using the checked-in example, without credentials. See [discovery details](skills/blender-tixl-bridge/references/discovery.md) if transport setup or freshness needs investigation. Missing components are retried; complete evidence can be reused for at most 30 seconds only when both outputs and fingerprints remain valid. Force refresh with **Refresh agent capabilities** through MCP or the documented one-shot command.
 
 ## 6. Perform the first sync with the end user
 
@@ -211,23 +166,9 @@ If TiXL closes cleanly during the first install and the sync reports a subsequen
 
 ## 7. Required verification
 
-Do not declare success until all of the following pass:
+Complete the [sync verification procedure](skills/blender-tixl-bridge/references/sync.md). Require an openable authored `.blend`, complete expected-world/animation/GLB/camera artifacts, successful project build, resolved graph and correct source-clip/global/per-world timing, mesh/texture select-replace, preloading, camera/light/world selection and final render-target/tone-map wiring. Pin **Output target**, inspect both graph and rendered-output images at meaningful times, and check warning/error logs. A blank/stale render is failure even after a successful build.
 
-- The source `.blend` remains the authored file and is openable in Blender.
-- The cache manifest contains every expected Blender world, animation file, GLB, and camera rail.
-- The generated TiXL project builds successfully and its home graph opens.
-- The graph has no unresolved children or unresolved connections.
-- Source clips feed the global and per-world clip sequences; each world clip sequence feeds its **Blender World Clip Time**, which feeds its **Blender Animation Scene**.
-- Mesh-select/replace and texture-select/replace nodes are connected for each world.
-- **Preload all Blender worlds**, camera, lights, world selection, render targets, and tone mapping are present.
-- The **Output target** render target is pinned.
-- Evaluate at one or more meaningful times and capture both a graph screenshot and rendered-output screenshot.
-- Visually inspect the output; a successful build with a blank or stale render is not success.
-- Check TiXL's error log and the bridge's `latest.log`.
-
-Use Blender MCP exclusively for Blender-side inspection and actions. Use the TiXL debug bridge exclusively for `getContext`, `getGraphState`, `setTime`, `pumpFrames`, `pin`, `screenshot`, and `screenshotWindow`. Never use Computer Use. If either application API cannot perform a required action, stop and ask the end user to perform it manually.
-
-After changing a loaded `.t3` or `.t3ui` structure on disk, save editor work and restart TiXL with `--debug-server 9042`; `reload` can leave the old graph instance in memory.
+Keep Home graphs and TimeClips user-owned. Structural edits to loaded `.t3`/`.t3ui` require saving editor work and restarting TiXL with `--debug-server 9042`; `reload` is insufficient. Unsupported API actions require a manual user step.
 
 ## Completion report
 

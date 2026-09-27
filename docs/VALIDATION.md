@@ -194,3 +194,46 @@ python tests/tixl_animation_bake_validation.py --baseline path/to/example_baseli
 
 The live helper requires Pillow locally. Its offline fixture, counter, and
 restoration tests use only the standard library and run in the normal CI suite.
+
+## Documentation reading measurement
+
+The [fixed-task report](benchmarks/documentation-reading-2026-09-27.json) compares
+the previous required documents at `f46904892e8aba2d85e1920d251bbe859f0ba30c`
+with the task router and generated capability summary. It counts full Markdown
+bodies with line endings normalized to LF, using pinned `tiktoken==0.11.0`,
+`o200k_base`, and `encode_ordinary`.
+These are documentation counts, excluding tool responses, system instructions,
+conditional references outside the selected task, and runtime usage or cost.
+
+| Fixed task | Before | After | Reduction |
+| --- | ---: | ---: | ---: |
+| First-run setup and first sync | 12,163 | 5,159 | 57.58% |
+| Saved-source sync and verification | 8,148 | 2,292 | 71.87% |
+| Existing TiXL graph edit | 8,148 | 2,649 | 67.49% |
+| Stale or blank output diagnosis | 8,148 | 2,048 | 74.86% |
+| Component upgrade and release evidence | 14,481 | 3,971 | 72.58% |
+
+The report records exact readsets and per-file hashes. First-run namespace and
+preference choices remain required; upgrade work reads onboarding only when
+first-run behavior is affected. Detailed protocol, operator, Blender and
+discovery references remain available for their respective subtasks.
+
+A forced refresh through the official Blender MCP extension generated both
+capability files from the same live evidence. All component coverage was complete
+with Blender 5.2.2 LTS, Blender MCP 1.0.3 and TiXL 4.3.0.2 / protocol 1. The detailed
+inventory was byte-identical to the previous full report. Missing or corrupt
+sidecars prevent evidence reuse; tests also cover a large advertised capability
+schema remaining in the detail file instead of expanding the summary.
+
+The rebuilt ZIP includes repository rules, both routers, task references and both
+generated capability files. All 36 local Markdown routing links resolved inside
+the archive; local notes and capability configuration were excluded. The two
+routers passed the skill-format validator.
+
+To reproduce, install the pinned tokenizer in a local environment and run
+`python tests/benchmark_documentation_reading.py --output reading-report.json`.
+The helper retrieves the baseline files directly from Git, so that commit must
+be present locally. Optional `--tokenizer-dependencies` and `--tokenizer-cache`
+arguments support an isolated installation and cached encoding data. The
+tokenizer is an evidence-generation dependency; normal CI needs no network or
+tokenizer installation.

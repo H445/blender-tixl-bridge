@@ -54,7 +54,9 @@ def build_archive(root=ROOT):
         # A ZIP install has no checkout path. Bundle the non-AI capability refresh
         # under the add-on so install/update/register/manual triggers still work.
         agent_files = [
+            root / "AGENTS.md",
             root / ".agents" / "CAPABILITIES.md",
+            root / ".agents" / "CAPABILITIES_DETAIL.md",
             root / ".agents" / "README.md",
             root / ".agents" / "capability_automation.py",
             root / ".agents" / "capability_automation.example.json",
@@ -63,6 +65,11 @@ def build_archive(root=ROOT):
             root / ".agents" / "skills" / "blender-tixl-bridge" / "SKILL.md",
             root / ".agents" / "skills" / "blender-tixl-release-refresh" / "SKILL.md",
         ]
+        # Keep the task routes usable in ZIP installations, without bundling
+        # unrelated local notes, generated logs, or personal configuration.
+        for skill in ("blender-tixl-bridge", "blender-tixl-release-refresh"):
+            agent_files.extend(sorted(
+                (root / ".agents" / "skills" / skill / "references").glob("*.md")))
         for path in agent_files:
             archive.write(path, "blender_tixl_bridge/" + path.relative_to(root).as_posix())
     return output

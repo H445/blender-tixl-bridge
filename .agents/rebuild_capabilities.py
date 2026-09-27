@@ -225,7 +225,8 @@ def mcp_inputs(tool: dict[str, Any]) -> str:
                      for name in sorted(properties))
 
 
-def render(args: argparse.Namespace) -> str:
+def collect_render_evidence(args: argparse.Namespace) -> dict[str, Any]:
+    """Collect evidence once so summary and detail stay tied to one probe pass."""
     bridge = parse_bridge_metadata()
     bridge_ops = parse_bridge_operators()
     tixl_source = infer_tixl_source(args.tixl_source)
@@ -246,6 +247,25 @@ def render(args: argparse.Namespace) -> str:
     live_tixl_evidence = (json.dumps(live_tixl, sort_keys=True) if live_tixl_complete
                           else (f"last known {json.dumps(cached_tixl_version, sort_keys=True)}; editor currently unavailable"
                                 if cached_tixl_version else "TiXL is not currently answering the configured port"))
+    if live_tixl_complete and isinstance(live_tixl, dict):
+        concise_parts = []
+        version = live_tixl.get("version")
+        if isinstance(version, dict):
+            version_text = version.get("editorVersion") or version.get("version")
+            if version_text:
+                concise_parts.append(f"TiXL {version_text}")
+            if version.get("protocolVersion") is not None:
+                concise_parts.append(f"protocol {version['protocolVersion']}")
+        if live_tixl.get("port") is not None:
+            concise_parts.append(f"port {live_tixl['port']}")
+        capabilities = live_tixl.get("capabilities")
+        if isinstance(capabilities, dict) and isinstance(capabilities.get("methods"), list):
+            concise_parts.append(f"{len(capabilities['methods'])} methods advertised")
+        elif live_tixl.get("capabilityDiscovery"):
+            concise_parts.append(str(live_tixl["capabilityDiscovery"]))
+        live_tixl_summary_evidence = "; ".join(concise_parts) or "TiXL debug server is responding"
+    else:
+        live_tixl_summary_evidence = live_tixl_evidence
 
     live_methods: dict[str, dict[str, Any]] = {}
     if live_tixl and isinstance(live_tixl.get("capabilities"), dict):
@@ -257,6 +277,56 @@ def render(args: argparse.Namespace) -> str:
                 live_methods[item] = {}
     methods = sorted(set(tixl_methods) | set(live_methods))
 
+    return {
+        "bridge": bridge,
+        "bridge_ops": bridge_ops,
+        "tixl_source": tixl_source,
+        "tixl_methods": tixl_methods,
+        "debug_server": debug_server,
+        "blender_probe": blender_probe,
+        "mcp_tools": mcp_tools,
+        "automation_evidence": automation_evidence,
+        "blender_install": blender_install,
+        "mcp_server": mcp_server,
+        "tixl_install": tixl_install,
+        "debug_bridge": debug_bridge,
+        "mcp_tool_count": mcp_tool_count,
+        "cached_tixl_version": cached_tixl_version,
+        "live_tixl": live_tixl,
+        "live_tixl_complete": live_tixl_complete,
+        "live_tixl_evidence": live_tixl_evidence,
+        "live_tixl_summary_evidence": live_tixl_summary_evidence,
+        "live_methods": live_methods,
+        "methods": methods,
+        "unclassified": sorted(method for method in methods if method not in KNOWN_TIXL_METHODS),
+    }
+
+
+def coverage_status(component: Any, available: bool) -> str:
+    if isinstance(component, dict):
+        if component.get("status") == "unavailable" or component.get("currentlyUnavailable") is True:
+            return "unavailable"
+    return "complete" if available else "missing"
+
+
+def render_detail(evidence: dict[str, Any]) -> str:
+    bridge = evidence["bridge"]
+    bridge_ops = evidence["bridge_ops"]
+    tixl_methods = evidence["tixl_methods"]
+    debug_server = evidence["debug_server"]
+    blender_probe = evidence["blender_probe"]
+    mcp_tools = evidence["mcp_tools"]
+    blender_install = evidence["blender_install"]
+    mcp_server = evidence["mcp_server"]
+    tixl_install = evidence["tixl_install"]
+    debug_bridge = evidence["debug_bridge"]
+    mcp_tool_count = evidence["mcp_tool_count"]
+    cached_tixl_version = evidence["cached_tixl_version"]
+    live_tixl_complete = evidence["live_tixl_complete"]
+    live_tixl_evidence = evidence["live_tixl_evidence"]
+    live_methods = evidence["live_methods"]
+    methods = evidence["methods"]
+
     lines = [
         "# Discovered Blender–TiXL capabilities",
         "",
@@ -267,12 +337,12 @@ def render(args: argparse.Namespace) -> str:
         "| Source | Status | Evidence |",
         "| --- | --- | --- |",
         f"| Bridge checkout | complete | add-on {escape_cell(bridge['version'])}; source SHA-256 `{digest(bridge['source'])}` |",
-        f"| Blender installation | {'complete' if blender_install.get('status') == 'ok' else 'missing'} | {escape_cell(blender_install.get('summary', 'Configure automatic Blender discovery'))} |",
+        f"| Blender installation | {coverage_status(blender_install, blender_install.get('status') == 'ok')} | {escape_cell(blender_install.get('summary', 'Configure automatic Blender discovery'))} |",
         f"| Blender runtime via MCP | {'complete' if blender_probe else 'unavailable'} | {escape_cell((blender_probe or {}).get('blenderVersion', 'The next add-on refresh retries when Blender MCP is connected'))} |",
-        f"| Blender MCP | {'complete' if mcp_tools else ('unavailable' if mcp_server.get('status') == 'unavailable' else 'missing')} | {mcp_tool_count}; {escape_cell(mcp_server.get('summary', 'configure Blender MCP transport'))} |",
-        f"| TiXL installation | {'complete' if tixl_install.get('status') == 'ok' else 'missing'} | {escape_cell(tixl_install.get('summary', 'Configure or infer TiXL.exe'))} |",
+        f"| Blender MCP | {coverage_status(mcp_server, bool(mcp_tools))} | {mcp_tool_count}; {escape_cell(mcp_server.get('summary', 'configure Blender MCP transport'))} |",
+        f"| TiXL installation | {coverage_status(tixl_install, tixl_install.get('status') == 'ok')} | {escape_cell(tixl_install.get('summary', 'Configure or infer TiXL.exe'))} |",
         f"| TiXL source | {'complete' if debug_server else 'missing'} | " + (f"matching `{DEBUG_SERVER_RELATIVE.as_posix()}`; SHA-256 `{digest(debug_server)}` |" if debug_server else "Pass --tixl-source |"),
-        f"| TiXL debug bridge | {'complete' if debug_bridge.get('status') == 'ok' else 'missing'} | {escape_cell(debug_bridge.get('summary', 'Client/server implementation fingerprint unavailable'))} |",
+        f"| TiXL debug bridge | {coverage_status(debug_bridge, debug_bridge.get('status') == 'ok')} | {escape_cell(debug_bridge.get('summary', 'Client/server implementation fingerprint unavailable'))} |",
         f"| Live TiXL debug server | {'complete' if live_tixl_complete else ('cached' if cached_tixl_version else 'unavailable')} | {escape_cell(live_tixl_evidence)} |",
         "",
         "The automation keeps retrying unavailable live probes. A `missing` row means its component is not configured or discoverable and is not yet monitored.",
@@ -302,19 +372,19 @@ def render(args: argparse.Namespace) -> str:
             advertised = live_methods.get(method, {})
             fallback = advertised.get("description") or "Inspect the matching server handler before use."
             category, description = KNOWN_TIXL_METHODS.get(method, ("**Unclassified**", fallback))
-            evidence = []
+            method_evidence = []
             if method in tixl_methods:
-                evidence.append(f"`DebugServer.cs:{tixl_methods[method]}`")
+                method_evidence.append(f"`DebugServer.cs:{tixl_methods[method]}`")
             if method in live_methods:
-                evidence.append("live server")
-            lines.append(f"| `{escape_cell(method)}` | {category} | {escape_cell(description)} | {', '.join(evidence)} |")
+                method_evidence.append("live server")
+            lines.append(f"| `{escape_cell(method)}` | {category} | {escape_cell(description)} | {', '.join(method_evidence)} |")
     else:
         lines.append("No TiXL method inventory was available. Pass the matching TiXL source root or use a server that advertises capabilities.")
 
     lines.extend(["", "## Reusable TiXL bridge operators", "", "| Operator | Contract from current `.t3ui` |", "| --- | --- |"])
     lines.extend(f"| `{escape_cell(op['name'])}` | {escape_cell(op['description'])} |" for op in bridge_ops)
 
-    unclassified = sorted(method for method in methods if method not in KNOWN_TIXL_METHODS)
+    unclassified = evidence["unclassified"]
     lines.extend(["", "## Review result", ""])
     if unclassified:
         lines.append("Unclassified TiXL methods require handler review before use: " + ", ".join(f"`{name}`" for name in unclassified) + ".")
@@ -324,19 +394,101 @@ def render(args: argparse.Namespace) -> str:
     return "\n".join(lines)
 
 
+def render_summary(evidence: dict[str, Any], detail_name: str = "CAPABILITIES_DETAIL.md") -> str:
+    """Render the compact default view while retaining coverage and warnings."""
+    bridge = evidence["bridge"]
+    blender_install = evidence["blender_install"]
+    blender_probe = evidence["blender_probe"]
+    mcp_server = evidence["mcp_server"]
+    mcp_tools = evidence["mcp_tools"]
+    tixl_install = evidence["tixl_install"]
+    debug_bridge = evidence["debug_bridge"]
+    debug_server = evidence["debug_server"]
+    cached_tixl_version = evidence["cached_tixl_version"]
+    live_tixl_complete = evidence["live_tixl_complete"]
+    live_tixl_evidence = evidence["live_tixl_summary_evidence"]
+    methods = evidence["methods"]
+    unclassified = evidence["unclassified"]
+    live_tixl = evidence["live_tixl"]
+    bridge_ops = evidence["bridge_ops"]
+
+    lines = [
+        "# Blender–TiXL capabilities",
+        "",
+        f"> Generated automatically. Do not hand-edit. The detailed evidence and complete inventories are in [{escape_cell(detail_name)}]({escape_cell(detail_name)}).",
+        "",
+        "## Discovery coverage",
+        "",
+        "| Source | Status | Evidence |",
+        "| --- | --- | --- |",
+        f"| Bridge checkout | complete | add-on {escape_cell(bridge['version'])}; source SHA-256 `{digest(bridge['source'])}` |",
+        f"| Blender installation | {coverage_status(blender_install, blender_install.get('status') == 'ok')} | {escape_cell(blender_install.get('summary', 'Configure automatic Blender discovery'))} |",
+        f"| Blender runtime via MCP | {'complete' if blender_probe else 'unavailable'} | {escape_cell((blender_probe or {}).get('blenderVersion', 'The next add-on refresh retries when Blender MCP is connected'))} |",
+        f"| Blender MCP | {coverage_status(mcp_server, bool(mcp_tools))} | {len(mcp_tools)} tool(s); {escape_cell(mcp_server.get('summary', 'configure Blender MCP transport'))} |",
+        f"| TiXL installation | {coverage_status(tixl_install, tixl_install.get('status') == 'ok')} | {escape_cell(tixl_install.get('summary', 'Configure or infer TiXL.exe'))} |",
+        f"| TiXL source | {'complete' if debug_server else 'missing'} | " + (f"matching `{DEBUG_SERVER_RELATIVE.as_posix()}`; SHA-256 `{digest(debug_server)}` |" if debug_server else "Pass --tixl-source |"),
+        f"| TiXL debug bridge | {coverage_status(debug_bridge, debug_bridge.get('status') == 'ok')} | {escape_cell(debug_bridge.get('summary', 'Client/server implementation fingerprint unavailable'))} |",
+        f"| Live TiXL debug server | {'complete' if live_tixl_complete else ('cached' if cached_tixl_version else 'unavailable')} | {escape_cell(live_tixl_evidence)} |",
+        "",
+        "Unavailable live probes are retried on refresh. A `missing` component is not configured or discoverable and is not yet monitored.",
+        "",
+        "## Available surface",
+        "",
+        f"- Blender bridge add-on: **{escape_cell(bridge['name'])} {escape_cell(bridge['version'])}** (minimum Blender {escape_cell(bridge['minimumBlender'])}).",
+        f"- Blender MCP tools: **{len(mcp_tools)}** discovered.",
+        f"- TiXL protocol methods: **{len(methods)}** discovered.",
+        f"- Reusable TiXL bridge operators: **{len(bridge_ops)}** discovered.",
+    ]
+    if isinstance(live_tixl, dict) and live_tixl.get("error"):
+        lines.extend(["", f"Warning: live TiXL probe failed: {escape_cell(live_tixl['error'])}."])
+    elif not live_tixl_complete:
+        lines.extend(["", f"Warning: {escape_cell(live_tixl_evidence)}."])
+    if not mcp_tools:
+        lines.extend(["", "Warning: no Blender MCP tool inventory was available."])
+    if not methods:
+        lines.extend(["", "Warning: no TiXL method inventory was available."])
+    if unclassified:
+        lines.extend(["", "Unclassified TiXL methods require handler review before use: "
+                      + ", ".join(f"`{name}`" for name in unclassified) + "."])
+    else:
+        lines.extend(["", "No unclassified TiXL methods were discovered."])
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_bundle(args: argparse.Namespace) -> tuple[str, str]:
+    evidence = collect_render_evidence(args)
+    output = Path(getattr(args, "output", DEFAULT_OUTPUT))
+    return render_summary(evidence, detail_output_path(output).name), render_detail(evidence)
+
+
+def render(args: argparse.Namespace) -> str:
+    """Backward-compatible full report renderer."""
+    return render_bundle(args)[1]
+
+
+def detail_output_path(output: Path) -> Path:
+    return output.with_name(f"{output.stem}_DETAIL{output.suffix}")
+
+
 def main() -> int:
     args = parse_args()
     output = args.output.resolve()
-    content = render(args)
+    detail_output = detail_output_path(output)
+    summary, detail = render_bundle(args)
     if args.check:
-        if not output.is_file() or output.read_text(encoding="utf-8") != content:
-            print(f"Capability snapshot is stale: {output}", file=sys.stderr)
+        if (not output.is_file() or output.read_text(encoding="utf-8") != summary
+                or not detail_output.is_file()
+                or detail_output.read_text(encoding="utf-8") != detail):
+            print(f"Capability snapshots are stale: {output} and {detail_output}", file=sys.stderr)
             return 1
-        print(f"Capability snapshot is current: {output}")
+        print(f"Capability snapshots are current: {output} and {detail_output}")
         return 0
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(content, encoding="utf-8", newline="\n")
-    print(f"Wrote {output}")
+    detail_output.parent.mkdir(parents=True, exist_ok=True)
+    detail_output.write_text(detail, encoding="utf-8", newline="\n")
+    output.write_text(summary, encoding="utf-8", newline="\n")
+    print(f"Wrote {output} and {detail_output}")
     return 0
 
 

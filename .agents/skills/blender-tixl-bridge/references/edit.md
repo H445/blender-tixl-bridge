@@ -1,0 +1,10 @@
+# Edit a TiXL graph safely
+
+Read [operator semantics](operators.md) before changing timing, geometry, textures, lights, preloading or render routes. Use stable child/symbol/input/output IDs from `getGraphState`, never screen coordinates. Consult [protocol details](protocol.md) and the generated inventory for unknown method signatures.
+
+1. Capture `getContext`, full `getGraphState`, and `getGraphView`; preserve project, selection, pinned output, time and playback. Pause before changes.
+2. Apply one logical mutation through the debug bridge. `setInput` sets a typed input; `addOp` needs a symbol ID when names are ambiguous; `connect` checks types/cycles and needs the intended multi-input index. Do not replace an occupied non-multi input as a diagnostic: undo may not recreate its displaced connection. `setBypass` requires compatible input/output types. `deleteOp` changes graph structure.
+3. Pump two or three frames; read graph state again and reject missing children/connections or unexpected topology. Evaluate the affected output, inspect numeric mesh counts/bounds/topology where supported, then capture graph/output images and inspect warning/error logs. Visually verify the intended change.
+4. On failed verification, undo immediately and read back the rollback, including original connections and rendered output. Do not assume undo restored a displaced edge. Stop rather than leaving an unverified edit.
+5. In-memory mutations have undo support but are not proof of disk persistence. There is no general save command: coordinate saving with the user. Never call `shutdown` without explicit authorization and a confirmed save; never use test-only `stallMainThread` in normal operation.
+6. Restore diagnostic context and exact playback speed/time (playing mode first); clear any `setAgentState` activity. If loaded `.t3`/`.t3ui` structure changed on disk, save editor work and restart TiXL with `--debug-server 9042` before claiming visibility. Preserve the user home graph and TimeClips across resyncs; change world branches deliberately when Blender adds/removes worlds.

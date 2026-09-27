@@ -5,7 +5,9 @@ invokes ``once`` after install/update, on registration, before sync, or from its
 manual refresh operator. It discovers Blender package metadata, speaks MCP
 directly to the configured Blender MCP server, probes TiXL's local debug protocol,
 fingerprints both bridge implementations, and only rebuilds the snapshot when
-stable evidence changes.
+stable evidence changes, the refresh is forced, or either generated report is
+missing or no longer matches its recorded digest. Both the compact summary and
+the complete detail inventory must exist and match before cached evidence is reused.
 """
 
 from __future__ import annotations
@@ -808,8 +810,29 @@ def rebuild_snapshot(config: dict[str, Any], components: dict[str, Any], tixl_so
             output=output,
             check=False,
         )
-        atomic_write(output, rebuild.render(args))
+        summary, detail = rebuild.render_bundle(args)
+        atomic_write(rebuild.detail_output_path(output), detail)
+        atomic_write(output, summary)
     return output
+
+
+def _output_hashes(output: Path) -> dict[str, str] | None:
+    detail = rebuild.detail_output_path(output)
+    if not output.is_file() or not detail.is_file():
+        return None
+    try:
+        return {"summary": sha256_file(output), "detail": sha256_file(detail)}
+    except OSError:
+        return None
+
+
+def _outputs_match_previous(output: Path, previous: dict[str, Any]) -> bool:
+    expected = previous.get("outputHashes") if isinstance(previous, dict) else None
+    if not isinstance(expected, dict) or not all(isinstance(expected.get(key), str)
+                                                  for key in ("summary", "detail")):
+        return False
+    current = _output_hashes(output)
+    return current == {key: expected[key] for key in ("summary", "detail")} if current else False
 
 
 def _stat_signature(path: Path | None) -> dict[str, Any]:
@@ -950,6 +973,7 @@ def _cached_result(previous: dict[str, Any], output: Path, age: float) -> dict[s
                   "freshUntilUtc": fresh_until},
         "fingerprint": previous.get("fingerprint"),
         "output": str(output),
+        "detailOutput": str(rebuild.detail_output_path(output)),
         "components": public_evidence(previous.get("components", {}))["components"],
         "counters": current_counters(),
     }
@@ -997,7 +1021,7 @@ def _run_once_unlocked(config_path: Path, force: bool = False) -> dict[str, Any]
     screen = quick_screen(config, config_path)
     now = datetime.now(timezone.utc)
     age = _verification_age(previous, now)
-    if (not force and output.is_file() and age is not None
+    if (not force and _outputs_match_previous(output, previous) and age is not None
             and age <= CACHE_FRESHNESS_SECONDS
             and previous.get("quickScreen") == screen
             and _cache_is_complete(previous.get("components", {}))):
@@ -1008,13 +1032,15 @@ def _run_once_unlocked(config_path: Path, force: bool = False) -> dict[str, Any]
     # renew a bounded cache while carrying a same-stat stale digest forward.
     components, tixl_source, port = collect(config, previous, force=True)
     current_fingerprint = fingerprint(components)
-    changed = force or previous.get("fingerprint") != current_fingerprint or not output.is_file()
+    outputs_match = _outputs_match_previous(output, previous)
+    changed = force or previous.get("fingerprint") != current_fingerprint or not outputs_match
     if changed:
         rebuilt = rebuild_snapshot(config, components, tixl_source, port)
         increment("snapshotRebuilds")
         log(f"rebuilt {rebuilt} because monitored capability evidence changed")
     else:
         log("capability evidence unchanged")
+    output_hashes = _output_hashes(output)
     checked_at = datetime.now(timezone.utc)
     complete_evidence = _cache_is_complete(components)
     last_fully_verified = (checked_at.replace(microsecond=0).isoformat() if complete_evidence
@@ -1037,12 +1063,14 @@ def _run_once_unlocked(config_path: Path, force: bool = False) -> dict[str, Any]
         "evidenceFreshUntilUtc": evidence_deadline,
         "freshnessSeconds": CACHE_FRESHNESS_SECONDS,
         "quickScreen": screen,
+        "outputHashes": output_hashes,
         "lastRebuiltUtc": utc_now() if changed else previous.get("lastRebuiltUtc"),
         "components": components,
     }
     atomic_write_json(state_path, state)
     return {"changed": changed, "cached": False, "fingerprint": current_fingerprint,
-            "output": str(output), "components": public_evidence(components)["components"],
+            "output": str(output), "detailOutput": str(rebuild.detail_output_path(output)),
+            "components": public_evidence(components)["components"],
             "cache": {"status": "fully verified" if complete_evidence else "partial verification; unavailable evidence will be retried",
                       "freshnessSeconds": CACHE_FRESHNESS_SECONDS,
                       "lastAttemptUtc": state["lastAttemptUtc"],

@@ -1,0 +1,499 @@
+{
+  "schema": 1,
+  "measured_at_utc": "2026-09-27T06:39:01.825557+00:00",
+  "tokenizer": {
+    "package": "tiktoken",
+    "version": "0.11.0",
+    "encoding": "o200k_base",
+    "method": "encode_ordinary"
+  },
+  "baseline_commit": "f46904892e8aba2d85e1920d251bbe859f0ba30c",
+  "readsets": {
+    "first_run_onboarding": {
+      "description": "Set up a first-time user, preserve namespace choices, then follow focused sync verification.",
+      "before": [
+        "AGENTS.md",
+        ".agents/skills/blender-tixl-bridge/SKILL.md",
+        ".agents/CAPABILITIES.md",
+        ".agents/README.md"
+      ],
+      "after": [
+        "AGENTS.md",
+        ".agents/skills/blender-tixl-bridge/SKILL.md",
+        ".agents/CAPABILITIES.md",
+        ".agents/README.md",
+        ".agents/skills/blender-tixl-bridge/references/sync.md"
+      ]
+    },
+    "sync_and_verify": {
+      "description": "Sync a saved Blender source and verify installed graph structure, paths and rendered output.",
+      "before": [
+        "AGENTS.md",
+        ".agents/skills/blender-tixl-bridge/SKILL.md",
+        ".agents/CAPABILITIES.md"
+      ],
+      "after": [
+        "AGENTS.md",
+        ".agents/skills/blender-tixl-bridge/SKILL.md",
+        ".agents/CAPABILITIES.md",
+        ".agents/skills/blender-tixl-bridge/references/sync.md"
+      ]
+    },
+    "edit_tixl_graph": {
+      "description": "Safely edit an existing TiXL graph, verify the change and restore diagnostic state.",
+      "before": [
+        "AGENTS.md",
+        ".agents/skills/blender-tixl-bridge/SKILL.md",
+        ".agents/CAPABILITIES.md"
+      ],
+      "after": [
+        "AGENTS.md",
+        ".agents/skills/blender-tixl-bridge/SKILL.md",
+        ".agents/CAPABILITIES.md",
+        ".agents/skills/blender-tixl-bridge/references/edit.md",
+        ".agents/skills/blender-tixl-bridge/references/operators.md"
+      ]
+    },
+    "troubleshoot_blank_or_stale_output": {
+      "description": "Diagnose stale or blank output using manifests, graph state, logs and safe recovery.",
+      "before": [
+        "AGENTS.md",
+        ".agents/skills/blender-tixl-bridge/SKILL.md",
+        ".agents/CAPABILITIES.md"
+      ],
+      "after": [
+        "AGENTS.md",
+        ".agents/skills/blender-tixl-bridge/SKILL.md",
+        ".agents/CAPABILITIES.md",
+        ".agents/skills/blender-tixl-bridge/references/troubleshoot.md"
+      ]
+    },
+    "release_refresh": {
+      "description": "Refresh capabilities, release evidence and package after an application or add-on upgrade.",
+      "before": [
+        "AGENTS.md",
+        ".agents/skills/blender-tixl-bridge/SKILL.md",
+        ".agents/CAPABILITIES.md",
+        ".agents/skills/blender-tixl-release-refresh/SKILL.md",
+        ".agents/README.md",
+        "README.md"
+      ],
+      "after": [
+        "AGENTS.md",
+        ".agents/skills/blender-tixl-bridge/SKILL.md",
+        ".agents/CAPABILITIES.md",
+        ".agents/skills/blender-tixl-release-refresh/SKILL.md",
+        ".agents/skills/blender-tixl-release-refresh/references/refresh.md",
+        "README.md"
+      ]
+    }
+  },
+  "reproduction": {
+    "install": "python -m pip install --target examples/.tixl_cache/issue11_validation/tokenizer_dependencies tiktoken==0.11.0",
+    "run": "python tests/benchmark_documentation_reading.py --baseline-ref f46904892e8aba2d85e1920d251bbe859f0ba30c --current-root . --tokenizer-dependencies examples/.tixl_cache/issue11_validation/tokenizer_dependencies --tokenizer-cache examples/.tixl_cache/issue11_validation/tokenizer_cache"
+  },
+  "measurement_scope": "Full UTF-8 Markdown bodies normalized from CRLF/CR to LF in each fixed task readset. Per-file SHA-256 and byte lengths use that canonical LF content. Counts do not include system instructions, tool/API overhead, path labels, conditional references not listed for that task, or runtime/model prompting. These are comparable documentation-body counts, not API usage or cost claims.",
+  "tasks": {
+    "first_run_onboarding": {
+      "description": "Set up a first-time user, preserve namespace choices, then follow focused sync verification.",
+      "before": {
+        "paths": [
+          "AGENTS.md",
+          ".agents/skills/blender-tixl-bridge/SKILL.md",
+          ".agents/CAPABILITIES.md",
+          ".agents/README.md"
+        ],
+        "files": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "180c5a5c36318725b271dc01afeef9be154c6ad17533f24cc0ea66c3bee72c17",
+            "bytes": 2736,
+            "tokens": 612
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/SKILL.md",
+            "sha256": "a8553cc69c5fa05eb6e36440b673eff012e39f80215d2118272ef79448e7b295",
+            "bytes": 23250,
+            "tokens": 5250
+          },
+          {
+            "path": ".agents/CAPABILITIES.md",
+            "sha256": "945d2e35da72a770855cbb504bb81328faafba32e23b9274a217025ed0638302",
+            "bytes": 9214,
+            "tokens": 2286
+          },
+          {
+            "path": ".agents/README.md",
+            "sha256": "7629858e290c2f400e5d9162cbfd1081972828079204af323ca75614c7d74eac",
+            "bytes": 18817,
+            "tokens": 4015
+          }
+        ],
+        "total_tokens": 12163
+      },
+      "after": {
+        "paths": [
+          "AGENTS.md",
+          ".agents/skills/blender-tixl-bridge/SKILL.md",
+          ".agents/CAPABILITIES.md",
+          ".agents/README.md",
+          ".agents/skills/blender-tixl-bridge/references/sync.md"
+        ],
+        "files": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "3eeacf56707a98589543bdbc5ad8efb81518900df17abc09cd321ce30cf226fc",
+            "bytes": 3457,
+            "tokens": 760
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/SKILL.md",
+            "sha256": "01b91c09fa644bb0b461e9293328049b9bb6c691b4e87b1a21fcacfafd7546a7",
+            "bytes": 2333,
+            "tokens": 473
+          },
+          {
+            "path": ".agents/CAPABILITIES.md",
+            "sha256": "cd59534a4730bf5e393fcdc4605e91de2c0bde538f5bd40514d647de33fb5e90",
+            "bytes": 1325,
+            "tokens": 375
+          },
+          {
+            "path": ".agents/README.md",
+            "sha256": "62f921eee811cef846c39dbd5ca3d9c0d114e7052fa18cc93d7d22066267dfad",
+            "bytes": 13211,
+            "tokens": 2867
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/references/sync.md",
+            "sha256": "99ec3b8450501abce0c016e31ec7b14975a08fbd6bb4f3a8a8c4e045a512803b",
+            "bytes": 3176,
+            "tokens": 684
+          }
+        ],
+        "total_tokens": 5159,
+        "total_bytes": 23502
+      },
+      "token_reduction": 7004,
+      "reduction_percent": 57.58
+    },
+    "sync_and_verify": {
+      "description": "Sync a saved Blender source and verify installed graph structure, paths and rendered output.",
+      "before": {
+        "paths": [
+          "AGENTS.md",
+          ".agents/skills/blender-tixl-bridge/SKILL.md",
+          ".agents/CAPABILITIES.md"
+        ],
+        "files": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "180c5a5c36318725b271dc01afeef9be154c6ad17533f24cc0ea66c3bee72c17",
+            "bytes": 2736,
+            "tokens": 612
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/SKILL.md",
+            "sha256": "a8553cc69c5fa05eb6e36440b673eff012e39f80215d2118272ef79448e7b295",
+            "bytes": 23250,
+            "tokens": 5250
+          },
+          {
+            "path": ".agents/CAPABILITIES.md",
+            "sha256": "945d2e35da72a770855cbb504bb81328faafba32e23b9274a217025ed0638302",
+            "bytes": 9214,
+            "tokens": 2286
+          }
+        ],
+        "total_tokens": 8148
+      },
+      "after": {
+        "paths": [
+          "AGENTS.md",
+          ".agents/skills/blender-tixl-bridge/SKILL.md",
+          ".agents/CAPABILITIES.md",
+          ".agents/skills/blender-tixl-bridge/references/sync.md"
+        ],
+        "files": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "3eeacf56707a98589543bdbc5ad8efb81518900df17abc09cd321ce30cf226fc",
+            "bytes": 3457,
+            "tokens": 760
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/SKILL.md",
+            "sha256": "01b91c09fa644bb0b461e9293328049b9bb6c691b4e87b1a21fcacfafd7546a7",
+            "bytes": 2333,
+            "tokens": 473
+          },
+          {
+            "path": ".agents/CAPABILITIES.md",
+            "sha256": "cd59534a4730bf5e393fcdc4605e91de2c0bde538f5bd40514d647de33fb5e90",
+            "bytes": 1325,
+            "tokens": 375
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/references/sync.md",
+            "sha256": "99ec3b8450501abce0c016e31ec7b14975a08fbd6bb4f3a8a8c4e045a512803b",
+            "bytes": 3176,
+            "tokens": 684
+          }
+        ],
+        "total_tokens": 2292,
+        "total_bytes": 10291
+      },
+      "token_reduction": 5856,
+      "reduction_percent": 71.87
+    },
+    "edit_tixl_graph": {
+      "description": "Safely edit an existing TiXL graph, verify the change and restore diagnostic state.",
+      "before": {
+        "paths": [
+          "AGENTS.md",
+          ".agents/skills/blender-tixl-bridge/SKILL.md",
+          ".agents/CAPABILITIES.md"
+        ],
+        "files": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "180c5a5c36318725b271dc01afeef9be154c6ad17533f24cc0ea66c3bee72c17",
+            "bytes": 2736,
+            "tokens": 612
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/SKILL.md",
+            "sha256": "a8553cc69c5fa05eb6e36440b673eff012e39f80215d2118272ef79448e7b295",
+            "bytes": 23250,
+            "tokens": 5250
+          },
+          {
+            "path": ".agents/CAPABILITIES.md",
+            "sha256": "945d2e35da72a770855cbb504bb81328faafba32e23b9274a217025ed0638302",
+            "bytes": 9214,
+            "tokens": 2286
+          }
+        ],
+        "total_tokens": 8148
+      },
+      "after": {
+        "paths": [
+          "AGENTS.md",
+          ".agents/skills/blender-tixl-bridge/SKILL.md",
+          ".agents/CAPABILITIES.md",
+          ".agents/skills/blender-tixl-bridge/references/edit.md",
+          ".agents/skills/blender-tixl-bridge/references/operators.md"
+        ],
+        "files": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "3eeacf56707a98589543bdbc5ad8efb81518900df17abc09cd321ce30cf226fc",
+            "bytes": 3457,
+            "tokens": 760
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/SKILL.md",
+            "sha256": "01b91c09fa644bb0b461e9293328049b9bb6c691b4e87b1a21fcacfafd7546a7",
+            "bytes": 2333,
+            "tokens": 473
+          },
+          {
+            "path": ".agents/CAPABILITIES.md",
+            "sha256": "cd59534a4730bf5e393fcdc4605e91de2c0bde538f5bd40514d647de33fb5e90",
+            "bytes": 1325,
+            "tokens": 375
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/references/edit.md",
+            "sha256": "dc82b6ce84257afef378af3cfe51540172a5d1f5471cf77c3f592338bd252b96",
+            "bytes": 2088,
+            "tokens": 426
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/references/operators.md",
+            "sha256": "9c42481f9716ca0f9b6f399cf0e840d3c8420b3416bcc1daceae8144f2cf29a2",
+            "bytes": 2784,
+            "tokens": 615
+          }
+        ],
+        "total_tokens": 2649,
+        "total_bytes": 11987
+      },
+      "token_reduction": 5499,
+      "reduction_percent": 67.49
+    },
+    "troubleshoot_blank_or_stale_output": {
+      "description": "Diagnose stale or blank output using manifests, graph state, logs and safe recovery.",
+      "before": {
+        "paths": [
+          "AGENTS.md",
+          ".agents/skills/blender-tixl-bridge/SKILL.md",
+          ".agents/CAPABILITIES.md"
+        ],
+        "files": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "180c5a5c36318725b271dc01afeef9be154c6ad17533f24cc0ea66c3bee72c17",
+            "bytes": 2736,
+            "tokens": 612
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/SKILL.md",
+            "sha256": "a8553cc69c5fa05eb6e36440b673eff012e39f80215d2118272ef79448e7b295",
+            "bytes": 23250,
+            "tokens": 5250
+          },
+          {
+            "path": ".agents/CAPABILITIES.md",
+            "sha256": "945d2e35da72a770855cbb504bb81328faafba32e23b9274a217025ed0638302",
+            "bytes": 9214,
+            "tokens": 2286
+          }
+        ],
+        "total_tokens": 8148
+      },
+      "after": {
+        "paths": [
+          "AGENTS.md",
+          ".agents/skills/blender-tixl-bridge/SKILL.md",
+          ".agents/CAPABILITIES.md",
+          ".agents/skills/blender-tixl-bridge/references/troubleshoot.md"
+        ],
+        "files": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "3eeacf56707a98589543bdbc5ad8efb81518900df17abc09cd321ce30cf226fc",
+            "bytes": 3457,
+            "tokens": 760
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/SKILL.md",
+            "sha256": "01b91c09fa644bb0b461e9293328049b9bb6c691b4e87b1a21fcacfafd7546a7",
+            "bytes": 2333,
+            "tokens": 473
+          },
+          {
+            "path": ".agents/CAPABILITIES.md",
+            "sha256": "cd59534a4730bf5e393fcdc4605e91de2c0bde538f5bd40514d647de33fb5e90",
+            "bytes": 1325,
+            "tokens": 375
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/references/troubleshoot.md",
+            "sha256": "ef5de67e254d92d51bd748759519d9f18b305bdf21cd6d3d7c439d6081bcccc6",
+            "bytes": 2178,
+            "tokens": 440
+          }
+        ],
+        "total_tokens": 2048,
+        "total_bytes": 9293
+      },
+      "token_reduction": 6100,
+      "reduction_percent": 74.86
+    },
+    "release_refresh": {
+      "description": "Refresh capabilities, release evidence and package after an application or add-on upgrade.",
+      "before": {
+        "paths": [
+          "AGENTS.md",
+          ".agents/skills/blender-tixl-bridge/SKILL.md",
+          ".agents/CAPABILITIES.md",
+          ".agents/skills/blender-tixl-release-refresh/SKILL.md",
+          ".agents/README.md",
+          "README.md"
+        ],
+        "files": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "180c5a5c36318725b271dc01afeef9be154c6ad17533f24cc0ea66c3bee72c17",
+            "bytes": 2736,
+            "tokens": 612
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/SKILL.md",
+            "sha256": "a8553cc69c5fa05eb6e36440b673eff012e39f80215d2118272ef79448e7b295",
+            "bytes": 23250,
+            "tokens": 5250
+          },
+          {
+            "path": ".agents/CAPABILITIES.md",
+            "sha256": "945d2e35da72a770855cbb504bb81328faafba32e23b9274a217025ed0638302",
+            "bytes": 9214,
+            "tokens": 2286
+          },
+          {
+            "path": ".agents/skills/blender-tixl-release-refresh/SKILL.md",
+            "sha256": "8ebccad7fcb33e1061c107cc7710890c7d2603ad4fb9541c298ef5890e6705b1",
+            "bytes": 6495,
+            "tokens": 1363
+          },
+          {
+            "path": ".agents/README.md",
+            "sha256": "7629858e290c2f400e5d9162cbfd1081972828079204af323ca75614c7d74eac",
+            "bytes": 18817,
+            "tokens": 4015
+          },
+          {
+            "path": "README.md",
+            "sha256": "c5d8d84553eff3429b8102a27bd6cc716b1b05f7e7eeac5e1c4840d61fc82e55",
+            "bytes": 4460,
+            "tokens": 955
+          }
+        ],
+        "total_tokens": 14481
+      },
+      "after": {
+        "paths": [
+          "AGENTS.md",
+          ".agents/skills/blender-tixl-bridge/SKILL.md",
+          ".agents/CAPABILITIES.md",
+          ".agents/skills/blender-tixl-release-refresh/SKILL.md",
+          ".agents/skills/blender-tixl-release-refresh/references/refresh.md",
+          "README.md"
+        ],
+        "files": [
+          {
+            "path": "AGENTS.md",
+            "sha256": "3eeacf56707a98589543bdbc5ad8efb81518900df17abc09cd321ce30cf226fc",
+            "bytes": 3457,
+            "tokens": 760
+          },
+          {
+            "path": ".agents/skills/blender-tixl-bridge/SKILL.md",
+            "sha256": "01b91c09fa644bb0b461e9293328049b9bb6c691b4e87b1a21fcacfafd7546a7",
+            "bytes": 2333,
+            "tokens": 473
+          },
+          {
+            "path": ".agents/CAPABILITIES.md",
+            "sha256": "cd59534a4730bf5e393fcdc4605e91de2c0bde538f5bd40514d647de33fb5e90",
+            "bytes": 1325,
+            "tokens": 375
+          },
+          {
+            "path": ".agents/skills/blender-tixl-release-refresh/SKILL.md",
+            "sha256": "f89a50a6cbfc08394687b4eff4e85e0d5cde84edfe46af2bc3eb5e6586d0480d",
+            "bytes": 1459,
+            "tokens": 295
+          },
+          {
+            "path": ".agents/skills/blender-tixl-release-refresh/references/refresh.md",
+            "sha256": "83d3b4a8c8228ef722164b22b136368d422d45889907839c6459a63633582d59",
+            "bytes": 5274,
+            "tokens": 1113
+          },
+          {
+            "path": "README.md",
+            "sha256": "c5d8d84553eff3429b8102a27bd6cc716b1b05f7e7eeac5e1c4840d61fc82e55",
+            "bytes": 4460,
+            "tokens": 955
+          }
+        ],
+        "total_tokens": 3971,
+        "total_bytes": 18308
+      },
+      "token_reduction": 10510,
+      "reduction_percent": 72.58
+    }
+  }
+}

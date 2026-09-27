@@ -128,6 +128,8 @@ class CapabilityAutomationTest(unittest.TestCase):
             config_path.write_text(json.dumps(config), encoding="utf-8")
             output = Path(config["output"])
             output.write_text("snapshot", encoding="utf-8")
+            detail_output = self.automation.rebuild.detail_output_path(output)
+            detail_output.write_text("detailed snapshot", encoding="utf-8")
             contract = root / "operator.t3ui"
             contract.write_text("contract", encoding="utf-8")
             components = {
@@ -148,6 +150,7 @@ class CapabilityAutomationTest(unittest.TestCase):
                 state = {
                     "components": components,
                     "fingerprint": "cached-fingerprint",
+                    "outputHashes": self.automation._output_hashes(output),
                     "quickScreen": screen,
                     "lastFullyVerifiedUtc": verified.isoformat(),
                     "evidenceFreshUntilUtc": (verified + timedelta(seconds=30)).isoformat(),
@@ -167,6 +170,7 @@ class CapabilityAutomationTest(unittest.TestCase):
             self.assertEqual(result["counters"].get("liveTiXLProbes", 0), 0)
             self.assertEqual(result["counters"].get("stateAndReportWrites", 0), 0)
             self.assertEqual(output.read_text(encoding="utf-8"), "snapshot")
+            self.assertEqual(detail_output.read_text(encoding="utf-8"), "detailed snapshot")
 
     def test_cache_screen_invalidates_for_operator_membership_config_and_endpoint(self):
         with tempfile.TemporaryDirectory() as folder:
