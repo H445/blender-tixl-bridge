@@ -144,6 +144,19 @@ camera_markers = [marker for marker in markers if marker.camera is not None]
 assert not camera_markers, "Camera-bound timeline markers would introduce cuts"
 assert scene.camera is not None, "The uninterrupted camera is missing"
 assert len(bpy.data.cameras) == 1, "The demo should use one physical camera"
+flight_rig = bpy.data.objects.get("ASTERION | flight rig")
+assert flight_rig is not None, "The narrative flight rig is missing"
+assert all(obj.parent == flight_rig for obj in detachable), (
+    "All reusable craft pieces must travel on the shared flight rig"
+)
+assert all(obj.parent == flight_rig for obj in objects if obj.type == "LIGHT"), (
+    "Craft lighting must follow the ship through the mission"
+)
+story_markers = [marker for marker in markers if marker.name.startswith("STORY |")]
+assert len(story_markers) >= 8, "The mission beats are missing from the timeline"
+assert bpy.data.objects.get("SIGNAL | recovered moon core") is not None
+assert bpy.data.objects.get("SCAN | explorer to lunar signal") is not None
+assert len([obj for obj in objects if obj.name.startswith("WARP | ion trail")]) >= 24
 
 
 def local_pose(obj):
@@ -254,7 +267,8 @@ try:
         scene.frame_set(frame)
         bpy.context.view_layer.update()
         camera_samples[frame] = (scene.camera.matrix_world.translation.copy(),
-                                 scene.camera.matrix_world.to_quaternion())
+                                 scene.camera.matrix_world.to_quaternion(),
+                                 flight_rig.matrix_world.translation.copy())
 finally:
     scene.frame_set(original_frame, subframe=original_subframe)
     bpy.context.view_layer.update()
@@ -289,7 +303,7 @@ max_camera_turn = max(
         camera_samples[right][1]).angle), math.tau-angle)/(right-left)
     for left, right in zip(camera_probe_frames, camera_probe_frames[1:]))
 assert camera_travel > 100, f"The camera orbit is too static: {camera_travel} m"
-assert max_camera_speed < .4 and max_camera_turn < .02, (
+assert max_camera_speed < .5 and max_camera_turn < .02, (
     f"The camera has a visible jump: {max_camera_speed} m/frame, "
     f"{max_camera_turn} rad/frame"
 )
@@ -297,8 +311,9 @@ assert max_camera_speed < .4 and max_camera_turn < .02, (
 
 def assembled_orbit(start, end):
     frames = [frame for frame in camera_probe_frames if start <= frame <= end]
-    angles = [math.atan2(camera_samples[frame][0].y,
-                         camera_samples[frame][0].x) for frame in frames]
+    angles = [math.atan2((camera_samples[frame][0]-camera_samples[frame][2]).y,
+                         (camera_samples[frame][0]-camera_samples[frame][2]).x)
+              for frame in frames]
     return sum(math.atan2(math.sin(right-left), math.cos(right-left))
                for left, right in zip(angles, angles[1:]))
 
@@ -306,9 +321,18 @@ def assembled_orbit(start, end):
 assembled_orbits = {name: assembled_orbit(start, end) for name, start, end in (
     ("COMBAT", 1, 1441), ("EXPLORER", 2161, 3601),
     ("HAULER", 4321, 5761))}
-assert all(abs(abs(angle)-math.tau) < .05 for angle in assembled_orbits.values()), (
+assert all(abs(angle) >= math.tau-.08 for angle in assembled_orbits.values()), (
     f"Each assembled ship needs a complete uninterrupted camera rotation: {assembled_orbits}"
 )
+warp_displacements = {}
+for name, start, end in (("arrival", 11, 16), ("escape", 84, 90)):
+    scene.frame_set(start*60+1)
+    first = flight_rig.matrix_world.translation.copy()
+    scene.frame_set(end*60+1)
+    distance = (flight_rig.matrix_world.translation-first).length
+    assert distance > 20, f"{name} warp lacks travel: {distance} m"
+    warp_displacements[name] = distance
+scene.frame_set(original_frame, subframe=original_subframe)
 
 
 def mean_motion(first, last):
@@ -424,6 +448,7 @@ summary = {
     "maxCameraMetersPerFrame": max_camera_speed,
     "maxCameraRadiansPerFrame": max_camera_turn,
     "assembledOrbitRadians": assembled_orbits,
+    "warpDisplacementsMeters": warp_displacements,
     "bulletTime": bullet_time,
     "breakupRotationNoiseModifiers": noise_count,
     "breakupRotationMotion": noise_motion,

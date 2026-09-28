@@ -1059,6 +1059,9 @@ scene["reused_part_count"] = scene["detachable_mesh_count"]
 scene["role_component_counts"] = {name:len(objects) for name,objects in role_parts.items()}
 scene["static_space_object_count"] = len(space.objects)
 scene["asset_directory"] = "//advanced_spaceship/textures"
+story_path = ROOT / "add_asterion_story.py"
+exec(compile(story_path.read_text(encoding="utf-8"), str(story_path), "exec"),
+     {"__file__": str(story_path)})
 bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT))
 print("ASTERION_BUILT",{"file":str(OUTPUT),"detachable_parts":scene["detachable_mesh_count"],
                          "space_objects":len(space.objects),"seconds":SECONDS,
