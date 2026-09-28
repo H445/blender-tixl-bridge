@@ -459,7 +459,7 @@ def poly_prism(name, outline, z_bottom, z_top, material, coll=craft):
 
 
 def sky_sphere(name, material, coll, radius=350, segments=96, rings=48):
-    # Inward-facing equirectangular UV mesh is visible from every camera cut.
+    # Inward-facing equirectangular UV mesh is visible throughout the orbit.
     # The seam has duplicate vertices so the image spans the sphere exactly once.
     verts = []
     for j in range(rings+1):
@@ -601,26 +601,41 @@ for side in (-1,1):
 # Nose sensors, dorsal guns, twin keel antennae and surface greebles.
 for i in range(18):
     a=math.tau*i/18
-    x=math.cos(a)*.45
-    z=math.sin(a)*.38
+    x=math.cos(a)*.24
+    z=math.sin(a)*.25
     detachable(box(f"NOSE-SENSOR-{i:02d}",(.13,.34,.1),
                    (x,4.6,z),white if i%3 else amber,bevel=.018),"spine",300+i)
 for side in (-1,1):
     for gun in range(9):
-        y=2.4-gun*.85
-        x=side*(1.64+gun*.16)
+        # Fasten each weapon to the swept wing skin, rather than leaving the
+        # forward guns suspended beyond the leading edge.
+        y=.8-gun*.56
+        x=side*(2.2+gun*.55)
         detachable(tapered(f"RAILGUN-{side:+d}-{gun:02d}",
                             .40,-.40,.07,.10,.07,.10,dark),
                    "wing-left" if side<0 else "wing-right",100+gun)
-        parts[-1].location=(x,y,.32)
+        parts[-1].location=(x,y,.19)
         detachable(box(f"RAILGUN-FLASH-{side:+d}-{gun:02d}",
-                       (.09,.13,.09),(x,y+.42,.32),blue,bevel=.012),
+                       (.09,.13,.09),(x,y+.42,.19),blue,bevel=.012),
                    "wing-left" if side<0 else "wing-right",120+gun)
 for i in range(70):
     y=RNG.uniform(-5.5,3.6)
-    x=RNG.choice((-1,1))*RNG.uniform(.12,1.14)
-    z=RNG.choice((-1,1))*RNG.uniform(.82,1.03)
+    # Keep every machined fitting partially seated in the pressure shell.
+    if y > 1.1:
+        progress=(5.1-y)/4.0
+        half_width=.10+(1.33-.10)*progress
+        half_height=.12+(.90-.12)*progress
+    elif y > -3.1:
+        progress=(1.1-y)/4.2
+        half_width=1.33+(1.48-1.33)*progress
+        half_height=.90+(.82-.90)*progress
+    else:
+        progress=(-3.1-y)/3.5
+        half_width=1.48+(1.00-1.48)*progress
+        half_height=.82+(.66-.82)*progress
+    x=RNG.choice((-1,1))*RNG.uniform(.12,.60)*half_width
     size=RNG.uniform(.035,.105)
+    z=RNG.choice((-1,1))*(half_height+size*.08)
     detachable(box(f"MICRO-GREEBLE-{i:03d}",
                    (size*1.3,size*2,size*.55),(x,y,z),
                    copper if i%5==0 else dark,bevel=.008),"spine",400+i)
@@ -650,16 +665,21 @@ for side in (-1,1):
         far=side*(8.0+panel*4.1)
         outline=[(near,2.2),(far,1.8),(far,-4.8),(near,-4.3)]
         role_object(poly_prism(f"EXPLORER-RADIATOR-{side:+d}-{panel}",
-                               outline,.65,.73,white),"EXPLORER")
+                               outline,.40,.48,white),"EXPLORER")
         for rib in range(9):
             yy=1.60-rib*.70
             xx=side*(6.2+panel*4.0)
             role_object(box(f"EXPLORER-SOLAR-CELL-{side:+d}-{panel}-{rib:02d}",
-                            (2.9,.055,.025),(xx,yy,.745),
+                            (2.9,.055,.025),(xx,yy,.49),
                             canopy_mat if rib%2 else blue,bevel=.008),"EXPLORER")
+    for station, yy in enumerate((.8,-3.0)):
+        role_object(box(f"EXPLORER-ARRAY-TRUSS-{side:+d}-{station}",
+                        (3.6,.24,.30),(side*3.0,yy,.36),copper,
+                        bevel=.035),"EXPLORER")
     for probe in range(4):
         role_object(ring(f"EXPLORER-LIDAR-{side:+d}-{probe}",
-                         (side*(2.1+probe*.85),3.8,.38),.21,.035,copper,
+                         (side*.17,5.2+probe*1.55+(0 if side<0 else .72),0),
+                         .21,.035,copper,
                          segments=16),"EXPLORER")
 
 # HAULER: broad twin cargo rails, twelve tall transport modules and reinforced
@@ -672,9 +692,11 @@ for side in (-1,1):
                         (.55,.20,1.65),(side*5.4,2.9-station*1.55,.82),
                         dark,bevel=.025),"HAULER")
 for row in range(4):
+    yy=2.3-row*2.35
+    role_object(box(f"HAULER-CARGO-DECK-{row:02d}",
+                    (7.6,.36,.34),(0,yy,.87),dark,bevel=.045),"HAULER")
     for col in range(3):
         xx=(col-1)*2.55
-        yy=2.3-row*2.35
         role_object(box(f"HAULER-CARGO-{row:02d}-{col:02d}",
                         (2.15,2.0,1.34),(xx,yy,1.70),
                         white if (row+col)%3==0 else hull,bevel=.11),"HAULER")
@@ -816,27 +838,32 @@ for idx,obj in enumerate(parts):
     hauler_scale=(1,1,1)
     if group.startswith("wing"):
         side=-1 if group.endswith("left") else 1
-        explorer.x=side*(1.25+max(0,abs(rest.x)-1.25)*1.75)
-        explorer.y=rest.y*1.18+max(0,abs(rest.x)-2)*.28
-        explorer.z=rest.z+.57
-        explorer_angle.z=side*.13
-        hauler.x=side*(2.4+max(0,abs(rest.x)-1.25)*.66)
-        hauler.y=rest.y-.75
-        hauler.z=rest.z-.40
-        hauler_angle.y=side*.62
+        # Rotate the complete wing assembly around one root hinge. Applying a
+        # different stretch to each part separated its plates and weapons.
+        pivot=Vector((side*1.0,1.0,0))
+        relative=rest-pivot
+        turn=side*.28
+        explorer=Vector((pivot.x+relative.x*math.cos(turn)
+                         -relative.y*math.sin(turn),
+                         pivot.y+relative.x*math.sin(turn)
+                         +relative.y*math.cos(turn),rest.z+.22))
+        explorer_angle.z=turn
+        fold=-side*.38
+        hauler=Vector((pivot.x+relative.x*math.cos(fold)
+                       +relative.z*math.sin(fold),
+                       rest.y-.50,
+                       pivot.z-relative.x*math.sin(fold)
+                       +relative.z*math.cos(fold)-.20))
+        hauler_angle.y=fold
     elif group.startswith("engine"):
         side=-1 if group.endswith("left") else 1
-        explorer.x=side*(abs(rest.x)*1.36)
-        explorer.y=rest.y-1.2
-        hauler.x=side*(abs(rest.x)*1.55)
-        hauler.y=rest.y-.6
-        hauler.z=rest.z-.5
+        explorer=rest+Vector((side*1.0,-.65,.12))
+        hauler=rest+Vector((side*1.0,-.60,-.25))
     elif group=="spine":
-        explorer.y=rest.y*1.26
-        explorer_scale=(.81,1.13,.82)
-        hauler.x=rest.x*1.28
-        hauler.y=rest.y*.86
-        hauler_scale=(1.22,.88,1.22)
+        # The pressure shell stays watertight in every role. Mission hardware
+        # and hinged wings change the outline around this common load path.
+        explorer=rest.copy()
+        hauler=rest.copy()
     # Each object fires independently, then joins two starkly different
     # layouts. Key hold frames make the three role silhouettes unambiguous.
     trajectory=[(1,rest,(0,0,0),(1,1,1)),
@@ -888,28 +915,36 @@ for role, objects in role_parts.items():
                 combat_scale=(.80,.80,.80)
                 hauler=Vector((0,9.9,-.6))
                 hauler_scale=(.9,.9,.9)
+            elif "ARRAY-TRUSS" in obj.name:
+                side=-1 if original.x<0 else 1
+                combat=Vector((side*3.0,original.y,-.06))
+                combat_scale=(.82,.86,.72)
+                hauler=Vector((side*3.45,original.y,1.08))
+                hauler_scale=(.92,1,.9)
             elif "RADIATOR" in obj.name:
                 side=-1 if original.x<0 else 1
                 panel=0 if abs(original.x)<8 else 1
                 combat=Vector((side*(3.8+panel*1.75),-2.1,.36))
                 combat_scale=(.52,.58,.8)
                 combat_angle.z=side*.18
-                hauler=Vector((side*(3.85+panel*.40),1.35-panel*3.15,2.62))
+                hauler=Vector((side*(3.85+panel*.40),1.35-panel*3.15,2.36))
                 hauler_scale=(.48,.47,.7)
                 hauler_angle.y=side*.16
             elif "SOLAR-CELL" in obj.name:
                 side=-1 if original.x<0 else 1
                 panel=0 if abs(original.x)<8 else 1
                 rib=round((1.60-original.y)/.70)
-                combat=Vector((side*(3.8+panel*1.75),.50-rib*.47,.55))
+                combat=Vector((side*(3.8+panel*1.75),.50-rib*.47,.40))
                 combat_scale=(.56,.80,.8)
                 hauler=Vector((side*(3.85+panel*.40),
-                               2.5-panel*3.15-rib*.32,2.82))
+                               2.5-panel*3.15-rib*.32,2.40))
                 hauler_scale=(.50,.8,.8)
             else:  # lidar rings become combat apertures and cargo couplers
-                side=-1 if original.x<0 else 1
-                probe=round((abs(original.x)-2.1)/.85)
-                combat=Vector((side*(2.3+probe*.75),2.7-probe*.65,.48))
+                match=re.search(r"EXPLORER-LIDAR-([+-]1)-(\d+)",obj.name)
+                if match is None:
+                    raise ValueError(f"Unclassified survey collar: {obj.name}")
+                side,probe=(int(value) for value in match.groups())
+                combat=Vector((side*(2.6+probe*.8),.8-probe*1.3,.22))
                 combat_scale=(.8,.8,.8)
                 hauler=Vector((side*5.35,2.8-probe*2.1,1.05))
                 hauler_scale=(1,1,1)
@@ -920,16 +955,21 @@ for role, objects in role_parts.items():
                 side=-1 if original.x<0 else 1
                 combat=Vector((side*4.15,-1.6,-.55))
                 combat_scale=(.63,.73,.72)
-                explorer=Vector((side*2.45,-1.25,-.65))
+                explorer=Vector((side*1.20,-1.1,.55))
                 explorer_scale=(.55,.83,.60)
             elif "CRADLE-BRACE" in obj.name:
                 side=-1 if original.x<0 else 1
                 station=round((2.9-original.y)/1.55)
-                combat=Vector((side*3.45,2.2-station*1.45,-.35))
+                combat=Vector((side*3.45,-.2-station*.85,-.35))
                 combat_scale=(.68,.72,.70)
-                explorer=Vector((side*(2.5+station*.13),
-                                 2.8-station*1.55,-.62))
+                explorer=Vector((side*1.20,2.8-station*1.55,.85))
                 explorer_scale=(.55,.72,.62)
+            elif "CARGO-DECK" in obj.name:
+                row=int(obj.name.rsplit("-",1)[-1])
+                combat=Vector((0,1.7-row*1.6,-.32))
+                combat_scale=(.70,.80,.50)
+                explorer=Vector((0,2.6-row*1.9,-.45))
+                explorer_scale=(.70,.80,.50)
             else:  # twelve cargo pods and their permanently attached straps
                 match=re.search(r"HAULER-(?:CARGO|CONTAINER-STRAP)-(\d+)-(\d+)",obj.name)
                 if match is None:
@@ -942,9 +982,8 @@ for role, objects in role_parts.items():
                                1.1-(row%2)*2.15-col*.30,
                                .53+(original.z-1.70)*.50))
                 combat_scale=(.50,.52,.50)
-                explorer=Vector(((col-1)*1.65+local_x*.43,
-                                 5.2-row*2.15,
-                                 .39+(original.z-1.70)*.43))
+                explorer=Vector(((col-1)*1.10+local_x*.43,
+                                 2.6-row*1.9,1.02))
                 explorer_scale=(.43,.46,.43)
         direction=Vector((RNG.uniform(-1,1),RNG.uniform(-.25,1.2),
                           RNG.uniform(-.85,.85)))

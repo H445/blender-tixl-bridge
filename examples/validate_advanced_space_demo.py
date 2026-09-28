@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import math
 import hashlib
+import re
 from pathlib import Path
 
 import bpy
@@ -61,7 +62,8 @@ assert len(unique_profiles) == len(detachable), (
 assert all(obj.get("fabrication_variant") for obj in detachable), (
     "Every craft part needs a deterministic fabrication variant"
 )
-cargo_pods = [obj for obj in detachable if obj.name.startswith("HAULER-CARGO-")]
+cargo_pods = [obj for obj in detachable
+              if re.fullmatch(r"HAULER-CARGO-\d\d-\d\d", obj.name)]
 roof_variants = {obj.get("roof_variant") for obj in cargo_pods}
 assert len(cargo_pods) == 12 and len(roof_variants) >= 4, (
     "Cargo modules need individual roof machinery profiles"
@@ -171,6 +173,37 @@ def configuration_bounds(candidates):
     return low + high
 
 
+def assembly_components(candidates, clearance=.05):
+    # AABB overlap is a conservative screen for visible floating modules. It
+    # does not certify a welded joint, but catches separated wings, arrays,
+    # fittings, and cargo pods in each assembled configuration.
+    bounds = []
+    for obj in candidates:
+        points = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+        bounds.append((tuple(min(point[axis] for point in points) for axis in range(3)),
+                       tuple(max(point[axis] for point in points) for axis in range(3))))
+    parent = list(range(len(candidates)))
+
+    def root(index):
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    for index, first in enumerate(bounds):
+        for other in range(index):
+            second = bounds[other]
+            gap_squared = sum(max(0, second[0][axis]-first[1][axis],
+                                  first[0][axis]-second[1][axis])**2
+                              for axis in range(3))
+            if gap_squared <= clearance**2:
+                parent[root(index)] = root(other)
+    clusters = {}
+    for index, obj in enumerate(candidates):
+        clusters.setdefault(root(index), []).append(obj.name)
+    return sorted(clusters.values(), key=len, reverse=True)
+
+
 original_frame = scene.frame_current
 original_subframe = scene.frame_subframe
 sample_frames = (1, 541, 580, 841, 900, 1041, 1261, 1801, 1840,
@@ -178,6 +211,8 @@ sample_frames = (1, 541, 580, 841, 900, 1041, 1261, 1801, 1840,
 sampled_poses = {}
 sampled_bounds = {}
 visible_counts = {}
+assembly_cluster_counts = {}
+assembly_outliers = {}
 camera_samples = {}
 camera_probe_frames = sorted(set(range(1, scene.frame_end+1, 30)) | {scene.frame_end} |
                              {frame+offset for frame in (541, 580, 900, 1041,
@@ -195,6 +230,10 @@ try:
             or obj.get("configuration_role") in {"EXPLORER", "HAULER"}
         ]
         sampled_bounds[frame] = configuration_bounds(config_objects)
+        if frame in (1, 1261, 2521):
+            clusters = assembly_components(detachable)
+            assembly_cluster_counts[frame] = len(clusters)
+            assembly_outliers[frame] = [group[0] for group in clusters[1:]]
     for frame in camera_probe_frames:
         scene.frame_set(frame)
         bpy.context.view_layer.update()
@@ -219,6 +258,9 @@ assert len(animated_detachable) >= 350, (
 )
 assert all(count == len(detachable) for count in visible_counts.values()), (
     f"Some craft pieces disappear instead of being reused: {visible_counts}"
+)
+assert all(count == 1 for count in assembly_cluster_counts.values()), (
+    f"Assembled configurations contain floating groups: {assembly_outliers}"
 )
 camera_travel = sum((camera_samples[right][0]-camera_samples[left][0]).length
                     for left, right in zip(camera_probe_frames, camera_probe_frames[1:]))
@@ -303,6 +345,7 @@ summary = {
     },
     "specializedModuleCounts": {"EXPLORER": len(explorer), "HAULER": len(hauler)},
     "visiblePartCounts": visible_counts,
+    "assemblyClusterCounts": assembly_cluster_counts,
     "cameraTravelMeters": camera_travel,
     "maxCameraMetersPerFrame": max_camera_speed,
     "maxCameraRadiansPerFrame": max_camera_turn,
