@@ -20,7 +20,7 @@ Keep these filenames so documentation links remain stable:
 | File | Required evidence |
 | --- | --- |
 | `docs/screenshots/blender-plugin.png` | Scene Properties → TiXL Bridge, including save sync, on-demand sync, and capability refresh. |
-| `docs/screenshots/blender-preferences.png` | Enabled add-on entry, version, TiXL paths, connection/port, capability repository, and refresh control. |
+| `docs/screenshots/blender-preferences.png` | Add-on version, illustrative TiXL paths, connection/port, capability repository, and refresh control. Crop or replace personal filesystem values with clearly identified example paths, then restore actual preferences. |
 | `docs/screenshots/tixl-graph.png` | Readable zoom on one world branch showing animation, mesh select/replace, and texture select/replace. Do not fit the entire graph when that makes labels illegible. |
 | `docs/screenshots/tixl-graph-detail.png` | Wider context around the same branch, including its scene output and surrounding connections. |
 

@@ -43,7 +43,7 @@ In Blender:
 5. Set **TiXL Editor folder** to the directory containing `TiXL.exe`.
 6. Leave **TiXL connection** on **Auto** unless you deliberately need another mode.
 
-![Blender bridge add-on preferences showing TiXL paths, debug bridge settings, capability refresh, and release update controls](screenshots/blender-preferences.png)
+![Blender bridge add-on preferences with example TiXL paths, debug bridge settings, capability refresh, and release update controls](screenshots/blender-preferences.png)
 
 ## Sync a scene
 
