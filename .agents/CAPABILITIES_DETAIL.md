@@ -32,7 +32,7 @@ Runtime probe:
   "addonVersion": [
     0,
     5,
-    5
+    6
   ],
   "background": false,
   "blenderMcpTcpExtension": {
