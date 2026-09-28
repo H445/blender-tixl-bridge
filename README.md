@@ -12,7 +12,7 @@ Save a Blender scene and turn it into an editable TiXL project. Blender remains 
 - **Save-driven workflow:** sync automatically after a Blender save or run it on demand.
 - **Release updates:** check published GitHub releases from the add-on, update on demand, or enable auto-update.
 - **Scene transfer:** meshes, UV textures, supported PBR materials, transforms, visibility, shape keys, animated material values, lights, and cameras.
-- **Editable TiXL graph:** retime source clips, process mesh buffers and material textures, change lighting, and extend the render chain with native TiXL operators.
+- **Editable TiXL graph:** select an imported object by name, process its mesh and material textures, retime source clips, change lighting, and extend the render chain with native TiXL operators.
 - **Multiple Blender worlds:** map collections and time ranges to switchable TiXL scene branches.
 - **Safe regeneration:** generated imports are replaceable caches while the user-edited TiXL home graph and TimeClips are preserved.
 - **Release and development modes:** build offline against a normal TiXL release or use the optional debug bridge for live reload, inspection, and screenshots.

@@ -6,7 +6,7 @@
 
 | Source | Status | Evidence |
 | --- | --- | --- |
-| Bridge checkout | complete | add-on 0.5.3; source SHA-256 `22f6f3b67a26d5f1` |
+| Bridge checkout | complete | add-on 0.5.4; source SHA-256 `49a9f19c0957658f` |
 | Blender installation | complete | Blender 5.2.2 LTS via MCP runtime |
 | Blender runtime via MCP | complete | 5.2.2 LTS |
 | Blender MCP | complete | 1 tool; Blender MCP TCP extension 1.0.3 |
@@ -19,7 +19,7 @@ The automation keeps retrying unavailable live probes. A `missing` row means its
 
 ## Blender bridge runtime
 
-- Add-on: **Prismal Labs Blender → TiXL Bridge 0.5.3**
+- Add-on: **Prismal Labs Blender → TiXL Bridge 0.5.4**
 - Minimum Blender declared by add-on: **4.3.0**
 - Registered bridge operators: `tixl_bridge.check_release_update`, `tixl_bridge.install_release_update`, `tixl_bridge.refresh_agent_capabilities`, `tixl_bridge.sync_saved_blend`
 - Add-on properties discovered from source: `auto_update`, `capability_repository`, `connection_mode`, `debug_port`, `editor_directory`, `operator_project`, `tixl_bridge_autosync`
@@ -32,7 +32,7 @@ Runtime probe:
   "addonVersion": [
     0,
     5,
-    3
+    4
   ],
   "background": false,
   "blenderMcpTcpExtension": {
@@ -117,6 +117,7 @@ Runtime probe:
 | `BlenderExportLights` | Preloads every Blender light manifest and keyed channel set on a paused initialization frame. WorldDirectory contains <scene>_manifest.json and optional <scene>_channels.json files. WorldIndex selects cached lights, TimeSeconds samples their animation, and EnergyScale calibrates Blender energy to TiXL point-light units. The operator forwards the incoming Command after pushing lights. |
 | `BlenderMeshReplace` | Replace one scene primitive with edited MeshBuffers. Keep PrimitiveIndex aligned with BlenderMeshSelect; all other animated primitives, transforms, and materials pass through. |
 | `BlenderMeshSelect` | Choose an animated primitive by zero-based index. The node status shows its name and total count. Route Mesh through TiXL mesh modifiers before BlenderMeshReplace. |
+| `BlenderObjectIndex` | Choose one imported Blender object by name. The primitive index feeds mesh and texture select/replace nodes; an empty or ambiguous name selects nothing. |
 | `BlenderSourceClip` | Editable Blender source TimeClip. Move or stretch it in the TiXL timeline; SourceRange stays in seconds of the Blender export. Its output feeds both the global timing sequence and the sequence for its Blender Animation Scene world. |
 | `BlenderTextureReplace` | Replace the selected primitive's four texture maps after TiXL image processing. Keep PrimitiveIndex aligned with BlenderTextureSelect; Blender PBR color and roughness values remain animated. |
 | `BlenderTextureSelect` | Tap the selected primitive's albedo, normal, roughness/metal/occlusion, and emissive textures. Insert TiXL image operators on these wires before BlenderTextureReplace. |

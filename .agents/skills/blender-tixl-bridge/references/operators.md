@@ -1,6 +1,6 @@
 ## Reusable TiXL bridge operators
 
-The bridge installs eleven operators under `PrismalLabs.BlenderExport`. Agents should recognize their roles and preserve these patterns during graph edits.
+The bridge installs twelve operators under `PrismalLabs.BlenderExport`. Agents should recognize their roles and preserve these patterns during graph edits.
 
 | Operator | Capability and correct use |
 | --- | --- |
@@ -11,6 +11,7 @@ The bridge installs eleven operators under `PrismalLabs.BlenderExport`. Agents s
 | `BlenderAnimationScene` | Applies transform, visibility, PBR/emission, and morph caches to matching glTF data at `TimeSeconds`; exposes opaque, transparent, and combined scenes. |
 | `BlenderWorldPreload` | Warms every connected world on the first paused render and then passes the active command. Keep all animation-scene results connected. |
 | `BlenderExportLights` | Preloads manifest/channel light data, chooses by world index, samples by time, and applies energy calibration. |
+| `BlenderObjectIndex` | Resolves a Blender object name to the current imported primitive index. Its status shows the match; empty or ambiguous names select nothing. Feed the same index to all four mesh and texture ports. |
 | `BlenderMeshSelect` | Selects a zero-based primitive and exposes its mesh for native TiXL mesh processing. Its status reports name and count. |
 | `BlenderMeshReplace` | Replaces the selected primitive with edited mesh buffers while preserving other animated primitives. Match its `PrimitiveIndex` with `BlenderMeshSelect`. |
 | `BlenderTextureSelect` | Exposes albedo, normal, roughness/metal/occlusion, and emissive textures for a primitive. |
@@ -22,6 +23,7 @@ Preserve the default path:
 Blender Source Clips
   ├─> global Blender Clip Sequence ─> Blender Camera Timeline ─> world selection
   └─> per-world Blender Clip Sequence ─> Blender World Clip Time ─> Blender Animation Scene
+       ├─> Blender Object Index ─> mesh and texture primitive indices
        ├─> Blender Mesh Select ─> native mesh ops ─> Blender Mesh Replace
        ├─> Blender Texture Select ─> native image ops ─> Blender Texture Replace
        └─> Blender World Preload / drawing / lights ─> RenderTarget ─> tone mapping ─> Output target

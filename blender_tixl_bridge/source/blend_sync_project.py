@@ -210,6 +210,7 @@ def _flatten_scene(home: dict, home_ui: dict, scene: dict, scene_ui: dict) -> bo
     for child in branches:
         branch_rows.setdefault(child["Name"].split(" / ")[0], len(branch_rows))
     branch_x = {"LoadGltfScene": 420, "BlenderAnimationScene": 640,
+                "BlenderObjectIndex": 810,
                 "BlenderMeshSelect": 860, "BlenderMeshReplace": 1080,
                 "BlenderTextureSelect": 1300, "BlenderTextureReplace": 1520,
                 "DrawScene": 1740, "Group": 1960}
@@ -225,7 +226,9 @@ def _flatten_scene(home: dict, home_ui: dict, scene: dict, scene_ui: dict) -> bo
         prefix = child["Name"].split(" / ")[0]
         if prefix in branch_rows and kind in branch_x:
             row = branch_rows[prefix]
-            item["Position"] = {"X": branch_x[kind], "Y": row * 420 + (145 if "glass" in child["Name"].lower() else 0)}
+            item["Position"] = {"X": branch_x[kind], "Y": row * 420 +
+                                (145 if "glass" in child["Name"].lower() else 0)
+                                - (145 if kind == "BlenderObjectIndex" else 0)}
         elif kind == "RenderTarget":
             item["Position"] = {"X": 3910 if child["Name"] == "Output target" else 3220,
                                 "Y": 1050}
@@ -321,6 +324,69 @@ def _add_texture_ports(scene: dict, scene_ui: dict) -> None:
         for edge in edges:
             scene["Connections"].append(_connection(replace_id, replace_result,
                                                      edge["TargetParentOrChildId"], draw_scene))
+
+
+def _add_object_selectors(graph: dict, graph_ui: dict) -> bool:
+    """Address one imported object across each world's mesh and image ports.
+
+    Numeric index edits belong to the user, so a branch with an existing index
+    connection or nonzero index value remains untouched during migration.
+    """
+    symbol = "b62fce64-2efe-54ac-9d6f-3db2f83deed4"
+    scene_input = "dc7ae73f-9b1d-54a1-9fc2-d5d7581c4f84"
+    name_input = "9e4a2fb0-334e-5567-8f63-e9d1ac3260aa"
+    index_output = "74cf55e0-7b98-5e5a-ae5d-f77a2f72079c"
+    ports = (
+        ("select mesh", "f47fce56-d58d-51c6-b598-f62d33ce570d"),
+        ("replace mesh", "84dc72f4-f0b9-5107-a821-e388dff9b4b3"),
+        ("select textures", "d1658e14-8cc0-57ad-8b2e-d98324d90762"),
+        ("replace textures", "233f4c81-bbba-530f-b3fc-604bf1d5a590"),
+    )
+    children = {child["Id"]: child for child in graph["Children"]}
+    by_name = {child["Name"]: child for child in graph["Children"]}
+    positions = {item["ChildId"]: item["Position"] for item in graph_ui["SymbolChildUis"]}
+    changed = False
+    for mesh_select in list(graph["Children"]):
+        if not mesh_select["SymbolName"].endswith("BlenderMeshSelect"):
+            continue
+        prefix = mesh_select["Name"].removesuffix("select mesh")
+        targets = [(by_name.get(prefix + label), slot) for label, slot in ports]
+        if any(child is None for child, _ in targets):
+            continue
+        selector_id = str(uuid.uuid5(uuid.NAMESPACE_URL, mesh_select["Id"] + "/object-selector"))
+        if selector_id in children:
+            continue
+        if any(any(edge["TargetParentOrChildId"] == child["Id"]
+                   and edge["TargetSlotId"] == slot for edge in graph["Connections"])
+               or any(value["Id"] == slot and value.get("Value") not in (None, 0)
+                      for value in child.get("InputValues", []))
+               for child, slot in targets):
+            continue
+        scene_edge = next((edge for edge in graph["Connections"]
+                           if edge["TargetParentOrChildId"] == mesh_select["Id"]
+                           and edge["TargetSlotId"] == "12bcfca2-ebbc-55f5-a75c-dd53ab356690"), None)
+        if scene_edge is None:
+            continue
+        graph["Children"].append({
+            "Id": selector_id, "SymbolId": symbol,
+            "SymbolName": "PrismalLabs.BlenderExport.BlenderObjectIndex",
+            "Name": prefix + "select object", "InputValues": [
+                {"Id": name_input, "Type": "System.String", "Value": ""}],
+            "Outputs": [],
+        })
+        graph["Connections"].append(_connection(
+            scene_edge["SourceParentOrChildId"], scene_edge["SourceSlotId"],
+            selector_id, scene_input))
+        graph["Connections"].extend(_connection(selector_id, index_output,
+                                                 child["Id"], slot)
+                                    for child, slot in targets)
+        position = positions.get(mesh_select["Id"], {"X": 0, "Y": 0})
+        graph_ui["SymbolChildUis"].append({
+            "ChildId": selector_id,
+            "Position": {"X": position["X"], "Y": position["Y"] - 145},
+        })
+        changed = True
+    return changed
 
 
 def _add_world_preloader(graph: dict, graph_ui: dict) -> bool:
@@ -584,6 +650,7 @@ def _editable_scene(graph: dict, ui: dict, source: str, name: str) -> tuple[dict
             scene["Connections"].append(_connection(replace_id, replace_result,
                                                      edge["TargetParentOrChildId"], draw_scene))
     _add_texture_ports(scene, scene_ui)
+    _add_object_selectors(scene, scene_ui)
     _add_world_preloader(scene, scene_ui)
     class_name = name + "Scene"
     scene_source = source.replace("namespace PrismalLabs.BlenderExport.Generated;",
@@ -671,6 +738,7 @@ def populate(project: Path, graph_files: list[Path], backup_root: Path, editor: 
     scene_for_home = copy.deepcopy(scene)
     scene_ui_for_home = copy.deepcopy(scene_ui)
     _add_texture_ports(scene_for_home, scene_ui_for_home)
+    _add_object_selectors(scene_for_home, scene_ui_for_home)
     _add_world_preloader(scene_for_home, scene_ui_for_home)
     home_files = [symbols / f"{name}{suffix}" for suffix in (".cs", ".t3", ".t3ui")]
     existing_home = _read_tixl_json(home_files[1]) if home_files[1].is_file() else None
@@ -680,6 +748,7 @@ def populate(project: Path, graph_files: list[Path], backup_root: Path, editor: 
         child.get("SymbolId") == scene["Id"] for child in existing_home.get("Children", []))
     has_flat_scene = existing_home is not None and any(
         child.get("SymbolName", "").endswith(("BlenderMeshSelect", "BlenderTextureSelect",
+                                                 "BlenderObjectIndex",
                                                  "BlenderCameraTimeline", "LoadGltfScene"))
         for child in existing_home.get("Children", []))
     if old_import or has_scene_wrapper:
@@ -699,6 +768,7 @@ def populate(project: Path, graph_files: list[Path], backup_root: Path, editor: 
     elif has_flat_scene:
         home_ui = _read_tixl_json(home_files[2])
         changed = _rekey_shared_scene_children(existing_home, home_ui, scene_for_home)
+        changed |= _add_object_selectors(existing_home, home_ui)
         changed |= _add_world_preloader(existing_home, home_ui)
         changed |= _link_world_clips(existing_home, home_ui, plan, graph["Id"])
         if changed:

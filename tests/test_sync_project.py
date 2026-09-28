@@ -142,6 +142,17 @@ class SyncProjectTest(unittest.TestCase):
                                  for child in home["Children"]), 2)
             self.assertEqual(sum(child["SymbolName"].endswith("BlenderTextureReplace")
                                  for child in home["Children"]), 2)
+            selectors = [child for child in home["Children"]
+                         if child["SymbolName"].endswith("BlenderObjectIndex")]
+            self.assertEqual(len(selectors), 2)
+            index_targets = {"f47fce56-d58d-51c6-b598-f62d33ce570d",
+                             "84dc72f4-f0b9-5107-a821-e388dff9b4b3",
+                             "d1658e14-8cc0-57ad-8b2e-d98324d90762",
+                             "233f4c81-bbba-530f-b3fc-604bf1d5a590"}
+            for selector in selectors:
+                ports = {edge["TargetSlotId"] for edge in home["Connections"]
+                         if edge["SourceParentOrChildId"] == selector["Id"]}
+                self.assertEqual(ports, index_targets)
             self.assertEqual(sum(child["SymbolName"].endswith("BlenderWorldClipTime")
                                  for child in home["Children"]), 2)
             self.assertEqual(sum(child["SymbolName"].endswith("BlenderClipSequence")
@@ -245,6 +256,7 @@ class SyncProjectTest(unittest.TestCase):
                                  for child in legacy_home["Children"]), 2)
 
             clips[1]["Outputs"][0]["OutputData"]["TimeClip"]["SourceRange"]["Start"] = 3
+            selectors[0]["InputValues"][0]["Value"] = "Planet"
             # A user can insert a float operator between a world clip lane
             # and its animation. Resync must preserve that custom route.
             edited_edge = next(edge for edge in home["Connections"]

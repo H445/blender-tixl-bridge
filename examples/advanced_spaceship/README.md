@@ -48,6 +48,10 @@ The current reference run synced successfully to TiXL 4.3.0.2. Its generated cac
 
 The earlier bounded playback sample in [playback_metrics.json](playback_metrics.json) predates this camera revision. The current output captures above verify the new camera views and breakup staging. TiXL's output-evaluation counters do not establish continuous scene-rendering performance; use workload-specific profiling for that question.
 
+## Selected moon effects in TiXL
+
+The editable graph's **Main / opaque select object** node now resolves `Tethys analogue | cratered moon` by name and sends its primitive index to both the mesh and texture paths. **DisplaceMeshNoise** deforms that mesh; **Displace** uses the moon's normal map to distort its albedo. The remaining scene passes through the same animated render path. The [original TiXL frame](previews/tixl_planet_before.png) and [effect frame](previews/tixl_planet_after.png) were captured at 84 seconds. Their image difference is concentrated on the moon; the ship is visually unchanged. The reusable setup is in [`../configure_asterion_planet_effects.py`](../configure_asterion_planet_effects.py), which checks the existing connections before editing the saved TiXL home graph.
+
 ## Current limitations
 
 - The Blender World shader is not transferred as a TiXL environment. The scene uses generated space geometry and emissive materials for its background.

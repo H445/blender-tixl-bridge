@@ -88,6 +88,12 @@ Camera timeline markers can control cuts independently. See the bundled [BlendSh
 
 Set the optional `tixl_project_name` Scene property when the generated project needs an exact name. It must be a valid C# identifier and unused on the first sync.
 
+## Distort one imported object in TiXL
+
+In the editable TiXL project graph, find the world branch containing the object and set **ObjectName** on **select object** to its Blender name. The selector resolves the current imported primitive index and feeds the mesh and texture select/replace nodes together. An empty, missing, or ambiguous name selects nothing. The selector status shows the resolved glTF name and index; a unique numeric suffix such as `.001` is accepted automatically when you enter the original Blender name.
+
+Insert a native mesh operator between **select mesh → replace mesh** and an image operator between one of **select textures → replace textures**. For example, **DisplaceMeshNoise** can deform the moon geometry while **Displace** changes only its albedo map. Other objects keep their own geometry, materials, transforms, and animation. Duplicate the selector and effect branch to edit another primitive independently. This is graph selection by object name; viewport picking is not provided by the bridge.
+
 ## Update the add-on
 
 The add-on checks the latest published bridge release once when Blender starts.

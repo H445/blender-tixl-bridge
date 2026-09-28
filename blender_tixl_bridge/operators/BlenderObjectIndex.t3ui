@@ -1,0 +1,8 @@
+{
+  "FormatVersion": 3,
+  "Id": "b62fce64-2efe-54ac-9d6f-3db2f83deed4",
+  "Description": "Choose one imported Blender object by name. The primitive index feeds mesh and texture select/replace nodes; an empty or ambiguous name selects nothing.",
+  "InputUis": [
+    {"InputId":"9e4a2fb0-334e-5567-8f63-e9d1ac3260aa","GroupTitle":"Blender object","Description":"Enter the object name from Blender. A unique glTF .001 suffix is resolved automatically."}
+  ]
+}
