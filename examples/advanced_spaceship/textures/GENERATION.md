@@ -1,18 +1,30 @@
 # Asterion image texture provenance
 
-These five source images were generated with Codex's built-in image-generation tool for the GPT Images 2.5 request. They are packed into `AsterionBreakaway.blend` by the scene builder. The builder uses them as color or emission textures; metallic and roughness values are set separately in its PBR materials. No normal or ORM image was generated.
+The six source images were generated with Codex's built-in image-generation tool for the GPT Images 2.5 request. The five surface albedos have aligned tangent-space normal maps and packed ORM maps derived with [`generate_pbr_maps.py`](../generate_pbr_maps.py) through Blender MCP TCP. ORM channels are red occlusion, green roughness, and blue metallic. These technical derivatives are inferred from the source images; they are not measured scans or separately AI-painted height maps. All 16 images are packed into `AsterionBreakaway.blend`. The space panorama supplies emission color only.
 
 | File | Dimensions | SHA-256 |
 | --- | --- | --- |
 | `armor_graphite.png` | 1254 × 1254 | `fec58a3995eea1dcc7141c14c0ad648d1e1958c6de7ef6e7d5d2f5d91189317a` |
+| `carbon_albedo.png` | 1254 × 1254 | `7e61c2e8efde2fe105dc3eddab074cb290ff9c9453d9e5509633f1ad491665f2` |
 | `heat_titanium.png` | 1254 × 1254 | `902b6a94094cce4c0d911686021e44eb1d6fd9f8c8fe04e50910ee86073141a7` |
 | `solar_ceramic.png` | 1254 × 1254 | `e56037dd6306c4111dbc9e12ac3183907aedf9b012e155fbad4e922ec74461bc` |
 | `moon_albedo.png` | 1254 × 1254 | `a82becf1903617cdb460f025e4ff12ef430a3c4d071bb88f6fa2a93bf779011d` |
 | `space_nebula.png` | 1774 × 887 | `0775002bc45084e460f120d237fb02e74c1ff2dfda035cb92d9c912949d12219` |
 
+## Derived technical maps
+
+| Family | Tangent normal SHA-256 | Packed ORM SHA-256 |
+| --- | --- | --- |
+| `hull` | `85e971035feb4f4b77a4a93f56c4d3e6ccc20663d585d1f6d7f05123aac3a7d0` | `620aae4e059204ebdffffc6be2310fbdb899aa7d0cdbaf80e4ff36731962b502` |
+| `carbon` | `26cf753eee3c0eb94379db1c907b25efde12063993d9b0fc61cab185ccc2bf07` | `e5602b1790f57273a26dbae8ee736e9ebcdefa87ab9fcd555a52ca44eed557c7` |
+| `copper` | `5dec064611ff85a8ce9fdf34449c21230d492c91894f496d572a239e60e353b5` | `da6f13c3b94d6ed7190ecd627dcce568393c751ed21dac6010f71e4a3352a0f0` |
+| `solar` | `2f18b70211e3dc62a363f883bb9b51dd195aaee2866c942e1a25d37018669b7f` | `6e7e557abe9211c20a3673c3cd62c09de19b04b0c67a5ded2cc983ada9638487` |
+| `moon` | `6b69d8fb3b5c4c62ea1e81391d518b7b9b4e83f43cd0bd9d0abca4dd603c8026` | `6d04acc17ed34befdaec070d8f4dc0b88120165f35a78372d1133203ef3c5723` |
+
 ## Prompt set
 
 - **Armor graphite:** Square orthographic material texture only: photorealistic dark graphite titanium and ceramic-composite spacecraft armor, brushed grain, micro-abrasions, hairline seams, micrometeorite pitting, cool gray and steel blue; neutral even illumination, no perspective, text, symbols, border, or baked cast shadows; repeatable texel scale.
+- **Carbon ceramic:** Square straight-on orthographic seamless PBR base-color swatch: dense charcoal carbon ceramic composite with shallow woven microstructure, soot-dark matte coating, chipped edges, heat discoloration, precision-machined recesses, believable micrometeorite wear and subtle cool navy variation; flat neutral illumination with no baked specular highlights, deep shadows, perspective, object silhouette, lettering, logo, or border.
 - **Heat titanium:** Square orthographic, repeatable close-up of heat-treated dark titanium with bronze and copper tint, machined grooves, micro scratches, ceramic scorching and oxidized wear; neutral illumination, no perspective, silhouette, text, logo, or border.
 - **Solar ceramic:** Square orthographic, repeating blue-black photovoltaic ceramic tiles with tiny regular cells, silver conductive traces, subtle wear, and high manufacturing precision; neutral illumination without baked reflections, perspective, text, logo, or border.
 - **Moon albedo:** Square orthographic regolith surface map with cold gray mineral grain, overlapping impact craters, radial ejecta, and subtle basalt; flat neutral illumination without a baked terminator, spherical silhouette, stars, text, or border.

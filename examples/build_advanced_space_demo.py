@@ -4,14 +4,16 @@ Run through the official Blender MCP TCP extension's execute_blender_code, for e
 with ``exec(compile(open(path, encoding='utf-8').read(), path, 'exec'),
 {'__file__': path})``. Never run
 Blender via its command-line interface for this repository. The AI image assets live
-in ``examples/advanced_spaceship/textures/`` and are supplied separately. Missing maps use PBR
-fallback colors so the geometry can be inspected before the final textures arrive.
+in ``examples/advanced_spaceship/textures/`` and are supplied separately. The
+builder requires the complete albedo, normal, and ORM map set.
 """
 
 from __future__ import annotations
 
 import math
 import random
+import re
+import hashlib
 from pathlib import Path
 
 import bpy
@@ -21,6 +23,17 @@ from mathutils import Vector
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "advanced_spaceship" / "textures"
 OUTPUT = ROOT / "AsterionBreakaway.blend"
+REQUIRED_TEXTURES = (
+    "armor_graphite.png", "hull_normal.png", "hull_orm.png",
+    "carbon_albedo.png", "carbon_normal.png", "carbon_orm.png",
+    "heat_titanium.png", "copper_normal.png", "copper_orm.png",
+    "solar_ceramic.png", "solar_normal.png", "solar_orm.png",
+    "moon_albedo.png", "moon_normal.png", "moon_orm.png",
+    "space_nebula.png",
+)
+missing_textures = [name for name in REQUIRED_TEXTURES if not (ASSETS / name).is_file()]
+if missing_textures:
+    raise FileNotFoundError(f"Required PBR texture maps are missing: {missing_textures}")
 FPS = 60
 LAST = 3601  # exactly 60 seconds from frame 1 at 60 fps
 RNG = random.Random(24021984)
@@ -85,7 +98,7 @@ rig = collection("03 Lighting and cameras")
 def image_node(nodes, links, name, file_name, socket, bsdf, *, noncolor=False):
     path = ASSETS / file_name
     if not path.is_file():
-        return None
+        raise FileNotFoundError(path)
     img = bpy.data.images.load(str(path), check_existing=True)
     img.pack()
     img.filepath = "//advanced_spaceship/textures/" + file_name
@@ -115,25 +128,37 @@ def pbr(name, color, metallic, roughness, *, albedo=None, orm=None, normal=None,
         image_node(nodes, links, "GPT Images 2.5 albedo", albedo, "Base Color", bsdf)
     if orm:
         # glTF exports the channel-packed occlusion/roughness/metallic image.
-        tex = image_node(nodes, links, "GPT Images 2.5 ORM", orm, "Roughness", bsdf, noncolor=True)
+        tex = image_node(nodes, links, "GPT Images 2.5 source-derived ORM", orm,
+                         "Roughness", bsdf, noncolor=True)
         if tex:
             sep = nodes.new("ShaderNodeSeparateColor")
             links.remove(bsdf.inputs["Roughness"].links[0])
             links.new(tex.outputs["Color"], sep.inputs["Color"])
+            gltf_group = bpy.data.node_groups.get("glTF Material Output")
+            if gltf_group is None:
+                gltf_group = bpy.data.node_groups.new("glTF Material Output",
+                                                      "ShaderNodeTree")
+                gltf_group.interface.new_socket("Occlusion",
+                                                socket_type="NodeSocketFloat")
+            gltf_output = nodes.new("ShaderNodeGroup")
+            gltf_output.node_tree = gltf_group
+            links.new(sep.outputs["Red"], gltf_output.inputs["Occlusion"])
             links.new(sep.outputs["Green"], bsdf.inputs["Roughness"])
             links.new(sep.outputs["Blue"], bsdf.inputs["Metallic"])
     if normal:
         path = ASSETS / normal
-        if path.is_file():
-            tex = nodes.new("ShaderNodeTexImage")
-            tex.image = bpy.data.images.load(str(path), check_existing=True)
-            tex.image.pack()
-            tex.image.filepath = "//advanced_spaceship/textures/" + normal
-            tex.image.colorspace_settings.name = "Non-Color"
-            nmap = nodes.new("ShaderNodeNormalMap")
-            nmap.inputs["Strength"].default_value = 0.52
-            links.new(tex.outputs["Color"], nmap.inputs["Color"])
-            links.new(nmap.outputs["Normal"], bsdf.inputs["Normal"])
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        tex = nodes.new("ShaderNodeTexImage")
+        tex.label = "GPT Images 2.5 source-derived normal"
+        tex.image = bpy.data.images.load(str(path), check_existing=True)
+        tex.image.pack()
+        tex.image.filepath = "//advanced_spaceship/textures/" + normal
+        tex.image.colorspace_settings.name = "Non-Color"
+        nmap = nodes.new("ShaderNodeNormalMap")
+        nmap.inputs["Strength"].default_value = 0.52
+        links.new(tex.outputs["Color"], nmap.inputs["Color"])
+        links.new(nmap.outputs["Normal"], bsdf.inputs["Normal"])
     if emission:
         image_node(nodes, links, "GPT Images 2.5 emission", emission, "Emission Color", bsdf)
         bsdf.inputs["Emission Strength"].default_value = max(emission_strength, 1.0)
@@ -142,12 +167,13 @@ def pbr(name, color, metallic, roughness, *, albedo=None, orm=None, normal=None,
 
 hull = pbr("01 | ceramic titanium armored hull", (0.29, 0.36, 0.43), 0.84, 0.34,
            albedo="armor_graphite.png", orm="hull_orm.png", normal="hull_normal.png")
-dark = pbr("02 | carbon ceramic recess", (0.025, 0.043, 0.061), 0.68, 0.47,
+dark = pbr("02 | carbon ceramic recess", (0.025, 0.043, 0.061), 0.08, 0.62,
            albedo="carbon_albedo.png", orm="carbon_orm.png", normal="carbon_normal.png")
 copper = pbr("03 | heat-scarred copper alloy", (0.53, 0.26, 0.11), 0.93, 0.38,
              albedo="heat_titanium.png", orm="copper_orm.png", normal="copper_normal.png")
-white = pbr("04 | porcelain sensor cover", (0.66, 0.72, 0.75), 0.18, 0.25,
-            albedo="solar_ceramic.png", normal="white_normal.png")
+white = pbr("04 | photovoltaic ceramic cover", (0.66, 0.72, 0.75), 0.24, 0.32,
+            albedo="solar_ceramic.png", orm="solar_orm.png",
+            normal="solar_normal.png")
 canopy_mat = pbr("04b | smoked iridium cockpit glazing", (0.015, 0.055, 0.085),
                  0.54, 0.12)
 blue = pbr("05 | ion blue emitter", (0.04, 0.16, 0.28), 0.38, 0.22,
@@ -158,39 +184,155 @@ nebula = pbr("07 | distant ionized dust photograph", (0.008, 0.014, 0.025), 0, 1
              emission="space_nebula.png", emission_color=(0.13, 0.24, 0.4),
              emission_strength=1.0)
 planet_mat = pbr("08 | cratered moon regolith", (0.32, 0.31, 0.30), 0.02, 0.91,
-                 albedo="moon_albedo.png", normal="moon_normal.png")
+                 albedo="moon_albedo.png", orm="moon_orm.png",
+                 normal="moon_normal.png")
 star_mat = pbr("09 | distant stars", (1, 1, 1), 0, 1,
                emission_color=(1, 1, 1), emission_strength=5)
 
 
-def mesh_object(name, verts, faces, material, coll, uv=True):
+def fabrication_signature(name):
+    return hashlib.sha256(name.encode("utf-8")).digest()
+
+
+def mesh_object(name, verts, faces, material, coll, uv=True,
+                extra_materials=(), face_materials=None):
     mesh = bpy.data.meshes.new(name + " mesh")
+    signature = fabrication_signature(name)
+    # Individual machining tolerances and slight asymmetric panel draft give
+    # repeated classes different physical profiles without changing the part
+    # pool or compromising their keyed assembly positions.
+    sx = .975 + signature[14]/255*.05
+    sy = .975 + signature[15]/255*.05
+    sz = .975 + signature[16]/255*.05
+    draft_x = (signature[17]/255-.5)*.018
+    draft_y = (signature[18]/255-.5)*.018
+    verts = [(vx*sx+vz*draft_x,vy*sy+vz*draft_y,vz*sz)
+             for vx,vy,vz in verts]
     mesh.from_pydata(verts, [], faces)
     mesh.update()
     if uv:
-        # Stable box-projection UVs for independent, uniquely transformed parts.
+        # Per-part rotations and offsets sample different patches of the packed
+        # albedo maps, so neighboring plates do not repeat identical wear.
         layer = mesh.uv_layers.new(name="UVMap")
+        quarter_turn = signature[0] % 4
+        offset_u = signature[1] / 255 * .67
+        offset_v = signature[2] / 255 * .67
         for poly in mesh.polygons:
             n = poly.normal
             axis = max(range(3), key=lambda i: abs(n[i]))
             other = [i for i in range(3) if i != axis]
             for li in poly.loop_indices:
                 co = mesh.vertices[mesh.loops[li].vertex_index].co
-                layer.data[li].uv = (co[other[0]] * 0.35 + 0.5,
-                                     co[other[1]] * 0.35 + 0.5)
+                u = co[other[0]] * .35 + .5
+                v = co[other[1]] * .35 + .5
+                if quarter_turn == 1:
+                    u,v=v,1-u
+                elif quarter_turn == 2:
+                    u,v=1-u,1-v
+                elif quarter_turn == 3:
+                    u,v=1-v,u
+                layer.data[li].uv = (u+offset_u,v+offset_v)
     obj = bpy.data.objects.new(name, mesh)
     coll.objects.link(obj)
     mesh.materials.append(material)
+    for extra in extra_materials:
+        mesh.materials.append(extra)
+    if face_materials is not None:
+        for poly,index in zip(mesh.polygons,face_materials):
+            poly.material_index=index
+    obj["fabrication_variant"] = signature[:4].hex()
     return obj
 
 
 def box(name, size, location, material, coll=craft, bevel=0.0):
     x, y, z = (d * 0.5 for d in size)
-    v = [(-x,-y,-z),(x,-y,-z),(x,y,-z),(-x,y,-z),
-         (-x,-y,z),(x,-y,z),(x,y,z),(-x,y,z)]
-    f = [(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),
-         (2,3,7,6),(3,0,4,7)]
-    obj = mesh_object(name, v, f, material, coll)
+    signature = fabrication_signature(name)
+    machined = size[0] >= .22 and size[1] >= .35 and size[2] >= .09
+    if machined:
+        corner = min(x,y)*(.12 + signature[4]/255*.16)
+        inset = .13 + signature[5]/255*.10
+        recess = min(z*.22,.065)
+        offset_x = (signature[6]/255-.5)*x*.065
+        offset_y = (signature[7]/255-.5)*y*.065
+        def octagon(hx,hy,chamfer,dx=0,dy=0):
+            return [(dx-hx+chamfer,dy-hy),(dx+hx-chamfer,dy-hy),
+                    (dx+hx,dy-hy+chamfer),(dx+hx,dy+hy-chamfer),
+                    (dx+hx-chamfer,dy+hy),(dx-hx+chamfer,dy+hy),
+                    (dx-hx,dy+hy-chamfer),(dx-hx,dy-hy+chamfer)]
+        rings = [(octagon(x,y,corner),-z),
+                 (octagon(x,y,corner),z),
+                 (octagon(x*(1-inset),y*(1-inset),corner*.65,
+                          offset_x,offset_y),z-recess)]
+        v=[(vx,vy,height) for outline,height in rings for vx,vy in outline]
+        f=[tuple(reversed(range(8)))]
+        for base in (0,8):
+            f.extend((base+i,base+(i+1)%8,base+8+(i+1)%8,base+8+i)
+                     for i in range(8))
+        f.append(tuple(range(16,24)))
+        face_materials=[0]*len(f)
+        face_materials[-1]=1
+        for i in range(8):
+            if (i+signature[8])%4==0:
+                face_materials[9+i]=1
+        accent = copper if material == dark else dark
+        extra_materials=(accent,copper,white)
+        if size[0] >= 1.5 and size[1] >= 1.5 and size[2] >= .8:
+            # Cargo pods are manufactured as individual service units, not
+            # twelve copies of a plain block. Vents, latch plates and radiator
+            # strips are welded into each pod's mesh so the piece stays whole.
+            roof=z-recess+.008
+            raised=min(.045,size[2]*.035)
+            def roof_plate(cx,cy,sx,sy,slot):
+                start=len(v)
+                ax,bx=cx-sx*.5,cx+sx*.5
+                ay,by=cy-sy*.5,cy+sy*.5
+                v.extend(((ax,ay,roof),(bx,ay,roof),(bx,by,roof),(ax,by,roof),
+                          (ax,ay,roof+raised),(bx,ay,roof+raised),
+                          (bx,by,roof+raised),(ax,by,roof+raised)))
+                f.extend(tuple(start+index for index in face)
+                         for face in ((0,3,2,1),(4,5,6,7),(0,1,5,4),
+                                      (1,2,6,5),(2,3,7,6),(3,0,4,7)))
+                face_materials.extend((slot,)*6)
+            roof_variant=signature[9]%4
+            roof_color=2+signature[10]%2
+            face_materials[17]=1+signature[11]%3
+            if roof_variant==0:  # parallel cooling ducts
+                for j in range(3):
+                    roof_plate((j-1)*x*.54+offset_x,offset_y,
+                               x*.13,y*1.20,roof_color)
+            elif roof_variant==1:  # transverse impact ribs
+                for j in range(4):
+                    roof_plate(offset_x,(j-1.5)*y*.38+offset_y,
+                               x*1.35,y*.11,roof_color)
+            elif roof_variant==2:  # two offset access hatches and a latch
+                roof_plate(-x*.27+offset_x,offset_y-y*.16,
+                           x*.60,y*.82,roof_color)
+                roof_plate(x*.38+offset_x,offset_y+y*.20,
+                           x*.47,y*.58,1)
+                roof_plate(x*.19+offset_x,offset_y-y*.17,
+                           x*.10,y*.22,2)
+            else:  # split thermal tiles around a service channel
+                for side in (-1,1):
+                    for row in (-1,1):
+                        roof_plate(side*x*.43+offset_x,row*y*.40+offset_y,
+                                   x*.43,y*.45,roof_color if side==row else 1)
+            roof_plate((signature[12]/255-.5)*x*.65,
+                       (signature[13]/255-.5)*y*.65,
+                       x*.11,y*.13,2)
+        else:
+            extra_materials=(accent,)
+        obj = mesh_object(name,v,f,material,coll,
+                          extra_materials=extra_materials,
+                          face_materials=face_materials)
+        if size[0] >= 1.5 and size[1] >= 1.5 and size[2] >= .8:
+            obj["roof_variant"] = roof_variant
+        bevel=min(bevel,recess*.38,min(size)*.055)
+    else:
+        v = [(-x,-y,-z),(x,-y,-z),(x,y,-z),(-x,y,-z),
+             (-x,-y,z),(x,-y,z),(x,y,z),(-x,y,z)]
+        f = [(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),
+             (2,3,7,6),(3,0,4,7)]
+        obj = mesh_object(name, v, f, material, coll)
     obj.location = location
     if bevel:
         mod = obj.modifiers.new("Machined radius", "BEVEL")
@@ -206,12 +348,36 @@ def tapered(name, front, rear, half_w_front, half_w_rear,
     center_y = (front + rear) * .5
     ys = (front-center_y, rear-center_y)
     verts = []
+    trench = name.startswith(("FUSELAGE", "NACELLE", "RAILGUN"))
     for y, w, h in zip(ys, (half_w_front, half_w_rear), (half_h_front, half_h_rear)):
-        verts.extend([(-w*.72,y,-h), (w*.72,y,-h), (w,y,-h*.65), (w,y,h*.65),
-                      (w*.72,y,h), (-w*.72,y,h), (-w,y,h*.65), (-w,y,-h*.65)])
-    faces = [tuple(reversed(range(8))), tuple(range(8,16))]
-    faces += [(i,(i+1)%8,(i+1)%8+8,i+8) for i in range(8)]
-    obj = mesh_object(name, verts, faces, material, coll)
+        if trench:
+            verts.extend([(-w*.72,y,-h),(w*.72,y,-h),(w,y,-h*.65),
+                          (w,y,h*.65),(w*.72,y,h),(w*.30,y,h),
+                          (w*.20,y,h*.57),(-w*.20,y,h*.57),
+                          (-w*.30,y,h),(-w*.72,y,h),
+                          (-w,y,h*.65),(-w,y,-h*.65)])
+        else:
+            verts.extend([(-w*.72,y,-h), (w*.72,y,-h), (w,y,-h*.65),
+                          (w,y,h*.65),(w*.72,y,h),(-w*.72,y,h),
+                          (-w,y,h*.65),(-w,y,-h*.65)])
+    ring_size = 12 if trench else 8
+    faces = [tuple(reversed(range(ring_size))),
+             tuple(range(ring_size,ring_size*2))]
+    faces += [(i,(i+1)%ring_size,(i+1)%ring_size+ring_size,i+ring_size)
+              for i in range(ring_size)]
+    if trench:
+        face_materials=[0]*len(faces)
+        face_materials[2+5]=2  # copper-lined descent
+        face_materials[2+6]=3 if name.startswith("FUSELAGE-01") else 1
+        face_materials[2+7]=2  # copper-lined ascent
+        face_materials[2+2]=1
+        face_materials[2+10]=1
+        obj=mesh_object(name,verts,faces,material,coll,
+                        extra_materials=(dark,copper,blue),
+                        face_materials=face_materials)
+        obj["service_trench"] = True
+    else:
+        obj = mesh_object(name, verts, faces, material, coll)
     obj.location.y = center_y
     return obj
 
@@ -236,13 +402,15 @@ def ring(name, center, major, minor, material, coll=craft, segments=24):
 
 def sphere(name, loc, radius, material, coll, segments=24, rings=12):
     verts, faces = [], []
+    signature = fabrication_signature(name)
+    radii = tuple(radius*(.975+signature[14+i]/255*.05) for i in range(3))
     for j in range(rings+1):
         theta = math.pi*j/rings
         for i in range(segments+1):
             phi = math.tau*i/segments
-            verts.append((radius*math.sin(theta)*math.cos(phi),
-                          radius*math.sin(theta)*math.sin(phi),
-                          radius*math.cos(theta)))
+            verts.append((radii[0]*math.sin(theta)*math.cos(phi),
+                          radii[1]*math.sin(theta)*math.sin(phi),
+                          radii[2]*math.cos(theta)))
     for j in range(rings):
         for i in range(segments):
             a = j*(segments+1)+i
@@ -260,6 +428,7 @@ def sphere(name, loc, radius, material, coll, segments=24, rings=12):
     obj = bpy.data.objects.new(name, mesh)
     coll.objects.link(obj)
     obj.location = loc
+    obj["fabrication_variant"] = signature[:4].hex()
     return obj
 
 
@@ -456,13 +625,15 @@ for i in range(70):
                    (size*1.3,size*2,size*.55),(x,y,z),
                    copper if i%5==0 else dark,bevel=.008),"spine",400+i)
 
-# Role silhouettes remain real separate meshes in the same export. Visibility
-# and transforms are keyframed so TiXL can switch configurations at runtime.
+# Every role module starts in the COMBAT ship and is reused in EXPLORER and
+# HAULER. No craft component is spawned, hidden, or swapped at a cut.
 role_parts = {"EXPLORER":[], "HAULER":[]}
 
 
 def role_object(obj, role):
     obj["configuration_role"] = role
+    obj["asterion_part"] = True
+    obj["assembly_group"] = role.lower()
     role_parts[role].append(obj)
     return obj
 
@@ -568,8 +739,8 @@ cameras=[
     camera("CAM A | three-quarter beauty",(22,-34,15),(0,-1,0),46),
     camera("CAM B | overhead breakaway",(3,-22,38),(0,-1,0),34),
     camera("CAM C | engines and debris",(-18,-23,4),(0,-2,0),40),
-    camera("CAM D | frontal reassembly",(2,29,12),(0,-1,0),40),
-    camera("CAM E | illuminated cargo deck",(17,-16,16),(0,-1,1.4),43),
+    camera("CAM D | frontal reassembly",(2,32,13),(0,2.5,0),32),
+    camera("CAM E | illuminated cargo deck",(17,-20,18),(0,-1,1.4),37),
 ]
 scene.camera=cameras[0]
 for frame, which, title in [(1,0,"COMBAT | compact strike ship"),
@@ -581,6 +752,44 @@ for frame, which, title in [(1,0,"COMBAT | compact strike ship"),
                             (3481,0,"COMBAT | final assembly")]:
     marker=scene.timeline_markers.new(title,frame=frame)
     marker.camera=cameras[which]
+
+
+camera_rotations = {}
+
+
+def camera_pose(cam, frame, location, target):
+    cam.location = location
+    rotation = (Vector(target)-cam.location).to_track_quat("-Z","Y").to_euler()
+    previous = camera_rotations.get(cam.name)
+    if previous is not None:
+        rotation.make_compatible(previous)
+    camera_rotations[cam.name] = rotation.copy()
+    cam.rotation_euler = rotation
+    cam.keyframe_insert("location", frame=frame)
+    cam.keyframe_insert("rotation_euler", frame=frame)
+
+
+# The bridge bakes the selected camera at 60 Hz. Each marker selects a moving
+# dolly/orbit shot rather than a static view for the duration of its clip.
+camera_shots = (
+    (0, ((1,(22,-34,15),(0,-1,0)), (260,(18,-29,17),(0,-1,0)),
+         (540,(12,-25,13),(0,-1,0)),
+         (3481,(28,-32,15),(0,-1,0)), (3601,(20,-28,12),(0,-1,0)))),
+    (1, ((541,(3,-22,38),(0,-1,0)), (900,(-7,-18,33),(0,1,0)),
+         (1260,(-13,-10,26),(0,2,0)))),
+    (2, ((1801,(-18,-23,5),(0,-2,0)), (2150,(-12,-27,13),(0,0,0)),
+         (2520,(-4,-24,20),(0,1,0)),
+         (3061,(-21,-20,8),(0,-1,0)), (3300,(-16,-9,13),(0,0,0)),
+         (3480,(-8,14,17),(0,1,0)))),
+    (3, ((1261,(2,32,13),(0,2.5,0)), (1500,(-8,30,10),(0,2,0)),
+         (1800,(-17,24,13),(0,1,0)))),
+    (4, ((2521,(17,-20,18),(0,-1,1.4)),
+         (2800,(7,-27,15),(0,-1,1.4)),
+         (3060,(-12,-27,17),(0,-1,1.4)))),
+)
+for camera_index, keys in camera_shots:
+    for frame, location, target in keys:
+        camera_pose(cameras[camera_index], frame, location, target)
 
 
 def pose(obj, frame, position, angle, scale=(1,1,1)):
@@ -651,33 +860,121 @@ for idx,obj in enumerate(parts):
         pose(obj,frame,position,angle,scale)
     obj["projectile_travel_m"] = round(travel,3)
 
-# Survey and cargo modules emerge from the projectile stream near their role
-# assembly and disappear only after the next breakup begins.
+# The same survey and cargo modules are armored combat fittings, explorer
+# instruments, and hauler equipment. Their mesh identities and visibility
+# persist across every configuration and every projectile salvo.
 for role, objects in role_parts.items():
-    appear, assembled, end = ((1121,1261,1801) if role=="EXPLORER"
-                               else (2401,2521,3061))
     for idx,obj in enumerate(objects):
-        destination=obj.location.copy()
-        offset=Vector((RNG.uniform(-8,8),RNG.uniform(4,14),RNG.uniform(-6,6)))
-        pose(obj,1,destination+offset,(0,0,RNG.uniform(-1,1)))
-        pose(obj,appear,destination+offset,(0,0,RNG.uniform(-1,1)))
-        pose(obj,assembled,destination,(0,0,0))
-        pose(obj,end,destination,(0,0,0))
-        for frame,hidden in ((1,True),(appear-1,True),(appear,False),
-                             (end,False),(end+1,True),(LAST,True)):
-            obj.hide_render=hidden
-            obj.keyframe_insert("hide_render",frame=frame)
+        original=obj.location.copy()
+        combat_angle=Vector((0,0,0))
+        explorer_angle=Vector((0,0,0))
+        hauler_angle=Vector((0,0,0))
+        if role=="EXPLORER":
+            explorer=original
+            explorer_scale=(1,1,1)
+            if "ten-metre" in obj.name:
+                combat=Vector((0,0,-1.15))
+                combat_scale=(.72,.60,.72)
+                hauler=Vector((0,6.8,-.6))
+                hauler_scale=(.85,.78,.85)
+            elif "forward survey head" in obj.name:
+                combat=Vector((0,2.45,-1.15))
+                combat_scale=(.80,.80,.80)
+                hauler=Vector((0,9.9,-.6))
+                hauler_scale=(.9,.9,.9)
+            elif "RADIATOR" in obj.name:
+                side=-1 if original.x<0 else 1
+                panel=0 if abs(original.x)<8 else 1
+                combat=Vector((side*(3.8+panel*1.75),-2.1,.36))
+                combat_scale=(.52,.58,.8)
+                combat_angle.z=side*.18
+                hauler=Vector((side*(3.85+panel*.40),1.35-panel*3.15,2.62))
+                hauler_scale=(.48,.47,.7)
+                hauler_angle.y=side*.16
+            elif "SOLAR-CELL" in obj.name:
+                side=-1 if original.x<0 else 1
+                panel=0 if abs(original.x)<8 else 1
+                rib=round((1.60-original.y)/.70)
+                combat=Vector((side*(3.8+panel*1.75),.50-rib*.47,.55))
+                combat_scale=(.56,.80,.8)
+                hauler=Vector((side*(3.85+panel*.40),
+                               2.5-panel*3.15-rib*.32,2.82))
+                hauler_scale=(.50,.8,.8)
+            else:  # lidar rings become combat apertures and cargo couplers
+                side=-1 if original.x<0 else 1
+                probe=round((abs(original.x)-2.1)/.85)
+                combat=Vector((side*(2.3+probe*.75),2.7-probe*.65,.48))
+                combat_scale=(.8,.8,.8)
+                hauler=Vector((side*5.35,2.8-probe*2.1,1.05))
+                hauler_scale=(1,1,1)
+        else:
+            hauler=original
+            hauler_scale=(1,1,1)
+            if "heavy cargo cradle rail" in obj.name:
+                side=-1 if original.x<0 else 1
+                combat=Vector((side*4.15,-1.6,-.55))
+                combat_scale=(.63,.73,.72)
+                explorer=Vector((side*2.45,-1.25,-.65))
+                explorer_scale=(.55,.83,.60)
+            elif "CRADLE-BRACE" in obj.name:
+                side=-1 if original.x<0 else 1
+                station=round((2.9-original.y)/1.55)
+                combat=Vector((side*3.45,2.2-station*1.45,-.35))
+                combat_scale=(.68,.72,.70)
+                explorer=Vector((side*(2.5+station*.13),
+                                 2.8-station*1.55,-.62))
+                explorer_scale=(.55,.72,.62)
+            else:  # twelve cargo pods and their permanently attached straps
+                match=re.search(r"HAULER-(?:CARGO|CONTAINER-STRAP)-(\d+)-(\d+)",obj.name)
+                if match is None:
+                    raise ValueError(f"Unclassified reusable cargo module: {obj.name}")
+                row,col=(int(value) for value in match.groups())
+                center_x=(col-1)*2.55
+                local_x=original.x-center_x
+                side=-1 if row<2 else 1
+                combat=Vector((side*(2.45+col*1.12)+local_x*.50,
+                               1.1-(row%2)*2.15-col*.30,
+                               .53+(original.z-1.70)*.50))
+                combat_scale=(.50,.52,.50)
+                explorer=Vector(((col-1)*1.65+local_x*.43,
+                                 5.2-row*2.15,
+                                 .39+(original.z-1.70)*.43))
+                explorer_scale=(.43,.46,.43)
+        direction=Vector((RNG.uniform(-1,1),RNG.uniform(-.25,1.2),
+                          RNG.uniform(-.85,.85)))
+        direction.x+=(-.3 if combat.x<0 else .3)
+        direction.normalize()
+        travel=RNG.uniform(5.0,16.0)
+        spin=Vector((RNG.uniform(-.7,.7),RNG.uniform(-.9,.9),
+                     RNG.uniform(-.8,.8)))
+        projectile=combat+direction*travel
+        trajectory=((1,combat,combat_angle,combat_scale),
+                    (541,combat,combat_angle,combat_scale),
+                    (841,projectile,spin,combat_scale),
+                    (1041,projectile+direction*2,spin*1.55,combat_scale),
+                    (1261,explorer,explorer_angle,explorer_scale),
+                    (1801,explorer,explorer_angle,explorer_scale),
+                    (2251,projectile+direction*1.3,spin*.95,combat_scale),
+                    (2461,projectile+direction*2.2,spin*1.5,combat_scale),
+                    (2521,hauler,hauler_angle,hauler_scale),
+                    (3061,hauler,hauler_angle,hauler_scale),
+                    (3301,projectile,spin,combat_scale),
+                    (LAST,combat,combat_angle,combat_scale))
+        for frame,position,angle,scale in trajectory:
+            pose(obj,frame,position,angle,scale)
+        obj["projectile_travel_m"] = round(travel,3)
 
 # The entire ship drifts and banks while geometry-based space remains fixed.
 for cam in cameras:
     cam.data.dof.use_dof=False  # deterministic TiXL camera approximation
 
 scene.frame_set(1)
-scene["detachable_mesh_count"] = len(parts)
+scene["detachable_mesh_count"] = len(parts)+sum(len(v) for v in role_parts.values())
+scene["reused_part_count"] = scene["detachable_mesh_count"]
 scene["role_component_counts"] = {name:len(objects) for name,objects in role_parts.items()}
 scene["static_space_object_count"] = len(space.objects)
 scene["asset_directory"] = "//advanced_spaceship/textures"
 bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT))
-print("ASTERION_BUILT",{"file":str(OUTPUT),"detachable_parts":len(parts),
+print("ASTERION_BUILT",{"file":str(OUTPUT),"detachable_parts":scene["detachable_mesh_count"],
                          "space_objects":len(space.objects),"seconds":60,
                          "texture_files_found":len(list(ASSETS.glob("*.png")))})

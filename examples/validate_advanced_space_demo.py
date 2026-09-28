@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import hashlib
 from pathlib import Path
 
 import bpy
@@ -39,15 +40,42 @@ objects = list(scene.objects)
 assert len(objects) >= 600, f"Expected at least 600 scene objects, found {len(objects)}"
 
 detachable = [obj for obj in objects if bool(obj.get("asterion_part", False))]
-assert len(detachable) >= 350, (
-    f"Expected at least 350 detachable parts, found {len(detachable)}"
+assert len(detachable) >= 450, (
+    f"Expected at least 450 reusable detachable parts, found {len(detachable)}"
 )
+craft_collection = bpy.data.collections.get("01 Asterion | detachable craft")
+assert craft_collection is not None, "Detachable craft collection is missing"
+craft_meshes = {obj for obj in craft_collection.objects if obj.type == "MESH"}
+assert craft_meshes == set(detachable), (
+    "Every instantiated craft mesh must be a reusable detachable part"
+)
+def geometry_signature(obj):
+    coordinates = tuple((round(vertex.co.x, 5), round(vertex.co.y, 5),
+                         round(vertex.co.z, 5)) for vertex in obj.data.vertices)
+    return hashlib.sha256(repr(coordinates).encode("ascii")).hexdigest()
+
+unique_profiles = {geometry_signature(obj) for obj in detachable}
+assert len(unique_profiles) == len(detachable), (
+    "Repeated exact mesh profiles remain in the reusable part pool"
+)
+assert all(obj.get("fabrication_variant") for obj in detachable), (
+    "Every craft part needs a deterministic fabrication variant"
+)
+cargo_pods = [obj for obj in detachable if obj.name.startswith("HAULER-CARGO-")]
+roof_variants = {obj.get("roof_variant") for obj in cargo_pods}
+assert len(cargo_pods) == 12 and len(roof_variants) >= 4, (
+    "Cargo modules need individual roof machinery profiles"
+)
+service_trenches = sum(bool(obj.get("service_trench")) for obj in detachable)
+assert service_trenches >= 20, "Structural service trenches are missing"
 
 explorer = [obj for obj in objects if obj.get("configuration_role") == "EXPLORER"]
 hauler = [obj for obj in objects if obj.get("configuration_role") == "HAULER"]
-combat_count = len(detachable)
 assert explorer, "No EXPLORER configuration components are present"
 assert hauler, "No HAULER configuration components are present"
+assert set(explorer + hauler).issubset(detachable), (
+    "Specialized modules must belong to the persistent detachable pool"
+)
 
 recorded_counts = scene.get("role_component_counts")
 if recorded_counts is not None:
@@ -71,14 +99,38 @@ for material in bpy.data.materials:
                 and node.label.startswith("GPT Images 2.5")):
             texture_nodes.append((material, node))
 packed_images = {node.image for _, node in texture_nodes}
-assert len(packed_images) >= 5, (
-    f"Expected at least 5 used GPT Images 2.5 maps, found {len(packed_images)}"
+required_maps = {
+    "armor_graphite.png", "hull_normal.png", "hull_orm.png",
+    "carbon_albedo.png", "carbon_normal.png", "carbon_orm.png",
+    "heat_titanium.png", "copper_normal.png", "copper_orm.png",
+    "solar_ceramic.png", "solar_normal.png", "solar_orm.png",
+    "moon_albedo.png", "moon_normal.png", "moon_orm.png",
+    "space_nebula.png",
+}
+used_map_names = {Path(bpy.path.basename(image.filepath)).name
+                  for image in packed_images}
+assert required_maps <= used_map_names, (
+    f"Required PBR maps are not connected: {sorted(required_maps-used_map_names)}"
 )
 for image in packed_images:
     assert image.packed_file is not None, f"Texture is not packed into the .blend: {image.name}"
     assert image.size[0] >= 32 and image.size[1] >= 32, (
         f"Texture has unexpectedly small dimensions: {image.name} {tuple(image.size)}"
     )
+    if image.name.endswith(("_normal.png", "_orm.png")):
+        assert image.colorspace_settings.name == "Non-Color", (
+            f"Technical map is not in non-color space: {image.name}"
+        )
+occlusion_routes = 0
+for material in bpy.data.materials:
+    if material.use_nodes and material.node_tree:
+        for node in material.node_tree.nodes:
+            if (node.type == "GROUP" and node.node_tree is not None
+                    and node.node_tree.name.startswith("glTF Material Output")
+                    and node.inputs.get("Occlusion")
+                    and node.inputs["Occlusion"].is_linked):
+                occlusion_routes += 1
+assert occlusion_routes >= 5, "Packed ORM red channels are not routed to glTF occlusion"
 
 markers = list(scene.timeline_markers)
 camera_markers = [marker for marker in markers if marker.camera is not None]
@@ -121,20 +173,40 @@ def configuration_bounds(candidates):
 
 original_frame = scene.frame_current
 original_subframe = scene.frame_subframe
-sample_frames = (1, 841, 1261, 2521, 3601)
+sample_frames = (1, 841, 1261, 1801, 2251, 2521, 3061, 3601)
 sampled_poses = {}
 sampled_bounds = {}
+visible_counts = {}
+camera_motion = {}
 try:
     for frame in sample_frames:
         scene.frame_set(frame)
         bpy.context.view_layer.update()
         sampled_poses[frame] = {obj.name: local_pose(obj) for obj in detachable}
+        visible_counts[frame] = sum(not obj.hide_render for obj in detachable)
         config_objects = [
             obj for obj in objects
             if obj.get("asterion_part", False)
             or obj.get("configuration_role") in {"EXPLORER", "HAULER"}
         ]
         sampled_bounds[frame] = configuration_bounds(config_objects)
+    ordered_markers = sorted(camera_markers, key=lambda marker: marker.frame)
+    for index, marker in enumerate(ordered_markers):
+        end = (ordered_markers[index + 1].frame - 1
+               if index + 1 < len(ordered_markers) else scene.frame_end)
+        scene.frame_set(marker.frame)
+        bpy.context.view_layer.update()
+        start_location = marker.camera.matrix_world.translation.copy()
+        start_rotation = marker.camera.matrix_world.to_quaternion()
+        scene.frame_set(end)
+        bpy.context.view_layer.update()
+        end_location = marker.camera.matrix_world.translation.copy()
+        end_rotation = marker.camera.matrix_world.to_quaternion()
+        distance = (end_location - start_location).length
+        raw_angle = start_rotation.rotation_difference(end_rotation).angle
+        angle = min(raw_angle, math.tau-raw_angle)
+        camera_motion[marker.name] = {"travelMeters": distance,
+                                      "rotationRadians": angle}
 finally:
     scene.frame_set(original_frame, subframe=original_subframe)
     bpy.context.view_layer.update()
@@ -151,6 +223,13 @@ animated_detachable = [
 assert len(animated_detachable) >= 350, (
     "Expected at least 350 detachable objects with active transform animation; "
     f"found {len(animated_detachable)}"
+)
+assert all(count == len(detachable) for count in visible_counts.values()), (
+    f"Some craft pieces disappear instead of being reused: {visible_counts}"
+)
+assert all(motion["travelMeters"] > 3.0 and motion["rotationRadians"] > .08
+           for motion in camera_motion.values()), (
+    f"Every camera shot must move and turn visibly: {camera_motion}"
 )
 
 return_errors = []
@@ -188,13 +267,20 @@ summary = {
     "durationSeconds": duration_seconds,
     "fps": effective_fps,
     "sceneObjectCount": len(objects),
+    "uniqueCraftMeshProfiles": len(unique_profiles),
+    "cargoRoofVariants": len(roof_variants),
+    "serviceTrenchParts": service_trenches,
     "configurationComponentCounts": {
-        "COMBAT": combat_count,
-        "EXPLORER": len(explorer),
-        "HAULER": len(hauler),
+        "COMBAT": len(detachable),
+        "EXPLORER": len(detachable),
+        "HAULER": len(detachable),
     },
+    "specializedModuleCounts": {"EXPLORER": len(explorer), "HAULER": len(hauler)},
+    "visiblePartCounts": visible_counts,
+    "movingCameraShots": camera_motion,
     "animatedDetachableCount": len(animated_detachable),
     "packedGPTImageCount": len(packed_images),
+    "gltfOcclusionRoutes": occlusion_routes,
     "cameraMarkerCount": len(camera_markers),
     "distinctMarkerCameraCount": len(marker_cameras),
     "configurationBoundsDistance": configuration_distances,
