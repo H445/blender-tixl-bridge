@@ -24,6 +24,10 @@ Load only the reference required for the current task; follow conditional links 
 
 The official Blender MCP TCP extension owns Blender actions. If no named Blender tool is exposed, connect directly to the configured TCP endpoint with the repository's `BlenderTcpExtensionClient`; check the endpoint before treating MCP as unavailable. The TiXL debug client owns editor actions. Terminal/filesystem tools handle builds, logs and artifact inspection. After a mutation, read state back through the same API and inspect the affected output. Restore diagnostic state. Keep user-authored Home graphs and TimeClips separate from replaceable imports. Neither a successful request nor a non-empty screenshot proves a correct render.
 
+Launch or restart TiXL only through the configured bridge with full process permissions. On this host, invoke the bridge launcher with `sandbox_permissions="require_escalated"`; the restricted process environment can leave a headless TiXL process and show a `0xe0434352` application error before port 9042 opens. Read the configured Editor directory from Blender add-on preferences through MCP, pass it as `TIXL_BRIDGE_EDITOR` to `blend_sync.start_editor(debug=True)`, then require a successful `getVersion` on port 9042. Do not launch the editor from a default-sandbox command. Use the debug protocol for shutdown when a clean session is confirmed.
+
 For a configured TiXL installation, follow the automatic clean-session close and restart rule in `AGENTS.md` before a sync that changes saved graph paths. Do not request a routine manual close; the first-run username/root namespace remains a user choice.
+
+Keep graph backups outside every live TiXL `Symbols` directory. TiXL scans `.t3` files there; a backup with the same symbol ID can load as a duplicate and break graph resolution. After moving a duplicate out of `Symbols`, restart through the debug bridge before judging the loaded graph.
 
 Onboarding and release instructions are conditional; routine work does not require rereading either. Protocol/operator inventories are references, not startup reading.
