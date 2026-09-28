@@ -1,4 +1,9 @@
-# BlendShapeExample
+# Examples
+
+- [Asterion Breakaway](advanced_spaceship/README.md) — 60-second modular spacecraft demo with distinct combat, explorer, and hauler builds, TiXL renders, and playback evidence.
+- [BlendShapeExample](#blendshapeexample) — 16-second four-shape morph demo.
+
+## BlendShapeExample
 
 Open `BlendShapeExample.blend` in Blender and run **Scene Properties → TiXL Bridge →
 Sync saved .blend to TiXL** after configuring the add-on. Use the generated
