@@ -6,7 +6,7 @@
 
 | Source | Status | Evidence |
 | --- | --- | --- |
-| Bridge checkout | complete | add-on 0.4.0; source SHA-256 `314e1edf575e8c4c` |
+| Bridge checkout | complete | add-on 0.5.0; source SHA-256 `f29bc0930f3b6d86` |
 | Blender installation | complete | Blender 5.2.2 LTS via MCP runtime |
 | Blender runtime via MCP | complete | 5.2.2 LTS |
 | Blender MCP | complete | 1 tool; Blender MCP TCP extension 1.0.3 |
@@ -19,10 +19,10 @@ The automation keeps retrying unavailable live probes. A `missing` row means its
 
 ## Blender bridge runtime
 
-- Add-on: **Prismal Labs Blender → TiXL Bridge 0.4.0**
+- Add-on: **Prismal Labs Blender → TiXL Bridge 0.5.0**
 - Minimum Blender declared by add-on: **4.3.0**
-- Registered bridge operators: `tixl_bridge.refresh_agent_capabilities`, `tixl_bridge.sync_saved_blend`
-- Add-on properties discovered from source: `capability_repository`, `connection_mode`, `debug_port`, `editor_directory`, `operator_project`, `tixl_bridge_autosync`
+- Registered bridge operators: `tixl_bridge.check_release_update`, `tixl_bridge.install_release_update`, `tixl_bridge.refresh_agent_capabilities`, `tixl_bridge.sync_saved_blend`
+- Add-on properties discovered from source: `auto_update`, `capability_repository`, `connection_mode`, `debug_port`, `editor_directory`, `operator_project`, `tixl_bridge_autosync`
 
 Runtime probe:
 
@@ -31,7 +31,7 @@ Runtime probe:
   "addonEnabled": true,
   "addonVersion": [
     0,
-    4,
+    5,
     0
   ],
   "background": false,
@@ -49,6 +49,8 @@ Runtime probe:
     2
   ],
   "bridgeOperators": [
+    "check_release_update",
+    "install_release_update",
     "refresh_agent_capabilities",
     "sync_saved_blend"
   ],

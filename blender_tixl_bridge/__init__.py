@@ -3,7 +3,7 @@
 bl_info = {
     "name": "Prismal Labs Blender → TiXL Bridge",
     "author": "Prismal Labs",
-    "version": (0, 4, 0),
+    "version": (0, 5, 0),
     "blender": (4, 3, 0),
     "location": "Scene Properties > TiXL Bridge",
     "description": "Build TiXL geometry, animation, camera and graph from a saved .blend",
@@ -13,6 +13,7 @@ bl_info = {
 import os
 import subprocess
 import sys
+import threading
 import time
 import types
 import uuid
@@ -21,6 +22,8 @@ from pathlib import Path
 import bpy
 from .source.sync_metrics import RunMetrics, count, phase
 from .source.sync_queue import LatestRequestQueue, get_or_create_queue, normalize_pending_log_paths
+from .source.release_update import (fetch_latest_release, download_release,
+                                    validate_archive, install_package, RELEASE_WEB)
 from bpy.app.handlers import persistent
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
@@ -29,10 +32,105 @@ SYNC = ROOT / "source" / "blend_sync.py"
 CAPABILITY_SCRIPT = Path(".agents") / "capability_automation.py"
 _SYNC_QUEUE_KEY = "tixl_bridge.latest_request_queue.v1"
 _SYNC_RUNTIME_MODULE = "_tixl_bridge_sync_runtime_v1"
+_UPDATE = {"phase": "idle", "message": "Release check has not run", "release": None,
+           "thread": None, "result": None, "error": None, "request": None}
 
 
 def settings():
     return bpy.context.preferences.addons[__package__].preferences
+
+
+def _start_release_work(kind, release=None, *, automatic=False):
+    """Run one release request off the UI thread; never call Blender in it."""
+    if _UPDATE["thread"] is not None and _UPDATE["thread"].is_alive():
+        # A .blend load or add-on re-registration may have dropped the timer
+        # while its short-lived network worker kept running.
+        if not bpy.app.timers.is_registered(_poll_release_work):
+            bpy.app.timers.register(_poll_release_work, first_interval=0.25, persistent=True)
+        return False
+    _UPDATE.update(phase="checking" if kind == "check" else "downloading",
+                   message="Checking GitHub Releases…" if kind == "check" else "Downloading verified release…",
+                   result=None, error=None, request="auto" if automatic else "manual")
+
+    def work():
+        try:
+            if kind == "check":
+                _UPDATE["result"] = fetch_latest_release(bl_info["version"])
+            else:
+                data = download_release(release)
+                _UPDATE["result"] = validate_archive(data, release["version"], release["digest"])
+        except Exception as error:
+            _UPDATE["error"] = str(error)
+
+    _UPDATE["thread"] = threading.Thread(target=work, name="TiXL bridge release check", daemon=True)
+    _UPDATE["thread"].start()
+    if not bpy.app.timers.is_registered(_poll_release_work):
+        bpy.app.timers.register(_poll_release_work, first_interval=0.25, persistent=True)
+    return True
+
+
+def _poll_release_work():
+    thread = _UPDATE["thread"]
+    if thread is not None and thread.is_alive():
+        return 0.25
+    phase = _UPDATE["phase"]
+    error = _UPDATE["error"]
+    if error:
+        _UPDATE.update(phase="error", message=f"Release check failed: {error}", thread=None)
+    elif phase == "checking":
+        release = _UPDATE["result"]
+        _UPDATE.update(release=release, thread=None)
+        if release is None:
+            _UPDATE.update(phase="current", message="No newer published release")
+        else:
+            _UPDATE.update(phase="available", message=f"Version {release['tag'][1:]} is available")
+            if settings().auto_update:
+                _start_release_work("install", release, automatic=True)
+                return 0.25
+    elif phase == "downloading":
+        release = _UPDATE["release"]
+        if _UPDATE["request"] == "auto" and not settings().auto_update:
+            _UPDATE.update(phase="available", message="Auto-update disabled; release is available", thread=None)
+        else:
+            try:
+                installed_addons = Path(bpy.utils.user_resource("SCRIPTS", path="addons")).resolve()
+                if ROOT.resolve() != (installed_addons / "blender_tixl_bridge").resolve():
+                    raise ValueError("This add-on is loaded from a checkout; update the checkout manually")
+                install_package(_UPDATE["result"], ROOT)
+                _UPDATE.update(phase="restart", message=f"Version {release['tag'][1:]} installed; restart Blender to use it",
+                               thread=None)
+            except Exception as install_error:
+                _UPDATE.update(phase="error", message=f"Release install failed: {install_error}", thread=None)
+    return None
+
+
+def _check_release_after_register():
+    _start_release_work("check")
+    return None
+
+
+def _auto_update_changed(self, context):
+    try:
+        bpy.ops.wm.save_userpref()
+    except RuntimeError:
+        pass
+    if self.auto_update and _UPDATE["phase"] == "available" and _UPDATE["release"]:
+        _start_release_work("install", _UPDATE["release"], automatic=True)
+    elif self.auto_update and _UPDATE["phase"] in ("idle", "current", "error"):
+        _start_release_work("check")
+
+
+def _draw_release_controls(layout):
+    box = layout.box()
+    box.label(text=f"Bridge version {'.'.join(map(str, bl_info['version']))}")
+    box.prop(settings(), "auto_update")
+    row = box.row()
+    row.enabled = _UPDATE["phase"] not in ("checking", "downloading", "restart")
+    row.operator("tixl_bridge.check_release_update", text="Check for updates")
+    box.label(text=_UPDATE["message"][:120])
+    if _UPDATE["phase"] == "available" and _UPDATE["release"]:
+        box.operator("tixl_bridge.install_release_update",
+                     text=f"Update to {_UPDATE['release']['tag'][1:]}")
 
 
 def bundled_python():
@@ -248,6 +346,9 @@ class TIXLBRIDGE_preferences(bpy.types.AddonPreferences):
         description="Built TiXL Editor folder containing TiXL.exe")
     capability_repository: StringProperty(name="Agent capability repository", subtype="DIR_PATH",
         description="Bridge checkout containing .agents/capability_automation.py")
+    auto_update: BoolProperty(name="Auto-update published releases", default=False,
+        description="Install newer published GitHub Releases automatically; restart Blender to use the installed version",
+        update=_auto_update_changed)
 
     def draw(self, context):
         layout = self.layout
@@ -261,6 +362,8 @@ class TIXLBRIDGE_preferences(bpy.types.AddonPreferences):
         layout.prop(self, "capability_repository")
         layout.operator("tixl_bridge.refresh_agent_capabilities")
         layout.label(text="Refresh is automatic on add-on load and before sync.")
+        layout.separator()
+        _draw_release_controls(layout)
 
 
 class TIXLBRIDGE_OT_sync_now(bpy.types.Operator):
@@ -285,6 +388,34 @@ class TIXLBRIDGE_OT_refresh_capabilities(bpy.types.Operator):
         return {"FINISHED"} if ok else {"CANCELLED"}
 
 
+class TIXLBRIDGE_OT_check_release_update(bpy.types.Operator):
+    bl_idname = "tixl_bridge.check_release_update"
+    bl_label = "Check for updates"
+    bl_description = f"Check published bridge releases at {RELEASE_WEB}"
+
+    def execute(self, context):
+        started = _start_release_work("check")
+        self.report({"INFO"}, "Release check started" if started else "A release request is already running")
+        return {"FINISHED"}
+
+
+class TIXLBRIDGE_OT_install_release_update(bpy.types.Operator):
+    bl_idname = "tixl_bridge.install_release_update"
+    bl_label = "Update bridge add-on"
+    bl_description = "Download and install the selected published release; restart Blender afterward"
+
+    @classmethod
+    def poll(cls, context):
+        return _UPDATE["phase"] == "available" and _UPDATE["release"] is not None
+
+    def execute(self, context):
+        if not _start_release_work("install", _UPDATE["release"]):
+            self.report({"WARNING"}, "A release request is already running")
+            return {"CANCELLED"}
+        self.report({"INFO"}, "Release download started")
+        return {"FINISHED"}
+
+
 class TIXLBRIDGE_PT_scene(bpy.types.Panel):
     bl_label = "TiXL Bridge"
     bl_idname = "TIXLBRIDGE_PT_scene"
@@ -296,6 +427,7 @@ class TIXLBRIDGE_PT_scene(bpy.types.Panel):
         self.layout.prop(context.scene, "tixl_bridge_autosync", text="Sync after save")
         self.layout.operator("tixl_bridge.sync_saved_blend")
         self.layout.operator("tixl_bridge.refresh_agent_capabilities")
+        _draw_release_controls(self.layout)
         blend = bpy.data.filepath
         if blend:
             status = _sync_queue().snapshot(blend)
@@ -307,7 +439,8 @@ class TIXLBRIDGE_PT_scene(bpy.types.Panel):
 
 
 CLASSES = (TIXLBRIDGE_preferences, TIXLBRIDGE_OT_sync_now,
-           TIXLBRIDGE_OT_refresh_capabilities, TIXLBRIDGE_PT_scene)
+           TIXLBRIDGE_OT_refresh_capabilities, TIXLBRIDGE_OT_check_release_update,
+           TIXLBRIDGE_OT_install_release_update, TIXLBRIDGE_PT_scene)
 
 
 def register():
@@ -319,11 +452,17 @@ def register():
         bpy.app.handlers.save_post.append(on_save)
     if not bpy.app.background and not bpy.app.timers.is_registered(refresh_after_register):
         bpy.app.timers.register(refresh_after_register, first_interval=2.0)
+    if not bpy.app.background and not bpy.app.timers.is_registered(_check_release_after_register):
+        bpy.app.timers.register(_check_release_after_register, first_interval=3.0, persistent=True)
 
 
 def unregister():
     if bpy.app.timers.is_registered(refresh_after_register):
         bpy.app.timers.unregister(refresh_after_register)
+    if bpy.app.timers.is_registered(_check_release_after_register):
+        bpy.app.timers.unregister(_check_release_after_register)
+    if bpy.app.timers.is_registered(_poll_release_work):
+        bpy.app.timers.unregister(_poll_release_work)
     if on_save in bpy.app.handlers.save_post:
         bpy.app.handlers.save_post.remove(on_save)
     # Do not unregister the sync queue timer or terminate its child. The queue

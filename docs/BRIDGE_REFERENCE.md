@@ -96,6 +96,7 @@ The bridge installs eleven shared operators under `PrismalLabs.BlenderExport`:
 ## Package layout
 
 - `blender_tixl_bridge/__init__.py` — Blender add-on, preferences, save handler, and operators.
+- `blender_tixl_bridge/source/release_update.py` — stable GitHub Release validation, bounded ZIP download, archive checks, and rollback-aware file installation. The startup check is one-shot; no background watcher is installed. Downloads run off Blender's UI thread, installation runs on its main thread, and the new code loads after a normal Blender restart. Auto-update is opt-in and never updates a source checkout.
 - `blender_tixl_bridge/operators/` — reusable TiXL `.cs`, `.t3`, and `.t3ui` operators.
 - `blender_tixl_bridge/source/` — export, validation, graph generation, installation, and debug client.
 - `blender_tixl_bridge/templates/` — internal graph and layout templates; do not install them as a TiXL project.

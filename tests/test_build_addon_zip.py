@@ -14,9 +14,9 @@ from build_addon_zip import ROOT, addon_version, archive_name, build_archive, ve
 class BuildAddonZipTest(unittest.TestCase):
     def test_repository_version_controls_archive_name(self):
         version = addon_version()
-        self.assertEqual(version, (0, 4, 0))
-        self.assertEqual(version_text(version), "0.4.0")
-        self.assertEqual(archive_name(version), "blender-tixl-bridge-0.4.0.zip")
+        self.assertEqual(version, (0, 5, 0))
+        self.assertEqual(version_text(version), "0.5.0")
+        self.assertEqual(archive_name(version), "blender-tixl-bridge-0.5.0.zip")
 
     def test_invalid_version_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

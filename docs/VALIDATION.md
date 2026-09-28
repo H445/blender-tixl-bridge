@@ -310,3 +310,36 @@ See the [diagnostics guide](../.agents/skills/blender-tixl-bridge/references/dia
 for commands, evidence scope and failure interpretation. The tokenizer used for
 measurements is an optional evidence-generation dependency, not a runtime or CI
 dependency.
+
+## Published release updater
+
+The 0.5.0 add-on checks GitHub's latest stable published release once on startup
+and on request. It displays a versioned update button only when the release is
+newer and includes the exact matching ZIP asset. Auto-update is off by default;
+enabling it saves the preference and installs a newer release after the check.
+Neither path restarts Blender or changes an unsaved scene. A normal restart loads
+the installed code.
+
+Archive tests cover tag/asset matching, size and SHA-256 checks, embedded add-on
+version, unsafe paths, duplicate names, symbolic links, and rollback after an
+interrupted file replacement. The rebuilt 0.5.0 ZIP passed its own archive
+validator with 88 package files. Through Blender MCP, installation verified 58
+source package files, the add-on exposed both operators and the toggle, and the
+foreground untitled Camera/Cube/Light scene stayed intact. A fresh Blender
+process retained the existing TiXL project, editor path, debug mode/port, and
+the disabled default for auto-update. The one-shot capability refresh reported
+complete coverage. A synthetic future release exercised the real Blender
+auto-update state flow with a mocked installer; it reached the install path once
+without downloading a release or changing installed files, and the toggle was
+restored to off. A separate live Blender check removed the polling timer while
+a controlled release worker was running: the controller reattached the timer,
+kept one worker, and completed the check. The poll and startup timers persist
+across `.blend` loads so a scene change cannot leave the controls stuck.
+
+The release check observed no newer published version at validation time. The
+automated tests therefore cover the newer-release installation path; no newer
+remote release was installed as part of this validation. Current Blender
+preferences and Scene panel screenshots were captured through Blender MCP.
+TiXL graph screenshots were refreshed through the debug bridge with zero
+unresolved children/connections, and its project, selection, output pin, time,
+playback and graph view were restored afterward.

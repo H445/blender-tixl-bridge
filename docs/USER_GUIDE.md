@@ -43,7 +43,7 @@ In Blender:
 5. Set **TiXL Editor folder** to the directory containing `TiXL.exe`.
 6. Leave **TiXL connection** on **Auto** unless you deliberately need another mode.
 
-![Blender bridge add-on preferences showing TiXL paths, debug bridge settings, and capability refresh](screenshots/blender-preferences.png)
+![Blender bridge add-on preferences showing TiXL paths, debug bridge settings, capability refresh, and release update controls](screenshots/blender-preferences.png)
 
 ## Sync a scene
 
@@ -55,7 +55,7 @@ The `.blend` must be saved and must have either an active camera or camera-bound
 
 Repeated saves share one active sync per source file. While it runs, another save replaces the pending request with the latest saved revision. The Scene panel and `sync_logs/sync_status.json` report running, pending, completed, and error states. A failed job does not discard a newer pending save. Launch failures retry three times, then remain available for the next save or manual sync. Keep Blender open until pending work finishes.
 
-![Blender TiXL Bridge panel with save sync, on-demand sync, and capability refresh controls](screenshots/blender-plugin.png)
+![Blender TiXL Bridge panel with save sync, capability refresh, update check, and auto-update controls](screenshots/blender-plugin.png)
 
 The first sync installs the reusable operators, creates a TiXL project beside the operator project, and records its exact location in `.tixl_cache/<blend name>/tixl_project.json`. Later syncs replace generated imports while preserving the project home, TimeClips, editable mesh and texture routes, and render graph.
 
@@ -88,7 +88,28 @@ Camera timeline markers can control cuts independently. See the bundled [BlendSh
 
 Set the optional `tixl_project_name` Scene property when the generated project needs an exact name. It must be a valid C# identifier and unused on the first sync.
 
-## Update from a checkout
+## Update the add-on
+
+The add-on checks the latest published bridge release once when Blender starts.
+Open **Edit → Preferences → Add-ons → Prismal Labs Blender → TiXL Bridge** (or
+**Scene Properties → TiXL Bridge**) to see the result and click **Check for
+updates** again at any time. When a newer versioned ZIP is published, click
+**Update to …** to download and install it. Enable **Auto-update published
+releases** to install a newer release after the startup check; this is off by
+default. The preference is saved immediately. Restart Blender when the panel
+reports that installation finished. It never closes Blender or discards an
+unsaved scene for you.
+
+Updates come from the repository's published GitHub Releases, not untagged
+commits. A release must have the matching versioned add-on ZIP. The add-on
+checks the ZIP version and published size and verifies the published SHA-256
+digest when GitHub provides one. It preserves Blender preferences and files
+outside the packaged add-on. If Blender is running the add-on directly from a
+source checkout, use the checkout installer below instead; the release updater
+does not overwrite that checkout. Network or installation errors appear in the
+panel, and **Check for updates** can retry them.
+
+### Update from a checkout
 
 Close Blender, then run:
 
