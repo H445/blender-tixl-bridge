@@ -1041,6 +1041,18 @@ for role, objects in role_parts.items():
             pose(obj,frame,position,angle,scale)
         obj["projectile_travel_m"] = round(travel,3)
 
+import runpy
+noise_tools = runpy.run_path(str(ROOT / "apply_breakaway_rotation_noise.py"))
+noise_summary = noise_tools["apply_rotation_noise"](
+    (obj for obj in scene.objects if obj.get("asterion_part", False)),
+    noise_tools["ASTERION_WINDOWS"],
+)
+scene["breakup_rotation_noise"] = (
+    "Per-part seeded XYZ F-curve noise in three breakup windows; "
+    "smooth blend to each assembled ship"
+)
+print("ASTERION_ROTATION_NOISE", noise_summary)
+
 scene.frame_set(1)
 scene["detachable_mesh_count"] = len(parts)+sum(len(v) for v in role_parts.values())
 scene["reused_part_count"] = scene["detachable_mesh_count"]

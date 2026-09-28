@@ -11,6 +11,7 @@ import json
 import math
 import hashlib
 import re
+import runpy
 from pathlib import Path
 
 import bpy
@@ -333,6 +334,46 @@ for name, first, snap, hold, release in (
                          "driftMetersPerFrame": hold_speed,
                          "releaseMetersPerFrame": release_speed}
 
+noise_tools = runpy.run_path(str(ROOT / "apply_breakaway_rotation_noise.py"))
+noise_windows = noise_tools["ASTERION_WINDOWS"]
+noise_prefix = noise_tools["PREFIX"]
+noise_count = 0
+for obj in detachable:
+    curves = noise_tools["rotation_curves"](obj)
+    for axis in range(3):
+        modifiers = [modifier for modifier in curves[axis].modifiers
+                     if modifier.name.startswith(noise_prefix)]
+        assert len(modifiers) == len(noise_windows), (
+            f"{obj.name} rotation axis {axis} lacks breakup noise"
+        )
+        for modifier, (_, start, end) in zip(modifiers, noise_windows):
+            assert (modifier.type == "NOISE" and modifier.blend_type == "ADD"
+                    and modifier.use_restricted_range
+                    and modifier.frame_start == start and modifier.frame_end == end
+                    and modifier.blend_in > 0 and modifier.blend_out > 0), (
+                f"{obj.name} has a mistimed breakup rotation modifier"
+            )
+        noise_count += len(modifiers)
+
+noise_motion = {}
+try:
+    for name, start, _ in noise_windows:
+        scene.frame_set(start + 160)
+        first = {obj.name: obj.rotation_euler.to_quaternion().copy()
+                 for obj in detachable}
+        scene.frame_set(start + 310)
+        motion = [first[obj.name].rotation_difference(
+                  obj.rotation_euler.to_quaternion()).angle for obj in detachable]
+        moving = sum(angle > .08 for angle in motion)
+        assert moving >= len(detachable) * .8, (
+            f"{name} has static debris rotations: {moving}/{len(detachable)} moving"
+        )
+        noise_motion[name] = {"rotatingParts": moving,
+                              "meanRadians": sum(motion) / len(motion)}
+finally:
+    scene.frame_set(original_frame, subframe=original_subframe)
+    bpy.context.view_layer.update()
+
 return_errors = []
 for obj in detachable:
     start_pose = sampled_poses[1][obj.name]
@@ -384,6 +425,8 @@ summary = {
     "maxCameraRadiansPerFrame": max_camera_turn,
     "assembledOrbitRadians": assembled_orbits,
     "bulletTime": bullet_time,
+    "breakupRotationNoiseModifiers": noise_count,
+    "breakupRotationMotion": noise_motion,
     "animatedDetachableCount": len(animated_detachable),
     "packedTextureImageCount": len(packed_images),
     "gltfOcclusionRoutes": occlusion_routes,
