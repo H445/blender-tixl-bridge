@@ -9,4 +9,4 @@ While the project is alpha, use `0.x.y` versions. Increment the minor number for
 3. Commit and push the release changes.
 4. Create and push the matching tag, such as `v0.4.0` for add-on version `0.4.0`.
 
-The `Publish add-on release` GitHub Actions workflow verifies that the tag and add-on version match, creates the GitHub Release with generated notes, and uploads the versioned ZIP. A mismatched tag fails before anything is published.
+The `Publish add-on release` GitHub Actions workflow checks out Git LFS assets, verifies that the bundled example is a real Blender file, and confirms that the tag and add-on version match. It then creates the GitHub Release with generated notes and uploads the versioned ZIP. A missing LFS asset or mismatched tag fails before anything is published.

@@ -343,3 +343,13 @@ preferences and Scene panel screenshots were captured through Blender MCP.
 TiXL graph screenshots were refreshed through the debug bridge with zero
 unresolved children/connections, and its project, selection, output pin, time,
 playback and graph view were restored afterward.
+
+## 0.5.1 release package correction
+
+The 0.5.0 GitHub Release ZIP contained a Git LFS pointer instead of the bundled
+`BlendShapeExample.blend` file because the release job did not hydrate LFS.
+The 0.5.1 release job checks out LFS assets, and `build_addon_zip.py` rejects
+the pointer before it can publish a ZIP. The archive test covers that failure.
+The local 0.5.1 build includes the real compressed Blender example; the full
+217-test suite passes. Blender MCP verified the 0.5.1 add-on enabled with the
+same scene and saved bridge settings, then refreshed capability discovery.

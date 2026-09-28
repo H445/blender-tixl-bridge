@@ -37,9 +37,17 @@ def archive_name(version):
     return f"blender-tixl-bridge-{version_text(version)}.zip"
 
 
+def verify_blend_example(path):
+    with path.open("rb") as source:
+        header = source.read(7)
+        if header != b"BLENDER" and not header.startswith(b"\x28\xb5\x2f\xfd"):
+            raise ValueError(f"Bundled example is not a Blender file (check Git LFS): {path}")
+
+
 def build_archive(root=ROOT):
     package = root / "blender_tixl_bridge"
     version = addon_version(package / "__init__.py")
+    verify_blend_example(root / "examples" / "BlendShapeExample.blend")
     output = root / archive_name(version)
     with ZipFile(output, "w", ZIP_DEFLATED) as archive:
         for path in sorted(package.rglob("*")):

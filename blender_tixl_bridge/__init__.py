@@ -3,7 +3,7 @@
 bl_info = {
     "name": "Prismal Labs Blender → TiXL Bridge",
     "author": "Prismal Labs",
-    "version": (0, 5, 0),
+    "version": (0, 5, 1),
     "blender": (4, 3, 0),
     "location": "Scene Properties > TiXL Bridge",
     "description": "Build TiXL geometry, animation, camera and graph from a saved .blend",

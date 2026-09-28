@@ -14,9 +14,9 @@ from build_addon_zip import ROOT, addon_version, archive_name, build_archive, ve
 class BuildAddonZipTest(unittest.TestCase):
     def test_repository_version_controls_archive_name(self):
         version = addon_version()
-        self.assertEqual(version, (0, 5, 0))
-        self.assertEqual(version_text(version), "0.5.0")
-        self.assertEqual(archive_name(version), "blender-tixl-bridge-0.5.0.zip")
+        self.assertEqual(version, (0, 5, 1))
+        self.assertEqual(version_text(version), "0.5.1")
+        self.assertEqual(archive_name(version), "blender-tixl-bridge-0.5.1.zip")
 
     def test_invalid_version_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -35,7 +35,10 @@ class BuildAddonZipTest(unittest.TestCase):
             (example / "screenshots").mkdir(parents=True)
             for name in ("BlendShapeExample.blend", "README.md", "build_blend_shape_example.py",
                          "validate_blend_shape_example.py"):
-                (example / name).write_text("fixture\n", encoding="utf-8")
+                if name.endswith(".blend"):
+                    (example / name).write_bytes(b"BLENDER" + b"fixture")
+                else:
+                    (example / name).write_text("fixture\n", encoding="utf-8")
 
             files = [
                 "AGENTS.md", ".agents/CAPABILITIES.md", ".agents/CAPABILITIES_DETAIL.md",
@@ -89,6 +92,11 @@ class BuildAddonZipTest(unittest.TestCase):
                             continue
                         resolved = posixpath.normpath(posixpath.join(posixpath.dirname(entry), target))
                         self.assertIn(resolved, names, f"unresolved route link from {entry}: {target}")
+
+            (example / "BlendShapeExample.blend").write_text(
+                "version https://git-lfs.github.com/spec/v1\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "check Git LFS"):
+                build_archive(root)
 
 
 if __name__ == "__main__":
