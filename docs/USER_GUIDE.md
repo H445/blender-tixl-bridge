@@ -59,7 +59,7 @@ Repeated saves share one active sync per source file. While it runs, another sav
 
 The first sync installs the reusable operators, creates a TiXL project beside the operator project, and records its exact location in `.tixl_cache/<blend name>/tixl_project.json`. Later syncs replace generated imports while preserving the project home, TimeClips, editable mesh and texture routes, and render graph.
 
-Daily use is simply: work in Blender and save. A failed export retains the previous validated cache. When installation requires TiXL to be closed, sync reports a manual handoff: save your editor work, close TiXL yourself, and retry sync. The bridge never closes or forcibly terminates a running editor. It can launch TiXL after a successful installation when no editor was running.
+Daily use is simply: work in Blender and save. A failed export retains the previous validated cache. The plug-in alone defers installation when TiXL is open: save your editor work, close TiXL, and retry sync. In an agentic workspace, a configured agent can close a known-clean TiXL session through the debug bridge before syncing and let the bridge relaunch it, avoiding that routine handoff. The bridge itself never forcibly terminates a running editor.
 
 ## Connection modes
 
@@ -67,7 +67,7 @@ Daily use is simply: work in Blender and save. A failed export retains the previ
 | --- | --- | --- |
 | **Auto** | Most users | Uses the debug bridge when available and otherwise builds offline. |
 | **Offline** | Normal release builds without a control socket | Writes and builds the project directly. Select a new generated project once in TiXL. |
-| **Debug bridge** | Bridge and TiXL development | Refreshes unchanged graph data and code through the live protocol; graph structure changes require saving work, manually closing TiXL, and retrying sync. Activation checks the saved graph against loaded children and connections. |
+| **Debug bridge** | Bridge and TiXL development | Refreshes unchanged graph data and code through the live protocol; graph structure changes require preserving editor work and closing TiXL before retrying sync. A configured agent can handle a clean-session close. Activation checks the saved graph against loaded children and connections. |
 
 For live development, start TiXL with `--debug-server 9042`, or select **Debug bridge** and let the bridge launch it on the first build. The port is configurable. The server listens only on the local computer and is not required for normal release use.
 

@@ -49,3 +49,5 @@ Use the **plug-in-only workflow** when you mainly want to save Blender scenes an
 Use the **agentic workspace workflow** for installation or upgrades, repeated cross-application changes, complex scene and graph work, automated validation, or troubleshooting that needs evidence from both Blender and TiXL.
 
 The agentic workflow is optional. It does not replace either application, does not remove the need for the user's first-run choices, and must not use Computer Use or generic UI automation as a substitute for Blender MCP or the TiXL debug bridge.
+
+After the TiXL username/root namespace and operator project are configured, the agent should handle routine bridge restarts. If it launched TiXL and only inspected the graph, it can close that clean session through the debug bridge, sync, and let the bridge reopen the project. If graph edits may be unsaved, it asks for the save before closing; the current debug protocol cannot report unsaved state. The user should not have to close TiXL manually for each scene update.

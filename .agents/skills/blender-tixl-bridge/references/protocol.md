@@ -66,7 +66,7 @@ After `openProject`, `setTime`, `pin`, graph-view changes, or graph mutations, p
 
 For graph edits: capture `getGraphState`, make one logical mutation, pump frames, read `getGraphState` again, evaluate the affected output, and inspect `getLogTail`. If verification fails, use `undo` and confirm the rollback. Do not assume an in-memory edit has been persisted when there is no explicit save command; coordinate saving with the end user.
 
-`shutdown` exits TiXL and discards unsaved changes. Never call it without explicit user authorization and a confirmed save. `stallMainThread` is a test-only fault-injection command and must not be used in normal operation. `setAgentState(state="busy"|"ready", note=...)` may advertise agent activity in the editor; clear it when finished.
+`shutdown` exits TiXL and discards unsaved changes. The user authorizes it for configured sessions when no save is pending. Use it for an agent-launched, read-only session or after the user confirms any editor edits were saved; confirm the process exits before installing changed graph paths. `getContext` does not report unsaved edits. Do not call `shutdown` when save state is uncertain, and do not use the test-only `stallMainThread` in normal operation. `setAgentState(state="busy"|"ready", note=...)` may advertise agent activity in the editor; clear it when finished.
 
 ### TiXL bridge call patterns
 

@@ -154,7 +154,7 @@ The official Blender MCP extension needs no separate command configuration; its 
 
 ## 6. Perform the first sync with the end user
 
-1. Ask the user to save any open TiXL work. Pause TiXL playback before publishing changed cache files.
+1. For the first-run namespace/project choices, involve the user as described above. Once configured, use the clean-session shutdown workflow in `AGENTS.md` rather than requesting a routine manual close. If editor edits may be unsaved, ask the user to save those edits before closing through the debug bridge. Pause TiXL playback before publishing changed cache files.
 2. Open a saved `.blend` that has an active camera. The bundled `examples\BlendShapeExample.blend` is the preferred smoke test.
 3. In **Scene Properties → TiXL Bridge**, click **Sync saved .blend to TiXL**. Enable **Sync after save** only if the user wants continuing automatic syncs.
 4. Follow `<blend folder>\.tixl_cache\<blend name>\sync_logs\latest.log` until the background job finishes.
