@@ -14,6 +14,8 @@ from pathlib import Path
 
 
 MOON = "Tethys analogue | cratered moon"
+MESH_AMOUNT = 2.6
+IMAGE_DISPLACEMENT = 0.24
 NAMES = {
     "object": "Main / opaque select object",
     "mesh_select": "Main / opaque select mesh",
@@ -48,7 +50,22 @@ def configure(path: Path) -> None:
     mesh_name = "Moon | displace mesh noise"
     image_name = "Moon | displace albedo image"
     if mesh_name in children or image_name in children:
-        raise ValueError("Planet effects are already installed; preserve user edits")
+        if mesh_name not in children or image_name not in children:
+            raise ValueError("Only one planet effect is installed; preserve user edits")
+        settings = (
+            (children[mesh_name], "b7559321-2dbe-4fe0-ab86-52532d008980", 0.55, MESH_AMOUNT),
+            (children[image_name], "0f2867ab-a65e-4bf3-b1b5-9c241690ba5f", 0.018, IMAGE_DISPLACEMENT),
+        )
+        for child, slot, previous, current in settings:
+            values = [item for item in child["InputValues"] if item["Id"] == slot]
+            if len(values) != 1 or values[0]["Value"] not in (previous, current):
+                raise ValueError(f"{child['Name']} has user-edited settings")
+        for child, slot, _, current in settings:
+            next(item for item in child["InputValues"] if item["Id"] == slot)["Value"] = current
+        name_values[0]["Value"] = MOON
+        path.write_text(json.dumps(graph, indent=2)+"\n", encoding="utf-8")
+        print("ASTERION_PLANET_EFFECTS_TUNED " + MOON)
+        return
     mesh_id = str(uuid.uuid5(uuid.NAMESPACE_URL, graph["Id"] + "/moon-mesh-noise"))
     image_id = str(uuid.uuid5(uuid.NAMESPACE_URL, graph["Id"] + "/moon-image-displace"))
     mesh_direct = edge(chosen["mesh_select"]["Id"],
@@ -66,7 +83,7 @@ def configure(path: Path) -> None:
         {"Id": mesh_id, "SymbolId": "b5709297-c714-4019-9d0b-6982590b5590",
          "SymbolName": "Lib.mesh.modify.DisplaceMeshNoise", "Name": mesh_name,
          "InputValues": [
-             {"Id": "b7559321-2dbe-4fe0-ab86-52532d008980", "Type": "System.Single", "Value": 0.55},
+            {"Id": "b7559321-2dbe-4fe0-ab86-52532d008980", "Type": "System.Single", "Value": MESH_AMOUNT},
              {"Id": "4b1a66a4-b5e4-4bc3-97f5-bd3cda668893", "Type": "System.Single", "Value": 2.2},
              {"Id": "83cb775f-c600-41c9-9435-604f77a426bd", "Type": "System.Boolean", "Value": False},
              {"Id": "f108f6f7-5e6f-43c8-9d0b-c2e7bf5adf9c", "Type": "System.Int32", "Value": 1},
@@ -74,7 +91,7 @@ def configure(path: Path) -> None:
         {"Id": image_id, "SymbolId": "1b149f1f-529c-4418-ac9d-3871f24a9e38",
          "SymbolName": "Lib.image.fx.distort.Displace", "Name": image_name,
          "InputValues": [
-             {"Id": "0f2867ab-a65e-4bf3-b1b5-9c241690ba5f", "Type": "System.Single", "Value": 0.018},
+            {"Id": "0f2867ab-a65e-4bf3-b1b5-9c241690ba5f", "Type": "System.Single", "Value": IMAGE_DISPLACEMENT},
              {"Id": "6a5c120f-7c04-439b-ad2d-6f78ceb3b378", "Type": "System.Int32", "Value": 2},
          ], "Outputs": []},
     ])
