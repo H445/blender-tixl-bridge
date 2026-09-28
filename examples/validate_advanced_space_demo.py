@@ -138,13 +138,9 @@ assert occlusion_routes >= 5, "Packed ORM red channels are not routed to glTF oc
 
 markers = list(scene.timeline_markers)
 camera_markers = [marker for marker in markers if marker.camera is not None]
-marker_cameras = {marker.camera for marker in camera_markers}
-assert len(camera_markers) >= 5, (
-    f"Expected at least 5 camera-bound timeline markers, found {len(camera_markers)}"
-)
-assert len(marker_cameras) >= 3, (
-    f"Expected at least 3 distinct marker cameras, found {len(marker_cameras)}"
-)
+assert not camera_markers, "Camera-bound timeline markers would introduce cuts"
+assert scene.camera is not None, "The uninterrupted camera is missing"
+assert len(bpy.data.cameras) == 1, "The demo should use one physical camera"
 
 
 def local_pose(obj):
@@ -177,11 +173,16 @@ def configuration_bounds(candidates):
 
 original_frame = scene.frame_current
 original_subframe = scene.frame_subframe
-sample_frames = (1, 841, 1261, 1801, 2251, 2521, 3061, 3601)
+sample_frames = (1, 541, 580, 841, 900, 1041, 1261, 1801, 1840,
+                 2180, 2251, 2521, 3061, 3100, 3230, 3301, 3601)
 sampled_poses = {}
 sampled_bounds = {}
 visible_counts = {}
-camera_motion = {}
+camera_samples = {}
+camera_probe_frames = sorted(set(range(1, scene.frame_end+1, 30)) | {scene.frame_end} |
+                             {frame+offset for frame in (541, 580, 900, 1041,
+                              1801, 1840, 2180, 2251, 3061, 3100, 3230, 3301)
+                              for offset in (-1, 0, 1)})
 try:
     for frame in sample_frames:
         scene.frame_set(frame)
@@ -194,23 +195,11 @@ try:
             or obj.get("configuration_role") in {"EXPLORER", "HAULER"}
         ]
         sampled_bounds[frame] = configuration_bounds(config_objects)
-    ordered_markers = sorted(camera_markers, key=lambda marker: marker.frame)
-    for index, marker in enumerate(ordered_markers):
-        end = (ordered_markers[index + 1].frame - 1
-               if index + 1 < len(ordered_markers) else scene.frame_end)
-        scene.frame_set(marker.frame)
+    for frame in camera_probe_frames:
+        scene.frame_set(frame)
         bpy.context.view_layer.update()
-        start_location = marker.camera.matrix_world.translation.copy()
-        start_rotation = marker.camera.matrix_world.to_quaternion()
-        scene.frame_set(end)
-        bpy.context.view_layer.update()
-        end_location = marker.camera.matrix_world.translation.copy()
-        end_rotation = marker.camera.matrix_world.to_quaternion()
-        distance = (end_location - start_location).length
-        raw_angle = start_rotation.rotation_difference(end_rotation).angle
-        angle = min(raw_angle, math.tau-raw_angle)
-        camera_motion[marker.name] = {"travelMeters": distance,
-                                      "rotationRadians": angle}
+        camera_samples[frame] = (scene.camera.matrix_world.translation.copy(),
+                                 scene.camera.matrix_world.to_quaternion())
 finally:
     scene.frame_set(original_frame, subframe=original_subframe)
     bpy.context.view_layer.update()
@@ -231,10 +220,43 @@ assert len(animated_detachable) >= 350, (
 assert all(count == len(detachable) for count in visible_counts.values()), (
     f"Some craft pieces disappear instead of being reused: {visible_counts}"
 )
-assert all(motion["travelMeters"] > 3.0 and motion["rotationRadians"] > .08
-           for motion in camera_motion.values()), (
-    f"Every camera shot must move and turn visibly: {camera_motion}"
+camera_travel = sum((camera_samples[right][0]-camera_samples[left][0]).length
+                    for left, right in zip(camera_probe_frames, camera_probe_frames[1:]))
+max_camera_speed = max(
+    (camera_samples[right][0]-camera_samples[left][0]).length/(right-left)
+    for left, right in zip(camera_probe_frames, camera_probe_frames[1:]))
+max_camera_turn = max(
+    min((angle := camera_samples[left][1].rotation_difference(
+        camera_samples[right][1]).angle), math.tau-angle)/(right-left)
+    for left, right in zip(camera_probe_frames, camera_probe_frames[1:]))
+assert camera_travel > 100, f"The camera orbit is too static: {camera_travel} m"
+assert max_camera_speed < .4 and max_camera_turn < .02, (
+    f"The camera has a visible jump: {max_camera_speed} m/frame, "
+    f"{max_camera_turn} rad/frame"
 )
+
+
+def mean_motion(first, last):
+    return sum((sampled_poses[last][obj.name][0]
+                -sampled_poses[first][obj.name][0]).length
+               for obj in detachable)/len(detachable)/(last-first)
+
+
+bullet_time = {}
+for name, first, snap, hold, release in (
+        ("combat_to_explorer", 541, 580, 900, 1041),
+        ("explorer_to_hauler", 1801, 1840, 2180, 2251),
+        ("hauler_to_combat", 3061, 3100, 3230, 3301)):
+    snap_speed = mean_motion(first, snap)
+    hold_speed = mean_motion(snap, hold)
+    release_speed = mean_motion(hold, release)
+    assert hold_speed < snap_speed*.12 and hold_speed < release_speed*.12, (
+        f"{name} lacks a sustained bullet-time drift: "
+        f"{snap_speed}, {hold_speed}, {release_speed}"
+    )
+    bullet_time[name] = {"snapMetersPerFrame": snap_speed,
+                         "driftMetersPerFrame": hold_speed,
+                         "releaseMetersPerFrame": release_speed}
 
 return_errors = []
 for obj in detachable:
@@ -281,12 +303,15 @@ summary = {
     },
     "specializedModuleCounts": {"EXPLORER": len(explorer), "HAULER": len(hauler)},
     "visiblePartCounts": visible_counts,
-    "movingCameraShots": camera_motion,
+    "cameraTravelMeters": camera_travel,
+    "maxCameraMetersPerFrame": max_camera_speed,
+    "maxCameraRadiansPerFrame": max_camera_turn,
+    "bulletTime": bullet_time,
     "animatedDetachableCount": len(animated_detachable),
     "packedTextureImageCount": len(packed_images),
     "gltfOcclusionRoutes": occlusion_routes,
     "cameraMarkerCount": len(camera_markers),
-    "distinctMarkerCameraCount": len(marker_cameras),
+    "cameraObjectCount": len(bpy.data.cameras),
     "configurationBoundsDistance": configuration_distances,
     "returnedToRestCount": len(detachable),
     "restoredFrame": original_frame,

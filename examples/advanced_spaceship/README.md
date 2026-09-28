@@ -1,6 +1,6 @@
 # Asterion Breakaway demo
 
-A 60-second Blender-to-TiXL stress scene: one persistent set of 492 spacecraft meshes breaks into individually animated projectile parts and rebuilds as three distinct configurations. Every part is visible and reused in COMBAT, EXPLORER, and HAULER; no role modules are swapped in or hidden. The builder creates 600+ scene objects including the space environment, cameras, and lights.
+A 60-second Blender-to-TiXL stress scene: one persistent set of 492 spacecraft meshes breaks into individually animated projectile parts and rebuilds as three distinct configurations. Every part is visible and reused in COMBAT, EXPLORER, and HAULER; no role modules are swapped in or hidden. One camera follows the action in an uninterrupted orbital take.
 
 ## Materials and texture assets
 
@@ -23,7 +23,7 @@ Run `../build_advanced_space_demo.py` through the official Blender MCP TCP exten
 
 ## Timeline
 
-The scene is 60 seconds at 60 fps. Camera markers select seven moving dolly and orbit shots while keyed object transforms stage the sequence:
+The scene is 60 seconds at 60 fps. A single camera follows a continuous orbit with no camera markers or cuts. At each breakaway, the parts snap outward, drift almost motionless while the camera circles the suspended debris, then accelerate into the next configuration. Brief blue-white point-light flashes emphasize the three explosions. Keyed object transforms stage the sequence:
 
 | Time | Configuration or action |
 | --- | --- |
@@ -34,15 +34,15 @@ The scene is 60 seconds at 60 fps. Camera markers select seven moving dolly and 
 | 42–51 s | HAULER cargo configuration |
 | 51–60 s | Return to COMBAT and final assembly |
 
-The same hull, survey, and cargo meshes form all three ships. Each module has combat, explorer, hauler, and projectile poses, so the transition exercises hundreds of independent transform records without adding or removing craft parts. All 492 craft meshes have distinct manufactured profiles and individually offset texture wear. The hull and engine pieces have recessed service trenches; cargo pods have four roof machinery patterns. `../validate_advanced_space_demo.py`, run through Blender MCP TCP, checks the persistent pool, its visibility at representative frames, distinct mesh profiles, packed maps, and movement within every camera shot.
+The same hull, survey, and cargo meshes form all three ships. Each module has combat, explorer, hauler, and projectile poses, so the transition exercises hundreds of independent transform records without adding or removing craft parts. All 492 craft meshes have distinct manufactured profiles and individually offset texture wear. The hull and engine pieces have recessed service trenches; cargo pods have four roof machinery patterns. `../validate_advanced_space_demo.py`, run through Blender MCP TCP, checks the persistent pool, its visibility at representative frames, distinct mesh profiles, packed maps, camera continuity, and the slowed debris intervals.
 
 ## TiXL sync and verification
 
 With the saved scene open through Blender MCP TCP, sync it using the bridge workflow and the configured TiXL operator project. In TiXL, inspect the generated world graph and texture routes, then evaluate and capture renders at the COMBAT, breakup, EXPLORER, HAULER, and final assembly markers. Confirm the rendered output as well as graph connections.
 
-The current reference run synced successfully to TiXL 4.3.0.2. Its generated cache contains 642 exported mesh objects and 492 animated reusable craft parts, with no visibility-switch channels. The seven moving camera shots and 60-second range transferred. The generated graph had 29 children and 52 connections, with no missing child or connection references. The 16K panorama is embedded as an unmodified JPEG image in the glTF scene. The full sync took about 70 seconds and published about 198 MB of generated cache data. TiXL rendered all three configurations, both breakup sequences, reassembly, and the final combat ship; see the [TiXL combat](previews/tixl_combat.png), [explorer](previews/tixl_explorer.png), [hauler](previews/tixl_hauler.png), and [graph overview](previews/tixl_graph_overview.png). Compare the [explorer camera move](previews/tixl_explorer_move.png) and [hauler camera move](previews/tixl_hauler_move.png) with their earlier frames. Matching [Blender combat](previews/combat_blender.png), [explorer](previews/explorer_blender.png), [hauler](previews/hauler_blender.png), and [cargo roof detail](previews/detail_hauler_blender.png) renders are included.
+The current reference run synced successfully to TiXL 4.3.0.2. Its generated cache contains 492 animated reusable craft parts, with no visibility-switch channels. The single 60-second camera rail has 3,600 samples; its largest adjacent-frame move is 0.253 m and its largest forward-direction turn is 0.007 rad. The generated graph has 29 children and 52 connections, with no missing child or connection references. The 16K panorama remains embedded in the glTF scene. The sync took about 66 seconds and published about 199 MB of generated cache data. TiXL rendered all three configurations and each slowed breakup: [combat](previews/tixl_combat.png), [first snap](previews/tixl_bullet_snap.png), [first suspended drift](previews/tixl_bullet_drift.png), [explorer](previews/tixl_explorer.png), [second suspended drift](previews/tixl_bullet_hauler.png), [hauler](previews/tixl_hauler.png), [return drift](previews/tixl_bullet_return.png), and [final combat](previews/tixl_final.png). Matching Blender views show the [first snap](previews/bullet_time_snap_blender.png), [suspended drift](previews/bullet_time_drift_blender.png), and [hauler transition](previews/bullet_time_hauler_blender.png).
 
-The bounded live playback sample in [playback_metrics.json](playback_metrics.json) advanced the editor clock roughly three seconds in each assembled configuration. TiXL reported 56.0–60.4 FPS, 283–298 MB managed memory, and 921 MB GPU memory across those samples. The 16K sky texture accounts for a substantial increase in GPU use over the previous backdrop. Its output-evaluation counters did not advance during this sample, so these values do not establish continuous scene-rendering performance. The captured output at ten timeline checkpoints verifies the scene content and camera views separately.
+The earlier bounded playback sample in [playback_metrics.json](playback_metrics.json) predates this camera revision. The eight current output captures above verify the new camera views and breakup staging. TiXL's output-evaluation counters do not establish continuous scene-rendering performance; use workload-specific profiling for that question.
 
 ## Current limitations
 

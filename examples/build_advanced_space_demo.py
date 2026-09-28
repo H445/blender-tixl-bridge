@@ -723,73 +723,61 @@ for frame, energy in ((1,0),(2401,0),(2521,5600),(3061,5600),
     cargo_key.data.energy=energy
     cargo_key.data.keyframe_insert("energy",frame=frame)
 
-
-def camera(name, loc, target, focal):
-    data=bpy.data.cameras.new(name)
-    obj=bpy.data.objects.new(name,data)
-    rig.objects.link(obj)
-    obj.location=loc
-    obj.rotation_euler=(Vector(target)-obj.location).to_track_quat("-Z","Y").to_euler()
-    data.lens=focal
-    data.clip_end=500
-    return obj
+for burst_frame in (541, 1801, 3061):
+    flash = light(f"Breakaway flash | {burst_frame}", "POINT", (0, 0, 1),
+                  0, (0.57, 0.78, 1.0))
+    for frame, energy in ((1, 0), (burst_frame-1, 0),
+                          (burst_frame+4, 10500), (burst_frame+22, 1100),
+                          (burst_frame+65, 0), (LAST, 0)):
+        flash.data.energy = energy
+        flash.data.keyframe_insert("energy", frame=frame)
 
 
-cameras=[
-    camera("CAM A | three-quarter beauty",(22,-34,15),(0,-1,0),46),
-    camera("CAM B | overhead breakaway",(3,-22,38),(0,-1,0),34),
-    camera("CAM C | engines and debris",(-18,-23,4),(0,-2,0),40),
-    camera("CAM D | frontal reassembly",(2,32,13),(0,2.5,0),32),
-    camera("CAM E | illuminated cargo deck",(17,-20,18),(0,-1,1.4),37),
-]
-scene.camera=cameras[0]
-for frame, which, title in [(1,0,"COMBAT | compact strike ship"),
-                            (541,1,"Projectile breakup to EXPLORER"),
-                            (1261,3,"EXPLORER | survey array"),
-                            (1801,2,"Projectile breakup to HAULER"),
-                            (2521,4,"HAULER | cargo cradle"),
-                            (3061,2,"Return to COMBAT"),
-                            (3481,0,"COMBAT | final assembly")]:
-    marker=scene.timeline_markers.new(title,frame=frame)
-    marker.camera=cameras[which]
+camera_data = bpy.data.cameras.new("CAM | uninterrupted orbital take")
+camera_data.lens = 33
+camera_data.clip_end = 500
+camera_data.dof.use_dof = False  # deterministic TiXL camera approximation
+cinema_camera = bpy.data.objects.new(camera_data.name, camera_data)
+rig.objects.link(cinema_camera)
+scene.camera = cinema_camera
+previous_camera_rotation = None
 
 
-camera_rotations = {}
+def smootherstep(start, end, value):
+    amount = max(0.0, min(1.0, (value-start)/(end-start)))
+    return amount*amount*amount*(amount*(amount*6-15)+10)
 
 
-def camera_pose(cam, frame, location, target):
-    cam.location = location
-    rotation = (Vector(target)-cam.location).to_track_quat("-Z","Y").to_euler()
-    previous = camera_rotations.get(cam.name)
-    if previous is not None:
-        rotation.make_compatible(previous)
-    camera_rotations[cam.name] = rotation.copy()
-    cam.rotation_euler = rotation
-    cam.keyframe_insert("location", frame=frame)
-    cam.keyframe_insert("rotation_euler", frame=frame)
+def camera_pose(frame):
+    global previous_camera_rotation
+    seconds = (frame-1)/FPS
+    progress = seconds/60.0
+    # The base orbit never stops. Extra arc around each suspended debris field
+    # creates a bullet-time move without teleporting to another camera.
+    orbit = (-0.97 + math.tau*(0.80*progress
+             + 0.18*smootherstep(9.0, 17.0, seconds)
+             + 0.18*smootherstep(30.0, 40.0, seconds)
+             + 0.18*smootherstep(51.0, 57.0, seconds)))
+    radius = 36.0 + 3.5*math.sin(math.tau*progress+0.25)
+    height = 15.0 + 5.5*math.sin(math.tau*progress-0.4)
+    cinema_camera.location = (radius*math.cos(orbit),
+                              radius*math.sin(orbit), height)
+    target = Vector((0, -0.4 + 0.7*math.sin(math.tau*progress),
+                     0.5 + 0.4*math.sin(math.tau*progress-0.5)))
+    rotation = (target-cinema_camera.location).to_track_quat("-Z", "Y").to_euler()
+    if previous_camera_rotation is not None:
+        rotation.make_compatible(previous_camera_rotation)
+    previous_camera_rotation = rotation.copy()
+    cinema_camera.rotation_euler = rotation
+    cinema_camera.keyframe_insert("location", frame=frame)
+    cinema_camera.keyframe_insert("rotation_euler", frame=frame)
 
 
-# The bridge bakes the selected camera at 60 Hz. Each marker selects a moving
-# dolly/orbit shot rather than a static view for the duration of its clip.
-camera_shots = (
-    (0, ((1,(22,-34,15),(0,-1,0)), (260,(18,-29,17),(0,-1,0)),
-         (540,(12,-25,13),(0,-1,0)),
-         (3481,(28,-32,15),(0,-1,0)), (3601,(20,-28,12),(0,-1,0)))),
-    (1, ((541,(3,-22,38),(0,-1,0)), (900,(-7,-18,33),(0,1,0)),
-         (1260,(-13,-10,26),(0,2,0)))),
-    (2, ((1801,(-18,-23,5),(0,-2,0)), (2150,(-12,-27,13),(0,0,0)),
-         (2520,(-4,-24,20),(0,1,0)),
-         (3061,(-21,-20,8),(0,-1,0)), (3300,(-16,-9,13),(0,0,0)),
-         (3480,(-8,14,17),(0,1,0)))),
-    (3, ((1261,(2,32,13),(0,2.5,0)), (1500,(-8,30,10),(0,2,0)),
-         (1800,(-17,24,13),(0,1,0)))),
-    (4, ((2521,(17,-20,18),(0,-1,1.4)),
-         (2800,(7,-27,15),(0,-1,1.4)),
-         (3060,(-12,-27,17),(0,-1,1.4)))),
-)
-for camera_index, keys in camera_shots:
-    for frame, location, target in keys:
-        camera_pose(cameras[camera_index], frame, location, target)
+# Dense keys closely approximate the analytic continuous path in Blender and
+# in the bridge's 60 Hz camera bake. No timeline camera markers create cuts.
+for camera_frame in list(range(1, LAST, 12)) + [LAST]:
+    camera_pose(camera_frame)
+scene["camera_style"] = "single continuous orbital take; bullet-time debris orbits"
 
 
 def pose(obj, frame, position, angle, scale=(1,1,1)):
@@ -799,6 +787,13 @@ def pose(obj, frame, position, angle, scale=(1,1,1)):
     obj.keyframe_insert("location",frame=frame)
     obj.keyframe_insert("rotation_euler",frame=frame)
     obj.keyframe_insert("scale",frame=frame)
+
+
+def slowed_burst(frame, start, start_angle, start_scale,
+                 end, end_angle, end_scale, fraction):
+    return (frame, start.lerp(end, fraction),
+            start_angle.lerp(end_angle, fraction),
+            tuple(a+(b-a)*fraction for a,b in zip(start_scale,end_scale)))
 
 
 for idx,obj in enumerate(parts):
@@ -846,14 +841,25 @@ for idx,obj in enumerate(parts):
     # layouts. Key hold frames make the three role silhouettes unambiguous.
     trajectory=[(1,rest,(0,0,0),(1,1,1)),
                 (541,rest,(0,0,0),(1,1,1)),
-                (841,projectile,spin,(1,1,1)),
+                slowed_burst(580,rest,Vector((0,0,0)),(1,1,1),
+                             projectile,spin,(1,1,1),.30),
+                slowed_burst(900,rest,Vector((0,0,0)),(1,1,1),
+                             projectile,spin,(1,1,1),.35),
                 (1041,projectile+direction*2.0,spin*1.55,(1,1,1)),
                 (1261,explorer,explorer_angle,explorer_scale),
                 (1801,explorer,explorer_angle,explorer_scale),
+                slowed_burst(1840,explorer,explorer_angle,explorer_scale,
+                             projectile,spin,(1,1,1),.30),
+                slowed_burst(2180,explorer,explorer_angle,explorer_scale,
+                             projectile,spin,(1,1,1),.35),
                 (2251,projectile+direction*1.3,spin*.95,(1,1,1)),
                 (2461,projectile+direction*2.2,spin*1.5,(1,1,1)),
                 (2521,hauler,hauler_angle,hauler_scale),
                 (3061,hauler,hauler_angle,hauler_scale),
+                slowed_burst(3100,hauler,hauler_angle,hauler_scale,
+                             projectile,spin,(1,1,1),.30),
+                slowed_burst(3230,hauler,hauler_angle,hauler_scale,
+                             projectile,spin,(1,1,1),.35),
                 (3301,projectile,spin,(1,1,1)),
                 (LAST,rest,(0,0,0),(1,1,1))]
     for frame,position,angle,scale in trajectory:
@@ -950,23 +956,30 @@ for role, objects in role_parts.items():
         projectile=combat+direction*travel
         trajectory=((1,combat,combat_angle,combat_scale),
                     (541,combat,combat_angle,combat_scale),
-                    (841,projectile,spin,combat_scale),
+                    slowed_burst(580,combat,combat_angle,combat_scale,
+                                 projectile,spin,combat_scale,.30),
+                    slowed_burst(900,combat,combat_angle,combat_scale,
+                                 projectile,spin,combat_scale,.35),
                     (1041,projectile+direction*2,spin*1.55,combat_scale),
                     (1261,explorer,explorer_angle,explorer_scale),
                     (1801,explorer,explorer_angle,explorer_scale),
+                    slowed_burst(1840,explorer,explorer_angle,explorer_scale,
+                                 projectile,spin,combat_scale,.30),
+                    slowed_burst(2180,explorer,explorer_angle,explorer_scale,
+                                 projectile,spin,combat_scale,.35),
                     (2251,projectile+direction*1.3,spin*.95,combat_scale),
                     (2461,projectile+direction*2.2,spin*1.5,combat_scale),
                     (2521,hauler,hauler_angle,hauler_scale),
                     (3061,hauler,hauler_angle,hauler_scale),
+                    slowed_burst(3100,hauler,hauler_angle,hauler_scale,
+                                 projectile,spin,combat_scale,.30),
+                    slowed_burst(3230,hauler,hauler_angle,hauler_scale,
+                                 projectile,spin,combat_scale,.35),
                     (3301,projectile,spin,combat_scale),
                     (LAST,combat,combat_angle,combat_scale))
         for frame,position,angle,scale in trajectory:
             pose(obj,frame,position,angle,scale)
         obj["projectile_travel_m"] = round(travel,3)
-
-# The entire ship drifts and banks while geometry-based space remains fixed.
-for cam in cameras:
-    cam.data.dof.use_dof=False  # deterministic TiXL camera approximation
 
 scene.frame_set(1)
 scene["detachable_mesh_count"] = len(parts)+sum(len(v) for v in role_parts.values())
