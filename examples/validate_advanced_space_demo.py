@@ -33,8 +33,8 @@ duration_seconds = (scene.frame_end - scene.frame_start) / effective_fps
 assert math.isclose(effective_fps, 60.0, rel_tol=0.0, abs_tol=1e-9), (
     f"Expected 60 fps, found {effective_fps}"
 )
-assert math.isclose(duration_seconds, 60.0, rel_tol=0.0, abs_tol=1e-9), (
-    f"Expected exactly 60 seconds, found {duration_seconds} seconds"
+assert math.isclose(duration_seconds, 108.0, rel_tol=0.0, abs_tol=1e-9), (
+    f"Expected exactly 108 seconds, found {duration_seconds} seconds"
 )
 
 objects = list(scene.objects)
@@ -206,8 +206,22 @@ def assembly_components(candidates, clearance=.05):
 
 original_frame = scene.frame_current
 original_subframe = scene.frame_subframe
-sample_frames = (1, 541, 580, 841, 900, 1041, 1261, 1801, 1840,
-                 2180, 2251, 2521, 3061, 3100, 3230, 3301, 3601)
+time_anchors = ((1, 1), (541, 1441), (1261, 2161), (1801, 3601),
+                (2521, 4321), (3061, 5761), (3601, 6481))
+
+
+def retimed_frame(frame):
+    for (source_start, target_start), (source_end, target_end) in zip(
+            time_anchors, time_anchors[1:]):
+        if source_start <= frame <= source_end:
+            return round(target_start + (frame-source_start)
+                         *(target_end-target_start)/(source_end-source_start))
+    raise ValueError(frame)
+
+
+sample_frames = tuple(retimed_frame(frame) for frame in (
+    1, 541, 580, 841, 900, 1041, 1261, 1801, 1840,
+    2180, 2251, 2521, 3061, 3100, 3230, 3301, 3601))
 sampled_poses = {}
 sampled_bounds = {}
 visible_counts = {}
@@ -215,9 +229,10 @@ assembly_cluster_counts = {}
 assembly_outliers = {}
 camera_samples = {}
 camera_probe_frames = sorted(set(range(1, scene.frame_end+1, 30)) | {scene.frame_end} |
-                             {frame+offset for frame in (541, 580, 900, 1041,
+                             {retimed_frame(frame)+offset for frame in (541, 580, 900, 1041,
                               1801, 1840, 2180, 2251, 3061, 3100, 3230, 3301)
-                              for offset in (-1, 0, 1)})
+                              for offset in (-1, 0, 1)} |
+                             {1, 1441, 2161, 3601, 4321, 5761})
 try:
     for frame in sample_frames:
         scene.frame_set(frame)
@@ -230,7 +245,7 @@ try:
             or obj.get("configuration_role") in {"EXPLORER", "HAULER"}
         ]
         sampled_bounds[frame] = configuration_bounds(config_objects)
-        if frame in (1, 1261, 2521):
+        if frame in (1, retimed_frame(1261), retimed_frame(2521)):
             clusters = assembly_components(detachable)
             assembly_cluster_counts[frame] = len(clusters)
             assembly_outliers[frame] = [group[0] for group in clusters[1:]]
@@ -248,7 +263,8 @@ animated_detachable = [
     if obj.animation_data is not None
     and obj.animation_data.action is not None
     and any(
-        pose_differs(sampled_poses[frame][obj.name], sampled_poses[1][obj.name])
+        pose_differs(sampled_poses[retimed_frame(frame)][obj.name],
+                     sampled_poses[1][obj.name])
         for frame in (841, 1261, 2521)
     )
 ]
@@ -278,6 +294,22 @@ assert max_camera_speed < .4 and max_camera_turn < .02, (
 )
 
 
+def assembled_orbit(start, end):
+    frames = [frame for frame in camera_probe_frames if start <= frame <= end]
+    angles = [math.atan2(camera_samples[frame][0].y,
+                         camera_samples[frame][0].x) for frame in frames]
+    return sum(math.atan2(math.sin(right-left), math.cos(right-left))
+               for left, right in zip(angles, angles[1:]))
+
+
+assembled_orbits = {name: assembled_orbit(start, end) for name, start, end in (
+    ("COMBAT", 1, 1441), ("EXPLORER", 2161, 3601),
+    ("HAULER", 4321, 5761))}
+assert all(abs(abs(angle)-math.tau) < .05 for angle in assembled_orbits.values()), (
+    f"Each assembled ship needs a complete uninterrupted camera rotation: {assembled_orbits}"
+)
+
+
 def mean_motion(first, last):
     return sum((sampled_poses[last][obj.name][0]
                 -sampled_poses[first][obj.name][0]).length
@@ -289,6 +321,7 @@ for name, first, snap, hold, release in (
         ("combat_to_explorer", 541, 580, 900, 1041),
         ("explorer_to_hauler", 1801, 1840, 2180, 2251),
         ("hauler_to_combat", 3061, 3100, 3230, 3301)):
+    first, snap, hold, release = map(retimed_frame, (first, snap, hold, release))
     snap_speed = mean_motion(first, snap)
     hold_speed = mean_motion(snap, hold)
     release_speed = mean_motion(hold, release)
@@ -303,7 +336,7 @@ for name, first, snap, hold, release in (
 return_errors = []
 for obj in detachable:
     start_pose = sampled_poses[1][obj.name]
-    end_pose = sampled_poses[3601][obj.name]
+    end_pose = sampled_poses[retimed_frame(3601)][obj.name]
     if pose_differs(start_pose, end_pose):
         return_errors.append(obj.name)
 assert not return_errors, (
@@ -317,8 +350,8 @@ def bounds_distance(a, b):
 
 
 combat_bounds = sampled_bounds[1]
-explorer_bounds = sampled_bounds[1261]
-hauler_bounds = sampled_bounds[2521]
+explorer_bounds = sampled_bounds[retimed_frame(1261)]
+hauler_bounds = sampled_bounds[retimed_frame(2521)]
 configuration_distances = {
     "COMBAT_EXPLORER": bounds_distance(combat_bounds, explorer_bounds),
     "COMBAT_HAULER": bounds_distance(combat_bounds, hauler_bounds),
@@ -349,6 +382,7 @@ summary = {
     "cameraTravelMeters": camera_travel,
     "maxCameraMetersPerFrame": max_camera_speed,
     "maxCameraRadiansPerFrame": max_camera_turn,
+    "assembledOrbitRadians": assembled_orbits,
     "bulletTime": bullet_time,
     "animatedDetachableCount": len(animated_detachable),
     "packedTextureImageCount": len(packed_images),

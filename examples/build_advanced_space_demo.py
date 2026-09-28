@@ -1,4 +1,4 @@
-"""Build the 60-second Asterion spacecraft bridge stress test inside Blender MCP.
+"""Build the 108-second Asterion spacecraft bridge stress test inside Blender MCP.
 
 Run through the official Blender MCP TCP extension's execute_blender_code, for example
 with ``exec(compile(open(path, encoding='utf-8').read(), path, 'exec'),
@@ -35,7 +35,24 @@ missing_textures = [name for name in REQUIRED_TEXTURES if not (ASSETS / name).is
 if missing_textures:
     raise FileNotFoundError(f"Required PBR texture maps are missing: {missing_textures}")
 FPS = 60
-LAST = 3601  # exactly 60 seconds from frame 1 at 60 fps
+SOURCE_LAST = 3601
+SECONDS = 108
+LAST = SECONDS*FPS+1
+# Extend each assembled hold to 24 seconds for a complete unbroken orbit.
+# The 12-second breakaways retain their original bullet-time choreography.
+TIME_ANCHORS = ((1,1),(541,1441),(1261,2161),(1801,3601),
+                (2521,4321),(3061,5761),(SOURCE_LAST,LAST))
+
+
+def retimed_frame(frame):
+    for (source_start,target_start),(source_end,target_end) in zip(
+            TIME_ANCHORS,TIME_ANCHORS[1:]):
+        if source_start <= frame <= source_end:
+            return round(target_start+(frame-source_start)
+                         *(target_end-target_start)/(source_end-source_start))
+    raise ValueError(f"Frame {frame} lies outside the source choreography")
+
+
 RNG = random.Random(24021984)
 
 # Replace scene content without resetting preferences, extensions or the live
@@ -72,9 +89,9 @@ scene.render.engine = "BLENDER_EEVEE" if bpy.app.version >= (5, 0, 0) else "BLEN
 scene.render.image_settings.file_format = "PNG"
 scene.view_settings.view_transform = "AgX"
 scene["tixl_project_name"] = "AsterionBreakaway"
-scene["demo_duration_seconds"] = 60
-scene["demo_phases"] = "0-9 COMBAT; 9-21 projectile breakup to EXPLORER; 21-30 EXPLORER; 30-42 projectile breakup to HAULER; 42-51 HAULER; 51-60 return to COMBAT"
-scene["variant_hold_frames"] = "COMBAT 1-541; EXPLORER 1261-1801; HAULER 2521-3061"
+scene["demo_duration_seconds"] = SECONDS
+scene["demo_phases"] = "0-24 COMBAT orbit; 24-36 breakaway to EXPLORER; 36-60 EXPLORER orbit; 60-72 breakaway to HAULER; 72-96 HAULER orbit; 96-108 return to COMBAT"
+scene["variant_hold_frames"] = "COMBAT 1-1441; EXPLORER 2161-3601; HAULER 4321-5761"
 scene["texture_source"] = "GPT Images 2.5 surface maps; NASA/Goddard space panorama; see examples/advanced_spaceship/textures"
 
 world = bpy.data.worlds.new("Near-black interstellar ambient")
@@ -735,24 +752,27 @@ def light(name, kind, loc, energy, color, size=None):
     return obj
 
 
-light("Distant sun | broad cool key","AREA",(17,-14,28),4600,(.72,.84,1.0),18)
-light("Warm reflected moonlight","AREA",(-14,15,2),2500,(1.0,.48,.22),12)
-light("Engine cobalt bounce","POINT",(0,-7,-2),900,(.12,.40,1.0))
+light("Distant sun | broad cool key","AREA",(17,-14,28),11000,(.82,.90,1.0),18)
+light("Warm reflected moonlight","AREA",(-14,15,7),6500,(1.0,.72,.48),16)
+light("Port bounce | ceramic detail","AREA",(-20,-10,11),4800,(.58,.72,1.0),15)
+light("Starboard bounce | ceramic detail","AREA",(21,13,10),4800,(.72,.82,1.0),15)
+light("Ventral reflected light","AREA",(2,3,-15),3600,(.55,.68,1.0),18)
+light("Engine cobalt bounce","POINT",(0,-7,-2),1400,(.18,.45,1.0))
 cargo_key = light("Cargo deck | warm inspection fill","AREA",(7,-6,19),
                   0,(1.0,.78,.56),11)
 for frame, energy in ((1,0),(2401,0),(2521,5600),(3061,5600),
-                      (3181,0),(LAST,0)):
+                      (3181,0),(SOURCE_LAST,0)):
     cargo_key.data.energy=energy
-    cargo_key.data.keyframe_insert("energy",frame=frame)
+    cargo_key.data.keyframe_insert("energy",frame=retimed_frame(frame))
 
 for burst_frame in (541, 1801, 3061):
     flash = light(f"Breakaway flash | {burst_frame}", "POINT", (0, 0, 1),
                   0, (0.57, 0.78, 1.0))
     for frame, energy in ((1, 0), (burst_frame-1, 0),
                           (burst_frame+4, 10500), (burst_frame+22, 1100),
-                          (burst_frame+65, 0), (LAST, 0)):
+                          (burst_frame+65, 0), (SOURCE_LAST, 0)):
         flash.data.energy = energy
-        flash.data.keyframe_insert("energy", frame=frame)
+        flash.data.keyframe_insert("energy", frame=retimed_frame(frame))
 
 
 camera_data = bpy.data.cameras.new("CAM | uninterrupted orbital take")
@@ -773,13 +793,13 @@ def smootherstep(start, end, value):
 def camera_pose(frame):
     global previous_camera_rotation
     seconds = (frame-1)/FPS
-    progress = seconds/60.0
-    # The base orbit never stops. Extra arc around each suspended debris field
-    # creates a bullet-time move without teleporting to another camera.
-    orbit = (-0.97 + math.tau*(0.80*progress
-             + 0.18*smootherstep(9.0, 17.0, seconds)
-             + 0.18*smootherstep(30.0, 40.0, seconds)
-             + 0.18*smootherstep(51.0, 57.0, seconds)))
+    progress = seconds/SECONDS
+    # One complete azimuth revolution during each 24-second assembled hold.
+    # The base orbit never stops, and three smooth extra arcs circle debris.
+    orbit = (-0.97 + math.tau*(seconds/24.0
+             + 0.12*smootherstep(24.0, 36.0, seconds)
+             + 0.12*smootherstep(60.0, 72.0, seconds)
+             + 0.12*smootherstep(96.0, 108.0, seconds)))
     radius = 36.0 + 3.5*math.sin(math.tau*progress+0.25)
     height = 15.0 + 5.5*math.sin(math.tau*progress-0.4)
     cinema_camera.location = (radius*math.cos(orbit),
@@ -799,16 +819,17 @@ def camera_pose(frame):
 # in the bridge's 60 Hz camera bake. No timeline camera markers create cuts.
 for camera_frame in list(range(1, LAST, 12)) + [LAST]:
     camera_pose(camera_frame)
-scene["camera_style"] = "single continuous orbital take; bullet-time debris orbits"
+scene["camera_style"] = "single continuous take; full orbit of each assembled ship; bullet-time debris arcs"
 
 
 def pose(obj, frame, position, angle, scale=(1,1,1)):
     obj.location=position
     obj.rotation_euler=angle
     obj.scale=scale
-    obj.keyframe_insert("location",frame=frame)
-    obj.keyframe_insert("rotation_euler",frame=frame)
-    obj.keyframe_insert("scale",frame=frame)
+    output_frame=retimed_frame(frame)
+    obj.keyframe_insert("location",frame=output_frame)
+    obj.keyframe_insert("rotation_euler",frame=output_frame)
+    obj.keyframe_insert("scale",frame=output_frame)
 
 
 def slowed_burst(frame, start, start_angle, start_scale,
@@ -888,7 +909,7 @@ for idx,obj in enumerate(parts):
                 slowed_burst(3230,hauler,hauler_angle,hauler_scale,
                              projectile,spin,(1,1,1),.35),
                 (3301,projectile,spin,(1,1,1)),
-                (LAST,rest,(0,0,0),(1,1,1))]
+                (SOURCE_LAST,rest,(0,0,0),(1,1,1))]
     for frame,position,angle,scale in trajectory:
         pose(obj,frame,position,angle,scale)
     obj["projectile_travel_m"] = round(travel,3)
@@ -1015,7 +1036,7 @@ for role, objects in role_parts.items():
                     slowed_burst(3230,hauler,hauler_angle,hauler_scale,
                                  projectile,spin,combat_scale,.35),
                     (3301,projectile,spin,combat_scale),
-                    (LAST,combat,combat_angle,combat_scale))
+                    (SOURCE_LAST,combat,combat_angle,combat_scale))
         for frame,position,angle,scale in trajectory:
             pose(obj,frame,position,angle,scale)
         obj["projectile_travel_m"] = round(travel,3)
@@ -1028,5 +1049,5 @@ scene["static_space_object_count"] = len(space.objects)
 scene["asset_directory"] = "//advanced_spaceship/textures"
 bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT))
 print("ASTERION_BUILT",{"file":str(OUTPUT),"detachable_parts":scene["detachable_mesh_count"],
-                         "space_objects":len(space.objects),"seconds":60,
+                         "space_objects":len(space.objects),"seconds":SECONDS,
     "texture_files_found":len(REQUIRED_TEXTURES)})
