@@ -1,8 +1,8 @@
 {
   "FormatVersion": 3,
   "Id": "b62fce64-2efe-54ac-9d6f-3db2f83deed4",
-  "Description": "Find an imported Blender mesh by its object name or a unique part of that name. SelectedObject shows the resolved name; PrimitiveIndex only connects the internal mesh and texture ports.",
+  "Description": "Choose a mesh object from the connected Blender scene. The dropdown updates from that scene at evaluation time. SelectedObject shows the resolved name; PrimitiveIndex only connects the internal mesh and texture ports.",
   "InputUis": [
-    {"InputId":"9e4a2fb0-334e-5567-8f63-e9d1ac3260aa","GroupTitle":"Blender object","Description":"Type a Blender mesh name or a unique fragment such as moon. The node status reports the resolved object or ambiguous matches."}
+    {"InputId":"9e4a2fb0-334e-5567-8f63-e9d1ac3260aa","GroupTitle":"Blender object","Description":"Choose an imported mesh object from the connected scene. Render the scene once to populate the list.","Usage":"CustomDropdown"}
   ]
 }

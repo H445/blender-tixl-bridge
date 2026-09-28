@@ -88,7 +88,7 @@ The bridge installs twelve shared operators under `PrismalLabs.BlenderExport`:
 | `BlenderAnimationScene` | Applies transform, visibility, material, and morph animation to glTF scenes. |
 | `BlenderWorldPreload` | Warms every connected world before switching. |
 | `BlenderExportLights` | Samples and applies exported Blender lights. |
-| `BlenderObjectIndex` | Searches imported Blender mesh names by exact name or unique fragment, exposes the resolved `SelectedObject` name, and feeds an internal primitive index to the mesh and texture ports. |
+| `BlenderObjectIndex` | Populates a searchable object dropdown from the connected scene's imported Blender meshes. Objects with several exported primitives get one labeled choice per part. Saves the chosen label, exposes `SelectedObject`, and feeds an internal primitive index to the mesh and texture ports. Unique name fragments from older graphs still resolve. |
 | `BlenderMeshSelect` | Exposes one animated primitive's mesh buffers. |
 | `BlenderMeshReplace` | Replaces that primitive after TiXL mesh processing. |
 | `BlenderTextureSelect` | Exposes four material texture groups. |

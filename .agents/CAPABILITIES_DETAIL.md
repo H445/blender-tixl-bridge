@@ -6,20 +6,20 @@
 
 | Source | Status | Evidence |
 | --- | --- | --- |
-| Bridge checkout | complete | add-on 0.5.5; source SHA-256 `1818c4694c60c0ac` |
+| Bridge checkout | complete | add-on 0.5.6; source SHA-256 `967b510f8c17130d` |
 | Blender installation | complete | Blender 5.2.2 LTS via MCP runtime |
 | Blender runtime via MCP | complete | 5.2.2 LTS |
 | Blender MCP | complete | 1 tool; Blender MCP TCP extension 1.0.3 |
-| TiXL installation | unavailable | TiXL 4.3.0.2 |
+| TiXL installation | complete | TiXL 4.3.0.2 |
 | TiXL source | complete | matching `Editor/App/DebugProtocol/DebugServer.cs`; SHA-256 `1b3dae492cd919b4` |
 | TiXL debug bridge | complete | client `1fef203b064fecf4`; server `1b3dae492cd919b4` |
-| Live TiXL debug server | cached | last known {"editorVersion": "4.3.0.2", "protocolVersion": 1}; editor currently unavailable |
+| Live TiXL debug server | complete | {"capabilityDiscovery": "not supported by this protocol version", "port": 9042, "version": {"editorVersion": "4.3.0.2", "protocolVersion": 1}} |
 
 The automation keeps retrying unavailable live probes. A `missing` row means its component is not configured or discoverable and is not yet monitored.
 
 ## Blender bridge runtime
 
-- Add-on: **Prismal Labs Blender → TiXL Bridge 0.5.5**
+- Add-on: **Prismal Labs Blender → TiXL Bridge 0.5.6**
 - Minimum Blender declared by add-on: **4.3.0**
 - Registered bridge operators: `tixl_bridge.check_release_update`, `tixl_bridge.install_release_update`, `tixl_bridge.refresh_agent_capabilities`, `tixl_bridge.sync_saved_blend`
 - Add-on properties discovered from source: `auto_update`, `capability_repository`, `connection_mode`, `debug_port`, `editor_directory`, `operator_project`, `tixl_bridge_autosync`
@@ -117,7 +117,7 @@ Runtime probe:
 | `BlenderExportLights` | Preloads every Blender light manifest and keyed channel set on a paused initialization frame. WorldDirectory contains <scene>_manifest.json and optional <scene>_channels.json files. WorldIndex selects cached lights, TimeSeconds samples their animation, and EnergyScale calibrates Blender energy to TiXL point-light units. The operator forwards the incoming Command after pushing lights. |
 | `BlenderMeshReplace` | Replace one scene primitive with edited MeshBuffers. Keep PrimitiveIndex aligned with BlenderMeshSelect; all other animated primitives, transforms, and materials pass through. |
 | `BlenderMeshSelect` | Choose an animated primitive by zero-based index. The node status shows its name and total count. Route Mesh through TiXL mesh modifiers before BlenderMeshReplace. |
-| `BlenderObjectIndex` | Find an imported Blender mesh by its object name or a unique part of that name. SelectedObject shows the resolved name; PrimitiveIndex only connects the internal mesh and texture ports. |
+| `BlenderObjectIndex` | Choose a mesh object from the connected Blender scene. The dropdown updates from that scene at evaluation time. SelectedObject shows the resolved name; PrimitiveIndex only connects the internal mesh and texture ports. |
 | `BlenderSourceClip` | Editable Blender source TimeClip. Move or stretch it in the TiXL timeline; SourceRange stays in seconds of the Blender export. Its output feeds both the global timing sequence and the sequence for its Blender Animation Scene world. |
 | `BlenderTextureReplace` | Replace the selected primitive's four texture maps after TiXL image processing. Keep PrimitiveIndex aligned with BlenderTextureSelect; Blender PBR color and roughness values remain animated. |
 | `BlenderTextureSelect` | Tap the selected primitive's albedo, normal, roughness/metal/occlusion, and emissive textures. Insert TiXL image operators on these wires before BlenderTextureReplace. |
