@@ -22,9 +22,16 @@ public sealed class BlenderObjectIndex : Instance<BlenderObjectIndex>, IStatusPr
     [Output(Guid = "74cf55e0-7b98-5e5a-ae5d-f77a2f72079c", DirtyFlagTrigger = DirtyFlagTrigger.Animated)]
     public readonly Slot<int> PrimitiveIndex = new();
 
+    [Output(Guid = "428e7504-8fc6-4689-99d5-d9562d7020fb", DirtyFlagTrigger = DirtyFlagTrigger.Animated)]
+    public readonly Slot<string> SelectedObject = new();
+
     private string _status = "Enter a Blender object name";
 
-    public BlenderObjectIndex() => PrimitiveIndex.UpdateAction = Update;
+    public BlenderObjectIndex()
+    {
+        PrimitiveIndex.UpdateAction = Update;
+        SelectedObject.UpdateAction = Update;
+    }
 
     private void Update(EvaluationContext context)
     {
@@ -35,28 +42,34 @@ public sealed class BlenderObjectIndex : Instance<BlenderObjectIndex>, IStatusPr
             foreach (var root in scene.RootNodes)
                 CollectNames(root, names);
 
-        var index = -1;
+        var matches = new List<int>();
         if (requested.Length > 0)
         {
-            index = names.FindIndex(name => string.Equals(name, requested, StringComparison.OrdinalIgnoreCase));
-            if (index < 0)
+            for (var i = 0; i < names.Count; i++)
+                if (string.Equals(names[i], requested, StringComparison.OrdinalIgnoreCase))
+                    matches.Add(i);
+            if (matches.Count == 0)
             {
                 // glTF sometimes appends .001 to an otherwise unique Blender name.
-                var matches = new List<int>();
                 for (var i = 0; i < names.Count; i++)
                     if (names[i].StartsWith(requested + ".", StringComparison.OrdinalIgnoreCase)
                         && int.TryParse(names[i].Substring(requested.Length + 1), out _))
                         matches.Add(i);
-                if (matches.Count == 1)
-                    index = matches[0];
             }
+            if (matches.Count == 0)
+                for (var i = 0; i < names.Count; i++)
+                    if (names[i].Contains(requested, StringComparison.OrdinalIgnoreCase))
+                        matches.Add(i);
         }
+        var index = matches.Count == 1 ? matches[0] : -1;
         if (scene == null || index >= scene.Dispatches.Count)
             index = -1;
         PrimitiveIndex.Value = index;
-        _status = requested.Length == 0 ? "Enter a Blender object name"
-                : index < 0 ? $"No unique primitive named '{requested}'"
-                : $"Selected {names[index]} ({index + 1}/{names.Count})";
+        SelectedObject.Value = index >= 0 ? names[index] : string.Empty;
+        _status = requested.Length == 0 ? $"Search {names.Count} imported Blender meshes by name"
+                : matches.Count > 1 ? $"{matches.Count} matches for '{requested}': {string.Join(", ", matches.GetRange(0, Math.Min(4, matches.Count)).ConvertAll(i => names[i]))}"
+                : index < 0 ? $"No imported Blender mesh matches '{requested}'"
+                : $"Selected Blender object: {names[index]}";
     }
 
     private static void CollectNames(SceneSetup.SceneNode node, List<string> names)

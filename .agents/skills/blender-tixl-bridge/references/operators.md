@@ -11,7 +11,7 @@ The bridge installs twelve operators under `PrismalLabs.BlenderExport`. Agents s
 | `BlenderAnimationScene` | Applies transform, visibility, PBR/emission, and morph caches to matching glTF data at `TimeSeconds`; exposes opaque, transparent, and combined scenes. |
 | `BlenderWorldPreload` | Warms every connected world on the first paused render and then passes the active command. Keep all animation-scene results connected. |
 | `BlenderExportLights` | Preloads manifest/channel light data, chooses by world index, samples by time, and applies energy calibration. |
-| `BlenderObjectIndex` | Resolves a Blender object name to the current imported primitive index. Its status shows the match; empty or ambiguous names select nothing. Feed the same index to all four mesh and texture ports. |
+| `BlenderObjectIndex` | Searches imported Blender mesh names by exact name or unique fragment. `SelectedObject` and status show the resolved name; ambiguity lists candidates and selects nothing. `PrimitiveIndex` is an internal wire shared by all four mesh and texture ports. |
 | `BlenderMeshSelect` | Selects a zero-based primitive and exposes its mesh for native TiXL mesh processing. Its status reports name and count. |
 | `BlenderMeshReplace` | Replaces the selected primitive with edited mesh buffers while preserving other animated primitives. Match its `PrimitiveIndex` with `BlenderMeshSelect`. |
 | `BlenderTextureSelect` | Exposes albedo, normal, roughness/metal/occlusion, and emissive textures for a primitive. |
