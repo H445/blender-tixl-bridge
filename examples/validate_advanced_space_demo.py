@@ -95,8 +95,7 @@ for material in bpy.data.materials:
     if not material.use_nodes or material.node_tree is None:
         continue
     for node in material.node_tree.nodes:
-        if (node.type == "TEX_IMAGE" and node.image is not None
-                and node.label.startswith("GPT Images 2.5")):
+        if node.type == "TEX_IMAGE" and node.image is not None:
             texture_nodes.append((material, node))
 packed_images = {node.image for _, node in texture_nodes}
 required_maps = {
@@ -105,7 +104,7 @@ required_maps = {
     "heat_titanium.png", "copper_normal.png", "copper_orm.png",
     "solar_ceramic.png", "solar_normal.png", "solar_orm.png",
     "moon_albedo.png", "moon_normal.png", "moon_orm.png",
-    "space_nebula.png",
+    "nasa_starmap_16k.jpg",
 }
 used_map_names = {Path(bpy.path.basename(image.filepath)).name
                   for image in packed_images}
@@ -121,6 +120,11 @@ for image in packed_images:
         assert image.colorspace_settings.name == "Non-Color", (
             f"Technical map is not in non-color space: {image.name}"
         )
+sky_image = next(image for image in packed_images
+                 if Path(bpy.path.basename(image.filepath)).name == "nasa_starmap_16k.jpg")
+assert tuple(sky_image.size) == (16384, 8192), (
+    f"The sky panorama is not the full 16K source: {tuple(sky_image.size)}"
+)
 occlusion_routes = 0
 for material in bpy.data.materials:
     if material.use_nodes and material.node_tree:
@@ -279,7 +283,7 @@ summary = {
     "visiblePartCounts": visible_counts,
     "movingCameraShots": camera_motion,
     "animatedDetachableCount": len(animated_detachable),
-    "packedGPTImageCount": len(packed_images),
+    "packedTextureImageCount": len(packed_images),
     "gltfOcclusionRoutes": occlusion_routes,
     "cameraMarkerCount": len(camera_markers),
     "distinctMarkerCameraCount": len(marker_cameras),

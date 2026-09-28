@@ -29,7 +29,7 @@ REQUIRED_TEXTURES = (
     "heat_titanium.png", "copper_normal.png", "copper_orm.png",
     "solar_ceramic.png", "solar_normal.png", "solar_orm.png",
     "moon_albedo.png", "moon_normal.png", "moon_orm.png",
-    "space_nebula.png",
+    "nasa_starmap_16k.jpg",
 )
 missing_textures = [name for name in REQUIRED_TEXTURES if not (ASSETS / name).is_file()]
 if missing_textures:
@@ -75,7 +75,7 @@ scene["tixl_project_name"] = "AsterionBreakaway"
 scene["demo_duration_seconds"] = 60
 scene["demo_phases"] = "0-9 COMBAT; 9-21 projectile breakup to EXPLORER; 21-30 EXPLORER; 30-42 projectile breakup to HAULER; 42-51 HAULER; 51-60 return to COMBAT"
 scene["variant_hold_frames"] = "COMBAT 1-541; EXPLORER 1261-1801; HAULER 2521-3061"
-scene["texture_source"] = "GPT Images 2.5; see examples/advanced_spaceship/textures"
+scene["texture_source"] = "GPT Images 2.5 surface maps; NASA/Goddard space panorama; see examples/advanced_spaceship/textures"
 
 world = bpy.data.worlds.new("Near-black interstellar ambient")
 world.use_nodes = True
@@ -160,7 +160,7 @@ def pbr(name, color, metallic, roughness, *, albedo=None, orm=None, normal=None,
         links.new(tex.outputs["Color"], nmap.inputs["Color"])
         links.new(nmap.outputs["Normal"], bsdf.inputs["Normal"])
     if emission:
-        image_node(nodes, links, "GPT Images 2.5 emission", emission, "Emission Color", bsdf)
+        image_node(nodes, links, "Space panorama emission", emission, "Emission Color", bsdf)
         bsdf.inputs["Emission Strength"].default_value = max(emission_strength, 1.0)
     return mat
 
@@ -180,9 +180,9 @@ blue = pbr("05 | ion blue emitter", (0.04, 0.16, 0.28), 0.38, 0.22,
            emission_color=(0.045, 0.43, 0.95), emission_strength=7.0)
 amber = pbr("06 | warning amber emitter", (0.24, 0.10, 0.015), 0.25, 0.3,
             emission_color=(1.0, 0.29, 0.035), emission_strength=3.0)
-nebula = pbr("07 | distant ionized dust photograph", (0.008, 0.014, 0.025), 0, 1,
-             emission="space_nebula.png", emission_color=(0.13, 0.24, 0.4),
-             emission_strength=1.0)
+starfield = pbr("07 | NASA Goddard deep star map", (0, 0, 0), 0, 1,
+                emission="nasa_starmap_16k.jpg", emission_color=(1, 1, 1),
+                emission_strength=2.0)
 planet_mat = pbr("08 | cratered moon regolith", (0.32, 0.31, 0.30), 0.02, 0.91,
                  albedo="moon_albedo.png", orm="moon_orm.png",
                  normal="moon_normal.png")
@@ -685,7 +685,7 @@ for row in range(4):
 
 # A portable space environment: textured emissive geometry and real meshes,
 # since Blender's World shader is not represented by glTF/TiXL.
-backdrop = sky_sphere("DEEP SPACE | GPT Images 2.5 equirectangular sky", nebula, space)
+backdrop = sky_sphere("DEEP SPACE | NASA Goddard 16K star map", starfield, space)
 backdrop["fixed_background"] = True
 moon = sphere("Tethys analogue | cratered moon",(41,80,-14),17,planet_mat,space,80,40)
 moon.rotation_euler=(.31,.12,.45)
@@ -977,4 +977,4 @@ scene["asset_directory"] = "//advanced_spaceship/textures"
 bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT))
 print("ASTERION_BUILT",{"file":str(OUTPUT),"detachable_parts":scene["detachable_mesh_count"],
                          "space_objects":len(space.objects),"seconds":60,
-                         "texture_files_found":len(list(ASSETS.glob("*.png")))})
+    "texture_files_found":len(REQUIRED_TEXTURES)})

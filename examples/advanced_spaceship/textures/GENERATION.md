@@ -1,6 +1,6 @@
 # Asterion image texture provenance
 
-The six source images were generated with Codex's built-in image-generation tool for the GPT Images 2.5 request. The five surface albedos have aligned tangent-space normal maps and packed ORM maps derived with [`generate_pbr_maps.py`](../generate_pbr_maps.py) through Blender MCP TCP. ORM channels are red occlusion, green roughness, and blue metallic. These technical derivatives are inferred from the source images; they are not measured scans or separately AI-painted height maps. All 16 images are packed into `AsterionBreakaway.blend`. The space panorama supplies emission color only.
+The five surface albedos were generated with Codex's built-in image-generation tool for the GPT Images 2.5 request. They have aligned tangent-space normal maps and packed ORM maps derived with [`generate_pbr_maps.py`](../generate_pbr_maps.py) through Blender MCP TCP. ORM channels are red occlusion, green roughness, and blue metallic. These technical derivatives are inferred from the source images; they are not measured scans or separately AI-painted height maps. All 16 images are packed into `AsterionBreakaway.blend`. The NASA panorama supplies emission color only.
 
 | File | Dimensions | SHA-256 |
 | --- | --- | --- |
@@ -9,7 +9,10 @@ The six source images were generated with Codex's built-in image-generation tool
 | `heat_titanium.png` | 1254 × 1254 | `902b6a94094cce4c0d911686021e44eb1d6fd9f8c8fe04e50910ee86073141a7` |
 | `solar_ceramic.png` | 1254 × 1254 | `e56037dd6306c4111dbc9e12ac3183907aedf9b012e155fbad4e922ec74461bc` |
 | `moon_albedo.png` | 1254 × 1254 | `a82becf1903617cdb460f025e4ff12ef430a3c4d071bb88f6fa2a93bf779011d` |
-| `space_nebula.png` | 1774 × 887 | `0775002bc45084e460f120d237fb02e74c1ff2dfda035cb92d9c912949d12219` |
+
+## Open NASA star panorama
+
+`nasa_starmap_16k.jpg` is the unmodified 16,384 × 8,192 celestial-coordinate image from [NASA/Goddard Space Flight Center Scientific Visualization Studio, Deep Star Maps](https://svs.gsfc.nasa.gov/3895/). SHA-256: `4e6e4cc870f220cafa2534c3d3d86eeac509169ef7338223e9de8c354132eb37`. Credit: **NASA/Goddard Space Flight Center Scientific Visualization Studio**. NASA's [image and media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/) say its imagery and texture maps generally are not subject to U.S. copyright, ask for NASA source acknowledgment, and prohibit implying NASA endorsement. The star map was designed for spherical mapping and replaces the lower resolution generated nebula backdrop.
 
 ## Derived technical maps
 
@@ -28,4 +31,3 @@ The six source images were generated with Codex's built-in image-generation tool
 - **Heat titanium:** Square orthographic, repeatable close-up of heat-treated dark titanium with bronze and copper tint, machined grooves, micro scratches, ceramic scorching and oxidized wear; neutral illumination, no perspective, silhouette, text, logo, or border.
 - **Solar ceramic:** Square orthographic, repeating blue-black photovoltaic ceramic tiles with tiny regular cells, silver conductive traces, subtle wear, and high manufacturing precision; neutral illumination without baked reflections, perspective, text, logo, or border.
 - **Moon albedo:** Square orthographic regolith surface map with cold gray mineral grain, overlapping impact craters, radial ejecta, and subtle basalt; flat neutral illumination without a baked terminator, spherical silhouette, stars, text, or border.
-- **Space nebula:** Wide deep-space background for the inside of a UV-mapped sky sphere: dark interstellar negative space, sharp stars of varied temperatures, distant blue-violet nebula dust and faint amber emission; no spacecraft, planet, foreground, lens flare, text, or border.

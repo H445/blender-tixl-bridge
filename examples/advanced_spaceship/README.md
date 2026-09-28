@@ -4,7 +4,7 @@ A 60-second Blender-to-TiXL stress scene: one persistent set of 492 spacecraft m
 
 ## Materials and texture assets
 
-Six GPT-generated source images and ten aligned technical maps are supplied in `textures/`. The five surface families each have albedo, tangent normal, and packed occlusion/roughness/metallic maps. The space panorama is an emission texture.
+Five GPT-generated surface images and ten aligned technical maps are supplied in `textures/`. The five surface families each have albedo, tangent normal, and packed occlusion/roughness/metallic maps. The background uses NASA/Goddard's 16,384 × 8,192 equirectangular star map as an emission texture, replacing the 1,774 × 887 generated panorama.
 
 | File | Prompt theme |
 | --- | --- |
@@ -13,9 +13,9 @@ Six GPT-generated source images and ten aligned technical maps are supplied in `
 | `heat_titanium.png` | Heat-scarred copper titanium alloy for exposed structural parts |
 | `solar_ceramic.png` | Blue-black photovoltaic ceramic cells with silver traces |
 | `moon_albedo.png` | Gray cratered moon regolith with varied impact detail |
-| `space_nebula.png` | Deep space nebula panorama with distant luminous dust |
+| `nasa_starmap_16k.jpg` | NASA/Goddard Deep Star Maps spherical star panorama |
 
-The builder requires every map and packs it into the blend. The Blender glTF export includes base color, normal, metallic/roughness, and occlusion links for the five textured surface families. Uniform cockpit glazing and small light emitters use direct PBR values. The source prompts, map derivation method, and file hashes are recorded in [textures/GENERATION.md](textures/GENERATION.md).
+The builder requires every map and packs it into the blend. The Blender glTF export includes base color, normal, metallic/roughness, and occlusion links for the five textured surface families. Uniform cockpit glazing and small light emitters use direct PBR values. The surface prompts, map derivation method, NASA credit, usage terms, and file hashes are recorded in [textures/GENERATION.md](textures/GENERATION.md).
 
 ## Build in Blender
 
@@ -40,9 +40,9 @@ The same hull, survey, and cargo meshes form all three ships. Each module has co
 
 With the saved scene open through Blender MCP TCP, sync it using the bridge workflow and the configured TiXL operator project. In TiXL, inspect the generated world graph and texture routes, then evaluate and capture renders at the COMBAT, breakup, EXPLORER, HAULER, and final assembly markers. Confirm the rendered output as well as graph connections.
 
-The current reference run synced successfully to TiXL 4.3.0.2. Its generated cache contains 642 exported mesh objects and 492 animated reusable craft parts, with no visibility-switch channels. The seven moving camera shots and 60-second range transferred. The generated graph had 29 children and 52 connections, with no missing child or connection references. The full sync took about 58 seconds and published about 179 MB of generated cache data. TiXL rendered all three configurations, both breakup sequences, reassembly, and the final combat ship; see the [TiXL combat](previews/tixl_combat.png), [explorer](previews/tixl_explorer.png), [hauler](previews/tixl_hauler.png), and [graph overview](previews/tixl_graph_overview.png). Compare the [explorer camera move](previews/tixl_explorer_move.png) and [hauler camera move](previews/tixl_hauler_move.png) with their earlier frames. Matching [Blender combat](previews/combat_blender.png), [explorer](previews/explorer_blender.png), [hauler](previews/hauler_blender.png), and [cargo roof detail](previews/detail_hauler_blender.png) renders are included.
+The current reference run synced successfully to TiXL 4.3.0.2. Its generated cache contains 642 exported mesh objects and 492 animated reusable craft parts, with no visibility-switch channels. The seven moving camera shots and 60-second range transferred. The generated graph had 29 children and 52 connections, with no missing child or connection references. The 16K panorama is embedded as an unmodified JPEG image in the glTF scene. The full sync took about 70 seconds and published about 198 MB of generated cache data. TiXL rendered all three configurations, both breakup sequences, reassembly, and the final combat ship; see the [TiXL combat](previews/tixl_combat.png), [explorer](previews/tixl_explorer.png), [hauler](previews/tixl_hauler.png), and [graph overview](previews/tixl_graph_overview.png). Compare the [explorer camera move](previews/tixl_explorer_move.png) and [hauler camera move](previews/tixl_hauler_move.png) with their earlier frames. Matching [Blender combat](previews/combat_blender.png), [explorer](previews/explorer_blender.png), [hauler](previews/hauler_blender.png), and [cargo roof detail](previews/detail_hauler_blender.png) renders are included.
 
-The bounded live playback sample in [playback_metrics.json](playback_metrics.json) advanced the editor clock roughly three seconds in each assembled configuration. TiXL reported 58.9–60.2 FPS, 327–341 MB managed memory, and 247–323 MB GPU memory across those samples. Its output-evaluation counters did not advance during this sample, so these values do not establish continuous scene-rendering performance. The captured output at ten timeline checkpoints verifies the scene content and camera views separately.
+The bounded live playback sample in [playback_metrics.json](playback_metrics.json) advanced the editor clock roughly three seconds in each assembled configuration. TiXL reported 56.0–60.4 FPS, 283–298 MB managed memory, and 921 MB GPU memory across those samples. The 16K sky texture accounts for a substantial increase in GPU use over the previous backdrop. Its output-evaluation counters did not advance during this sample, so these values do not establish continuous scene-rendering performance. The captured output at ten timeline checkpoints verifies the scene content and camera views separately.
 
 ## Current limitations
 
