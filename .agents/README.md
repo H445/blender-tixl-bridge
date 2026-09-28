@@ -8,7 +8,7 @@ The bridge currently targets Windows. Blender is the authored source; TiXL proje
 
 Follow [repository rules](../AGENTS.md): Blender actions use MCP, TiXL actions use the debug client, and unsupported bootstrap steps require a manual user handoff. Never use UI automation. Inspect each mutation through its API.
 
-Use official sources. Explain downloads/install locations and obtain only approvals required by the active environment. Collect the first-run choices below; never invent the TiXL username or dismiss meaningful preferences blindly. Ask the user to save unrelated work before closing an editor. Use a dedicated TiXL-created operator project, with `Auto` as the normal connection mode.
+Use official sources. Explain downloads/install locations and obtain only approvals required by the active environment. Collect the first-run choices below; never invent the TiXL username or dismiss meaningful preferences blindly. Ask the user to save unrelated work before closing an editor. Use a dedicated TiXL-created operator project, with `Auto` as the normal connection mode. For Blender actions, connect to the official Blender MCP TCP extension at its configured host and port, normally `localhost:9876`. If no named Blender tool is exposed, use `.agents/capability_automation.py`'s `BlenderTcpExtensionClient` directly; verify a live response before concluding the extension is unavailable.
 
 Load the [operational router](skills/blender-tixl-bridge/SKILL.md) for task-specific recipes. After upgrades, load [release refresh](skills/blender-tixl-release-refresh/SKILL.md). Capability discovery belongs to the add-on's one-shot automation, with no scheduled task, watcher or background service; no manufactured probe inputs.
 

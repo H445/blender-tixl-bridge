@@ -22,6 +22,6 @@ Load only the reference required for the current task; follow conditional links 
 | Component upgrade / release evidence | [Release refresh](../blender-tixl-release-refresh/SKILL.md) |
 | Implementation/documentation disagreement | [Source map](references/sources.md); implementation is authoritative |
 
-Blender MCP owns Blender actions; the TiXL debug client owns editor actions. Terminal/filesystem tools handle builds, logs and artifact inspection. After a mutation, read state back through the same API and inspect the affected output. Restore diagnostic state. Keep user-authored Home graphs and TimeClips separate from replaceable imports. Neither a successful request nor a non-empty screenshot proves a correct render.
+The official Blender MCP TCP extension owns Blender actions. If no named Blender tool is exposed, connect directly to the configured TCP endpoint with the repository's `BlenderTcpExtensionClient`; check the endpoint before treating MCP as unavailable. The TiXL debug client owns editor actions. Terminal/filesystem tools handle builds, logs and artifact inspection. After a mutation, read state back through the same API and inspect the affected output. Restore diagnostic state. Keep user-authored Home graphs and TimeClips separate from replaceable imports. Neither a successful request nor a non-empty screenshot proves a correct render.
 
 Onboarding and release instructions are conditional; routine work does not require rereading either. Protocol/operator inventories are references, not startup reading.

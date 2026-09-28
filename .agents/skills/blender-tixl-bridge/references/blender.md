@@ -1,6 +1,6 @@
 ## Blender MCP capabilities
 
-Blender MCP servers use different tool names. Inspect the connected server's advertised tools at the start of a task and map them to these capabilities. Prefer a specific read or write tool when one exists; otherwise use the MCP tool that executes Python in Blender. Do not guess a tool name.
+Use the official Blender MCP TCP extension at its configured host and port (normally `localhost:9876`). Its `execute_blender_code` capability runs Python in Blender. If the agent runtime does not list a named Blender tool, connect directly through `BlenderTcpExtensionClient` in `.agents/capability_automation.py`; it speaks the extension's null-delimited TCP protocol. A missing named tool does not mean the extension is unavailable. Read the configured endpoint and confirm a live response before acting. Do not use Blender CLI, screen automation, or another transport for Blender operations.
 
 The required Blender-side capabilities are:
 
