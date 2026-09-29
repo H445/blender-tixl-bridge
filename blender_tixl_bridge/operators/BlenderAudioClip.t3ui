@@ -1,0 +1,17 @@
+{
+  "FormatVersion": 3,
+  "Id": "4812d48b-f74e-49dd-98f3-bd6b5b1df82e",
+  "Description": "A timeline-synced audio clip. Connect project time in seconds; each instance owns a separate WAV and volume. Seeks and the loop seam restart at the corresponding clip position. Route Result into BlenderAudioBus.",
+  "InputUis": [
+    {"InputId":"20f00480-4039-4cb7-8120-5994db9ee296","GroupTitle":"Clip","Usage":"FilePath"},
+    {"InputId":"8ed11bc3-e8c1-4b0e-8c6c-26e79fe5d11b","GroupTitle":"Timing"},
+    {"InputId":"8725b560-1ef8-4d87-9145-34e0547c80a9","GroupTitle":"Timing"},
+    {"InputId":"20249dd6-273f-49d9-976a-bf78b3970817","GroupTitle":"Mix","Min":0.0,"Max":1.0,"ClampMin":true,"ClampMax":true},
+    {"InputId":"f8b57e42-740c-450a-99c6-7aa62bc946f3","GroupTitle":"Timing"},
+    {"InputId":"bfb31e0c-9e50-487b-ae5b-c11640961173","GroupTitle":"Clip"}
+  ],
+  "OutputUis": [
+    {"OutputId":"3df7fdd0-00e0-4f5a-9e54-4d5a8fc00813"},
+    {"OutputId":"fa621ca0-8208-4616-bdc4-e763833cc85a"}
+  ]
+}

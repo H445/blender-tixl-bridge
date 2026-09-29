@@ -1,0 +1,11 @@
+{
+  "FormatVersion": 3,
+  "Id": "c54e249e-0a7f-41a5-aa62-31117f33d5df",
+  "Inputs": [
+    {"Id":"2786a789-4527-45a4-aeb8-581ee93a621e","DefaultValue":null},
+    {"Id":"3974a495-1229-46c8-a1c7-7969a10b670d","DefaultValue":1.0},
+    {"Id":"3252ab1d-73d6-4aae-8e27-6df4ff1b85ba","DefaultValue":false}
+  ],
+  "Children": [],
+  "Connections": []
+}

@@ -6,7 +6,7 @@
 
 | Source | Status | Evidence |
 | --- | --- | --- |
-| Bridge checkout | complete | add-on 0.5.6; source SHA-256 `967b510f8c17130d` |
+| Bridge checkout | complete | add-on 0.5.7; source SHA-256 `cb77a6dddc29b951` |
 | Blender installation | complete | Blender 5.2.2 LTS via MCP runtime |
 | Blender runtime via MCP | complete | 5.2.2 LTS |
 | Blender MCP | complete | 1 tool; Blender MCP TCP extension 1.0.3 |
@@ -19,7 +19,7 @@ The automation keeps retrying unavailable live probes. A `missing` row means its
 
 ## Blender bridge runtime
 
-- Add-on: **Prismal Labs Blender → TiXL Bridge 0.5.6**
+- Add-on: **Prismal Labs Blender → TiXL Bridge 0.5.7**
 - Minimum Blender declared by add-on: **4.3.0**
 - Registered bridge operators: `tixl_bridge.check_release_update`, `tixl_bridge.install_release_update`, `tixl_bridge.refresh_agent_capabilities`, `tixl_bridge.sync_saved_blend`
 - Add-on properties discovered from source: `auto_update`, `capability_repository`, `connection_mode`, `debug_port`, `editor_directory`, `operator_project`, `tixl_bridge_autosync`
@@ -32,7 +32,7 @@ Runtime probe:
   "addonVersion": [
     0,
     5,
-    6
+    7
   ],
   "background": false,
   "blenderMcpTcpExtension": {
@@ -112,6 +112,8 @@ Runtime probe:
 | Operator | Contract from current `.t3ui` |
 | --- | --- |
 | `BlenderAnimationScene` | Applies a Blender export cache to a loaded glTF scene. DataPath points to the TIXLANIM transform/channel cache and GlbPath points to the matching GLB. Evaluates transforms, visibility, animated PBR/emission channels, and mesh morph targets at TimeSeconds. Use OpaqueResult for depth-writing solids and TransparentResult for back-to-front alpha geometry; Result is the unpartitioned scene. Export caches must use the TIXLANIM binary contract and preserve source node names. |
+| `BlenderAudioBus` | Master bus for any number of timeline-synced Blender Audio Clips. Connect each clip's Result and the final visual command to Clips and Visuals, then route the bus Result to the render target. Master Volume and Mute affect only clips inside this bus. |
+| `BlenderAudioClip` | A timeline-synced audio clip. Connect project time in seconds; each instance owns a separate WAV and volume. Seeks and the loop seam restart at the corresponding clip position. Route Result into BlenderAudioBus. |
 | `BlenderCameraTimeline` | Reads the Blender camera rail and outputs interpolated pose, lens, clip planes, and source time. The project TimeClips drive OverrideTime for shared camera, geometry, material, light, and world timing. WorldStartSeconds selects the active Blender world from source time; ActiveWorld remains available as a fallback. |
 | `BlenderClipSequence` | Selects the active Blender Source Clip and exposes its mapped source time and HasActiveClip state. A positive Loop Duration wraps the full lane and its TimeClip source mapping; zero leaves timing unlooped. Set the same duration on global and world lanes to repeat a whole composition. Insert float operators after a world sequence to retime it independently. |
 | `BlenderExportLights` | Preloads every Blender light manifest and keyed channel set on a paused initialization frame. WorldDirectory contains <scene>_manifest.json and optional <scene>_channels.json files. WorldIndex selects cached lights, TimeSeconds samples their animation, and EnergyScale calibrates Blender energy to TiXL point-light units. The operator forwards the incoming Command after pushing lights. |

@@ -77,7 +77,7 @@ New homes use the grid and lane defaults in `blender_tixl_bridge/templates/home_
 
 ## Reusable TiXL operators
 
-The bridge installs twelve shared operators under `PrismalLabs.BlenderExport`:
+The bridge installs fourteen shared operators under `PrismalLabs.BlenderExport`:
 
 | Operator | Role |
 | --- | --- |
@@ -93,6 +93,8 @@ The bridge installs twelve shared operators under `PrismalLabs.BlenderExport`:
 | `BlenderMeshReplace` | Replaces that primitive after TiXL mesh processing. |
 | `BlenderTextureSelect` | Exposes four material texture groups. |
 | `BlenderTextureReplace` | Replaces processed material textures. |
+| `BlenderAudioClip` | Plays a separate audio file against connected project time in seconds, including seeks and loops. Editable path and level support music or sound effect tracks. |
+| `BlenderAudioBus` | Mixes connected clip commands with a master level/mute and passes the final visual command to the output target. |
 
 ## Package layout
 

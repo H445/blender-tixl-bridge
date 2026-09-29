@@ -2,6 +2,8 @@
 
 A 108-second Blender-to-TiXL looping rescue scene: a combat craft slaloms through asteroid fields on its way to the psychedelic Tethys moon, rebuilds as an explorer and hauler, warps to a distant copper storm giant, dodges ring debris, then returns through a final jump to its opening pose. One persistent set of 500 spacecraft meshes breaks into individually animated parts and rebuilds as three distinct configurations. Every part is visible and reused in COMBAT, EXPLORER, and HAULER. One camera follows the journey in a continuous take.
 
+The [audio package](audio/README.md) supplies an original 120 BPM cinematic score and three separate timeline-synced effects clips for propulsion, lunar scanning, and cargo recovery. Four editable TiXL AudioClips route through a shared AudioBus with clip and master levels.
+
 ## Materials and texture assets
 
 Five GPT-generated surface images and ten aligned technical maps are supplied in `textures/`. The copper giant adds three deterministic procedural maps made by `generate_ember_planet_maps.py`. All six surface families have albedo, tangent normal, and packed occlusion/roughness/metallic maps. The background uses NASA/Goddard's 16,384 × 8,192 equirectangular star map as an emission texture, replacing the 1,774 × 887 generated panorama.

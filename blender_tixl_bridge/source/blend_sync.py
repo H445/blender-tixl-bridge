@@ -370,7 +370,8 @@ def generic_finish(blend: Path, cache: Path, manifest: dict, install: bool, refr
     operator_files = sorted((ROOT / "operators").glob("Blender*.*"))
     for stem in ("BlenderAnimationScene", "BlenderCameraTimeline", "BlenderExportLights",
                  "BlenderWorldPreload", "BlenderWorldClipTime",
-                 "BlenderSourceClip", "BlenderClipSequence", "BlenderObjectIndex", "BlenderMeshSelect",
+                 "BlenderSourceClip", "BlenderClipSequence", "BlenderAudioClip", "BlenderAudioBus",
+                 "BlenderObjectIndex", "BlenderMeshSelect",
                  "BlenderMeshReplace", "BlenderTextureSelect", "BlenderTextureReplace"):
         if any(not (ROOT / "operators" / f"{stem}{suffix}").is_file()
                for suffix in (".cs", ".t3", ".t3ui")):

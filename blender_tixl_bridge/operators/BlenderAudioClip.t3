@@ -1,0 +1,14 @@
+{
+  "FormatVersion": 3,
+  "Id": "4812d48b-f74e-49dd-98f3-bd6b5b1df82e",
+  "Inputs": [
+    {"Id":"20f00480-4039-4cb7-8120-5994db9ee296","DefaultValue":""},
+    {"Id":"8ed11bc3-e8c1-4b0e-8c6c-26e79fe5d11b","DefaultValue":0.0},
+    {"Id":"8725b560-1ef8-4d87-9145-34e0547c80a9","DefaultValue":108.0},
+    {"Id":"20249dd6-273f-49d9-976a-bf78b3970817","DefaultValue":0.5},
+    {"Id":"f8b57e42-740c-450a-99c6-7aa62bc946f3","DefaultValue":true},
+    {"Id":"bfb31e0c-9e50-487b-ae5b-c11640961173","DefaultValue":true}
+  ],
+  "Children": [],
+  "Connections": []
+}
