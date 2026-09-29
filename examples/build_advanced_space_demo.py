@@ -835,7 +835,9 @@ for burst_frame in (541, 1801, 3061):
 
 camera_data = bpy.data.cameras.new("CAM | uninterrupted orbital take")
 camera_data.lens = 33
-camera_data.clip_end = 500
+# The camera travels far from the sky sphere's center. Its far side can be
+# over 500 units away, so a shorter clipping plane cuts a circular hole in it.
+camera_data.clip_end = 800
 camera_data.dof.use_dof = False  # deterministic TiXL camera approximation
 cinema_camera = bpy.data.objects.new(camera_data.name, camera_data)
 rig.objects.link(cinema_camera)
