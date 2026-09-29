@@ -178,6 +178,27 @@ try:
 finally:
     scene.frame_set(original_frame, subframe=original_subframe)
 assert len([obj for obj in objects if obj.name.startswith("WARP | ion trail")]) >= 24
+hud = bpy.data.collections.get("05 HUD | mission telemetry")
+assert hud is not None and len(hud.objects) == 38, (
+    "Mission chapter and core-status HUD is incomplete")
+assert all(obj.type == "MESH" and obj.parent == scene.camera
+           for obj in hud.objects), "HUD must export as camera-mounted mesh"
+old_frame, old_subframe = scene.frame_current, scene.frame_subframe
+try:
+    scene.frame_set(1)
+    start_scales = {obj.name: tuple(obj.scale) for obj in hud.objects}
+    assert bpy.data.objects["HUD | phase 01 title"].scale.x > .99
+    assert bpy.data.objects["HUD | core state 01"].scale.x > .99
+    scene.frame_set(83*60+1)
+    assert bpy.data.objects["HUD | phase 07 title"].scale.x > .99
+    assert bpy.data.objects["HUD | core state 05"].scale.x > .99
+    assert bpy.data.objects["HUD | phase 01 title"].scale.x < .01
+    scene.frame_set(scene.frame_end)
+    assert all(max(abs(obj.scale[i]-start_scales[obj.name][i])
+                   for i in range(3)) < .001 for obj in hud.objects), (
+        "HUD does not close at the project loop seam")
+finally:
+    scene.frame_set(old_frame, subframe=old_subframe)
 
 
 def local_pose(obj):

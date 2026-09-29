@@ -1122,6 +1122,9 @@ scene["asset_directory"] = "//advanced_spaceship/textures"
 story_path = ROOT / "add_asterion_story.py"
 exec(compile(story_path.read_text(encoding="utf-8"), str(story_path), "exec"),
      {"__file__": str(story_path)})
+hud_path = ROOT / "add_asterion_hud.py"
+exec(compile(hud_path.read_text(encoding="utf-8"), str(hud_path), "exec"),
+     {"__file__": str(hud_path)})
 bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT))
 print("ASTERION_BUILT",{"file":str(OUTPUT),"detachable_parts":scene["detachable_mesh_count"],
                          "space_objects":len(space.objects),"seconds":SECONDS,
