@@ -1,7 +1,7 @@
-"""Install Asterion's editable TiXL AudioClips and AudioBus with the editor closed.
+"""Install native TiXL AudioClip -> AudioBus -> Execute with the editor closed.
 
-The score and three effect clips follow composition seconds and feed one master
-AudioBus. The existing image graph and source TimeClips are preserved exactly.
+Four native AudioClip operators expose separate editable timeline lanes. Their
+AudioReferences feed one native AudioBus, evaluated by Execute with the image.
 """
 
 from __future__ import annotations
@@ -27,12 +27,15 @@ CLIPS = (
     ("scan", "asterion_fx_scan.wav", .64),
     ("cargo", "asterion_fx_cargo.wav", .62),
 )
-SCORE = "asterion_score_120bpm.wav"
-CLIP_SYMBOL = "4812d48b-f74e-49dd-98f3-bd6b5b1df82e"
-CLIP_OUTPUT = "80923455-7af0-49f5-acb0-ed2a1e9fb715"
-TIME_OUTPUT = "fd3049aa-4c22-405b-b9b4-0a2474d0e377"
-BUS_OUTPUT = "6c6b994d-5fba-4c04-94a4-95a20314caf5"
-BUS_COMMAND = "2786a789-4527-45a4-aeb8-581ee93a621e"
+CLIP_SYMBOL = "f0008b50-091d-4e9f-91eb-baa212acfa20"
+CLIP_OUTPUT = "4c9e7a20-3f81-4d5a-b6e2-1a2b3c4d5e6f"
+CLIP_TIME_OUTPUT = "5fb7a174-9ab2-4688-89a0-7fbcbf831dcf"
+BUS_SYMBOL = "b7e0d240-1e42-4c8a-9f31-0ab1cd2e0100"
+BUS_OUTPUT = "b7e0d240-0001-4c8a-9f31-0ab1cd2e0100"
+BUS_INPUT = "b7e0d240-0002-4c8a-9f31-0ab1cd2e0100"
+EXECUTE_SYMBOL = "936e4324-bea2-463a-b196-6064a2d8a6b2"
+EXECUTE_INPUT = "5d73ebe6-9aa0-471a-ae6b-3f5bfd5a0f9c"
+EXECUTE_OUTPUT = "e81c99ce-fcee-4e7c-a1c7-0aa3b352b7e1"
 TARGET_COMMAND = "4da253b7-4953-439a-b03f-1d515a78bddf"
 
 
@@ -60,16 +63,29 @@ def inspect_audio(path):
         assert wav.readframes(1) == bytes(4), f"Nonzero loop tail: {path}"
 
 
+def clip_output(name):
+    start, end, layer = {
+        "score": (0, 108, 1), "flight": (0, 108, 2),
+        "scan": (43, 59, 3), "cargo": (72, 84, 4),
+    }[name]
+    return {"Id": CLIP_TIME_OUTPUT,
+            "OutputData": {"Type": "T3.Core.Animation.TimeClip",
+                           "TimeClip": {
+                               "TimeRange": {"Start": start/2, "End": end/2},
+                               "SourceRange": {"Start": start, "End": end},
+                               "LayerIndex": layer, "SourceUnit": "Seconds"}}}
+
+
 def read_graph(path):
     return json.loads(re.sub(r'/\*.*?\*/', '',
                              path.read_text(encoding="utf-8"), flags=re.S))
 
 
-def install(graph, ui):
+def install(graph, ui, *, existing_scan=None):
     if graph["Id"] != GRAPH_ID or ui["Id"] != GRAPH_ID:
         raise ValueError("The selected graph is not AsterionBreakaway")
     names = {child.get("Name"): child for child in graph["Children"]}
-    if "Audio | 120 BPM project time" in names:
+    if any(name and name.startswith("Audio | ") for name in names):
         raise ValueError("Audio graph is already installed; preserve user edits")
     for name in ("Output fit", "Output target"):
         if name not in names:
@@ -103,37 +119,40 @@ def install(graph, ui):
                                      "Position": {"X": x, "Y": y}})
         return new
 
-    time = child("120 BPM project time", "b0d75f21-df33-460b-beab-d8c5e1f23e5e",
-                 "Lib.numbers.anim.time.Time", 21000, -1200,
-                 [value("6d2f783a-23b7-425c-a4e3-cfcdcd61cf3a", "System.Int32", 2),
-                  value("ba443b6a-487f-4739-94a3-915584ee2d46", "System.Int32", 1)])
-    bus = child("mission audio bus", "c54e249e-0a7f-41a5-aa62-31117f33d5df",
-                "PrismalLabs.BlenderExport.BlenderAudioBus", 21840, -80,
-                [value("3974a495-1229-46c8-a1c7-7969a10b670d",
+    bus = child("mission audio bus", BUS_SYMBOL, "Lib.io.audio.AudioBus",
+                21680, -520,
+                [value("b7e0d240-0003-4c8a-9f31-0ab1cd2e0100",
                        "System.Single", .86)])
+    execute = child("execute audio + image", EXECUTE_SYMBOL,
+                    "Lib.flow.Execute", 22000, -80, [])
     for index, (name, filename, volume) in enumerate(CLIPS):
-        clip = child(name + " clip", CLIP_SYMBOL,
-                     "PrismalLabs.BlenderExport.BlenderAudioClip",
-                     21420, -1280 + index*315,
-                     [value("20f00480-4039-4cb7-8120-5994db9ee296",
-                            "System.String", f"AsterionBreakaway:audio/{filename}"),
-                      value("8725b560-1ef8-4d87-9145-34e0547c80a9",
-                            "System.Single", 108.0),
-                      value("20249dd6-273f-49d9-976a-bf78b3970817",
-                            "System.Single", volume)])
-        graph["Connections"].append(link(time["Id"], TIME_OUTPUT,
-                                         clip["Id"],
-                                         "8ed11bc3-e8c1-4b0e-8c6c-26e79fe5d11b"))
+        inputs = [value("625951af-5f99-4171-b5b0-c97413121f56",
+                        "System.String", f"AsterionBreakaway:audio/{filename}"),
+                  value("06b8b927-ec47-4392-bb67-b9a140cc852b",
+                        "System.Single", volume)]
+        if name == "scan" and existing_scan is not None:
+            clip = existing_scan
+            clip.update(Name="Audio | scan clip", InputValues=inputs)
+            position = next(item for item in ui["SymbolChildUis"]
+                            if item["ChildId"] == clip["Id"])
+            position["Position"] = {"X": 21360, "Y": -1280 + index*290}
+        else:
+            clip = child(name + " clip", CLIP_SYMBOL, "Lib.io.audio.AudioClip",
+                         21360, -1280 + index*290, inputs)
+        clip["Outputs"] = [clip_output(name)]
         graph["Connections"].append(link(clip["Id"], CLIP_OUTPUT,
-                                         bus["Id"], BUS_COMMAND))
+                                         bus["Id"], BUS_INPUT))
     graph["Connections"].remove(direct)
     graph["Connections"].append(link(fit["Id"], direct["SourceSlotId"],
-                                     bus["Id"], BUS_COMMAND))
+                                     execute["Id"], EXECUTE_INPUT))
     graph["Connections"].append(link(bus["Id"], BUS_OUTPUT,
+                                     execute["Id"], EXECUTE_INPUT))
+    graph["Connections"].append(link(execute["Id"], EXECUTE_OUTPUT,
                                      target["Id"], TARGET_COMMAND))
     target_ui = next(item for item in ui["SymbolChildUis"]
                      if item["ChildId"] == target["Id"])
-    if target_ui["Position"] != {"X": 21420, "Y": 0}:
+    if target_ui["Position"] not in ({"X": 21420, "Y": 0},
+                                      {"X": 22260, "Y": 0}):
         raise ValueError("Output target moved since layout was planned")
     target_ui["Position"] = {"X": 22260, "Y": 0}
     return graph, ui

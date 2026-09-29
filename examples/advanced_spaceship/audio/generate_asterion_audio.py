@@ -252,17 +252,30 @@ def flight_fx():
 
 def scan_fx():
     out = np.zeros((COUNT, 2), np.float32)
-    for start, end, pan in ((43, 51, -.55), (49, 57, .55)):
-        place(out, start, sweep(end-start, 900, 130, .12), .24, pan)
-        for t in np.arange(start+.25, end, .75):
-            place(out, float(t), sweep(.32, 620, 1240, .16), .16, pan)
-    for t in (43, 47.6, 52.2):
-        place(out, t, sweep(4.5, 70, 230, .26), .16)
-    for t in np.arange(43, 59, .5):
-        place(out, float(t), note(frequency(84 if int(t*2)%4 else 88), .23,
-                                  "bell"), .033, -.45 if int(t*2)%2 else .45)
-    place(out, 57.6, sweep(1.6, 360, 920, .06), .21)
-    room(out, .33)
+    # Soft, wide magnetic sweeps replace the shrill repeating sonar chirps.
+    # The half-bar pulses are felt as a scan cycle without masking the score.
+    for start, length, pan in ((43, 7.5, -.55), (49, 8.5, .55)):
+        n = seconds(length)
+        t = np.arange(n, dtype=np.float32) / SAMPLE_RATE
+        u = t / length
+        contour = smooth(t / 1.3) * smooth((length-t) / 1.4)
+        shimmer = airy_noise(length, 150, 1900)
+        slow_pitch = 174 + 80 * smooth(u)
+        phase = 2*np.pi*np.cumsum(slow_pitch) / SAMPLE_RATE
+        beam = (.30*np.sin(phase) + .11*np.sin(1.998*phase)
+                + .13*shimmer) * contour
+        place(out, start, beam.astype(np.float32), .34, pan)
+    for i, t0 in enumerate(np.arange(44, 57.5, 1.5)):
+        n = seconds(.9)
+        t = np.arange(n, dtype=np.float32) / SAMPLE_RATE
+        hz = (293.66, 349.23, 392.0, 329.63)[i % 4]
+        ping = (np.sin(2*np.pi*hz*t) + .16*np.sin(2*np.pi*hz*2.01*t))
+        ping *= np.exp(-t*4.6) * envelope(.9, .016, .24)
+        place(out, float(t0), ping.astype(np.float32), .055,
+              -.42 if i % 2 else .42)
+    for t0 in (43.0, 49.0, 57.0):
+        place(out, t0, sweep(1.8, 88, 142, .05), .11)
+    room(out, .19)
     write("asterion_fx_scan.wav", out)
 
 
@@ -288,7 +301,12 @@ def cargo_fx():
 
 
 if __name__ == "__main__":
-    score()
-    flight_fx()
-    scan_fx()
-    cargo_fx()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--stem", choices=("all", "score", "flight", "scan", "cargo"),
+                        default="all")
+    stem = parser.parse_args().stem
+    for name, render in (("score", score), ("flight", flight_fx),
+                         ("scan", scan_fx), ("cargo", cargo_fx)):
+        if stem in ("all", name):
+            render()

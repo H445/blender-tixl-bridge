@@ -93,8 +93,8 @@ The bridge installs fourteen shared operators under `PrismalLabs.BlenderExport`:
 | `BlenderMeshReplace` | Replaces that primitive after TiXL mesh processing. |
 | `BlenderTextureSelect` | Exposes four material texture groups. |
 | `BlenderTextureReplace` | Replaces processed material textures. |
-| `BlenderAudioClip` | Plays a separate audio file against connected project time in seconds, including seeks and loops. Editable path and level support music or sound effect tracks. |
-| `BlenderAudioBus` | Mixes connected clip commands with a master level/mute and passes the final visual command to the output target. |
+| `BlenderAudioClip` | Legacy bridge audio playback operator. For visible, editable TiXL timeline clips, use native `Lib.io.audio.AudioClip`. |
+| `BlenderAudioBus` | Legacy command bus for bridge audio clips. For new projects, wire native `AudioClip.AudioReference` outputs into native `AudioBus.Input`, then route the bus `Result` and final image command through `Execute` to the output target. |
 
 ## Package layout
 

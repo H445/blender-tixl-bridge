@@ -16,8 +16,8 @@ The bridge installs fourteen operators under `PrismalLabs.BlenderExport`. Agents
 | `BlenderMeshReplace` | Replaces the selected primitive with edited mesh buffers while preserving other animated primitives. Match its `PrimitiveIndex` with `BlenderMeshSelect`. |
 | `BlenderTextureSelect` | Exposes albedo, normal, roughness/metal/occlusion, and emissive textures for a primitive. |
 | `BlenderTextureReplace` | Replaces those four maps after TiXL image processing. Match its `PrimitiveIndex` with `BlenderTextureSelect`. |
-| `BlenderAudioClip` | Plays one editable audio file at connected project time in seconds. It restarts on timeline seeks, loop wrap, and drift. Set `LengthSeconds` to the file duration, and route its `Result` into an audio bus evaluated by the composition output. |
-| `BlenderAudioBus` | Evaluates independent clip commands, applies one master volume or mute to the enclosed clips, and forwards any visual command through `Result`. Route the final image command into the same bus before the output target. |
+| `BlenderAudioClip` | Legacy graph playback operator. For new timeline audio, use TiXL's native `Lib.io.audio.AudioClip` instead; it creates a visible editable TimeClip and exposes `AudioReference`. |
+| `BlenderAudioBus` | Legacy command bus for bridge audio clips. For new timeline audio, use native `Lib.io.audio.AudioBus` and route its `Result` through `Lib.flow.Execute` with the final image command. |
 
 Preserve the default path:
 
@@ -30,8 +30,8 @@ Blender Source Clips
        ├─> Blender Texture Select ─> native image ops ─> Blender Texture Replace
        └─> Blender World Preload / drawing / lights ─> RenderTarget ─> tone mapping ─> Output target
 
-Project Time (seconds) ─> Blender Audio Clips ─> Blender Audio Bus ─> Output target
-                                         tone mapping ──────────────┘
+Native AudioClip TimeClips ─> AudioReference ─> native AudioBus ─┐
+Tone mapping ─────────────────────────────────────────────────────┴─> Execute ─> Output target
 ```
 
 Sync preserves the user-owned home graph, TimeClips, and supported editable routes while replacing generated import data. Keep generated imports separate from user edits. If Blender adds or removes worlds, update the corresponding user-owned scene branches deliberately.
