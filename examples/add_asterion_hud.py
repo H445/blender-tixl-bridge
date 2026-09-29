@@ -5,7 +5,10 @@ mesh so the standard Blender-to-TiXL export carries it without custom nodes.
 The overlay has the same pose at 0 and 108 seconds for the project loop.
 """
 
+import math
+
 import bpy
+from mathutils import Vector
 
 
 scene = bpy.context.scene
@@ -75,15 +78,23 @@ def rectangle(name, x, y, width, height, material, depth=-2.005):
     return obj
 
 
+def animation_curves(obj):
+    action = obj.animation_data.action if obj.animation_data else None
+    if action is None:
+        return []
+    if hasattr(action, "fcurves"):
+        return list(action.fcurves)
+    return [curve for layer in action.layers for strip in layer.strips
+            for bag in strip.channelbags for curve in bag.fcurves]
+
+
 def key_scale(obj, keys):
     for second, value in keys:
         obj.scale = (value, value, value)
         obj.keyframe_insert("scale", frame=round(second*60)+1)
-    action = obj.animation_data.action
-    if hasattr(action, "fcurves"):
-        for curve in action.fcurves:
-            for point in curve.keyframe_points:
-                point.interpolation = "BEZIER"
+    for curve in animation_curves(obj):
+        for point in curve.keyframe_points:
+            point.interpolation = "BEZIER"
 
 
 def interval_keys(start, end):
@@ -165,10 +176,123 @@ for index, (start, end, label, material) in enumerate(statuses):
                     .030, material, right=True)
     key_scale(obj, keys)
 
+
+# Numeric telemetry is built from seven-segment mesh digits. Each segment has
+# a shared animation channel per visible state, so the standard glTF/TiXL
+# route carries live values without a scene-specific TiXL text operator.
+SEGMENTS = {
+    "0": "abcdef", "1": "bc", "2": "abdeg", "3": "abcdg",
+    "4": "bcfg", "5": "acdfg", "6": "acdefg", "7": "abc",
+    "8": "abcdefg", "9": "abcdfg",
+}
+
+
+def smooth01(value):
+    u = min(1.0, max(0.0, value))
+    return u*u*u*(u*(u*6-15)+10)
+
+
+def metric_samples():
+    rig = bpy.data.objects["ASTERION | flight rig"]
+    core = bpy.data.objects["SIGNAL | recovered moon core"]
+    previous = scene.frame_current
+    samples = []
+    for frame in range(1, scene.frame_end+1, 30):
+        second = (frame-1)/60
+        scene.frame_set(frame)
+        bpy.context.view_layer.update()
+        heading = round(math.degrees(rig.rotation_euler.z)) % 360
+        roll = round(math.degrees(rig.rotation_euler.y)) % 360
+        sensor = rig.matrix_world @ Vector((0, 3, 1.2))
+        distance = min(999, round((core.matrix_world.translation-sensor).length))
+        before = max(1, frame-3)
+        after = min(scene.frame_end, frame+3)
+        scene.frame_set(before)
+        first = rig.matrix_world.translation.copy()
+        scene.frame_set(after)
+        last = rig.matrix_world.translation.copy()
+        speed = min(999, round((last-first).length*60/(after-before)))
+        reset = 1-smooth01((second-103)/5)
+        scan = round(100*smooth01((second-43)/15)*reset)
+        cargo = round(100*smooth01((second-73)/9)*reset)
+        samples.append((frame, {"speed": speed, "heading": heading,
+                                "roll": roll, "range": distance,
+                                "scan": scan, "cargo": cargo}))
+    samples[-1] = (scene.frame_end, samples[0][1].copy())
+    scene.frame_set(previous)
+    return samples
+
+
+telemetry = metric_samples()
+
+
+def seven_segment_readout(name, x, y, material, metric):
+    width, height, line, advance = .025, .044, .0034, .033
+    geometry = {
+        "a": (line, height-line, width-2*line, line),
+        "b": (width-line, height/2, line, height/2-line),
+        "c": (width-line, line, line, height/2-line),
+        "d": (line, 0, width-2*line, line),
+        "e": (0, line, line, height/2-line),
+        "f": (0, height/2, line, height/2-line),
+        "g": (line, height/2-line/2, width-2*line, line),
+    }
+    objects = {}
+    for digit in range(3):
+        for segment, (dx, dy, w, h) in geometry.items():
+            obj = rectangle(f"HUD | {name} digit {digit} segment {segment}",
+                            x+digit*advance+dx, y+dy, w, h, material,
+                            depth=-1.997)
+            obj["hud_metric"] = metric
+            objects[digit, segment] = obj
+    last_states = {}
+    for frame, values in telemetry:
+        display = f"{values[metric]:03d}"
+        for digit, character in enumerate(display):
+            for segment in geometry:
+                state = segment in SEGMENTS[character]
+                key = digit, segment
+                if last_states.get(key) == state and frame != scene.frame_end:
+                    continue
+                obj = objects[key]
+                obj.scale = (1.0,)*3 if state else (0.0,)*3
+                obj.keyframe_insert("scale", frame=frame)
+                last_states[key] = state
+    for obj in objects.values():
+        for curve in animation_curves(obj):
+            for point in curve.keyframe_points:
+                point.interpolation = "CONSTANT"
+
+
+for label, metric, x, y, digits_x, material, unit in (
+    ("SPD", "speed", -.96, .354, -.80, cyan, "M/S"),
+    ("HDG", "heading", -.96, .305, -.80, white, "DEG"),
+    ("ROLL", "roll", -.96, .256, -.80, white, "DEG"),
+    ("RANGE", "range", .57, .354, .77, white, "M"),
+    ("SCAN", "scan", .57, .292, .77, cyan, "%"),
+    ("CARGO", "cargo", .57, .214, .77, amber, "%"),
+):
+    text_mesh(f"HUD | {metric} label", label, x, y, .022, material)
+    seven_segment_readout(metric, digits_x, y-.001, material, metric)
+    text_mesh(f"HUD | {metric} unit", unit, digits_x+.105, y, .018, material)
+
+for metric, y, material in (("scan", .278, cyan), ("cargo", .200, amber)):
+    rectangle(f"HUD | {metric} meter rail", .57, y, .39, .003, dim)
+    meter = rectangle(f"HUD | {metric} meter fill", .57, y, .39, .004,
+                      material, depth=-1.996)
+    for frame, values in telemetry:
+        meter.scale.x = max(.001, values[metric]/100)
+        meter.keyframe_insert("scale", frame=frame)
+    for curve in animation_curves(meter):
+        for point in curve.keyframe_points:
+            point.interpolation = "LINEAR"
+
 scene["mission_hud"] = (
     "Camera-mounted mesh typography: ten timed flight chapters, animated route "
-    "progress, and moon-core search/lock/transfer/secured states; seamless loop"
+    "progress, live speed/heading/roll/range digits, scan/cargo completion "
+    "meters, and moon-core search/lock/transfer/secured states; seamless loop"
 )
 scene.frame_set(1)
 print("ASTERION_HUD", {"objects": len(hud.objects), "phases": len(phases),
-                       "core_states": len(statuses)})
+                       "core_states": len(statuses),
+                       "telemetry_samples": len(telemetry)})

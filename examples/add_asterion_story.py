@@ -184,6 +184,7 @@ cyan = emission("STORY | ion warp cyan", (.08, .68, 1.0), 8)
 violet = emission("STORY | ion warp violet", (.57, .17, 1.0), 7)
 signal_mat = emission("STORY | distress signal amber", (1.0, .48, .08), 8)
 scan_mat = emission("STORY | survey beam", (.12, 1.0, .72), 4)
+side_scan_mat = emission("STORY | triangulation rays", (.015, .55, .92), 1.6)
 tractor_mat = emission("STORY | capture tether", (.02, .65, 1.0), 2.1)
 packet_mat = emission("STORY | scan packets", (.08, .88, 1.0), 2.8)
 
@@ -259,6 +260,22 @@ scan.name = "SCAN | explorer to lunar signal"
 scan.data.materials.append(scan_mat)
 scan.rotation_mode = "QUATERNION"
 
+bpy.ops.mesh.primitive_cylinder_add(vertices=10, radius=1, depth=2)
+side_ray_mesh = bpy.context.object.data
+side_ray_mesh.materials.append(side_scan_mat)
+side_rays = []
+for side, label in ((-1, "port"), (1, "starboard")):
+    ray = (move_to_story(bpy.context.object, "Explorer sensor triangulation")
+           if side == -1 else
+           bpy.data.objects.new(f"SCAN | {label} triangulation ray", side_ray_mesh))
+    if side == 1:
+        story.objects.link(ray)
+        ray["asterion_story_object"] = True
+        ray["story_role"] = "Explorer sensor triangulation"
+    ray.name = f"SCAN | {label} triangulation ray"
+    ray.rotation_mode = "QUATERNION"
+    side_rays.append((ray, side))
+
 bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=1, depth=2)
 tractor = move_to_story(bpy.context.object, "Cargo-to-core capture tether")
 tractor.name = "CAPTURE | cargo tractor tether"
@@ -270,6 +287,39 @@ bpy.ops.mesh.primitive_torus_add(major_segments=64, minor_segments=8,
 lock_halo = move_to_story(bpy.context.object, "Survey lock and core tracking halo")
 lock_halo.name = "SCAN | core lock halo"
 lock_halo.data.materials.append(packet_mat)
+
+bpy.ops.mesh.primitive_torus_add(major_segments=64, minor_segments=8,
+                                 major_radius=1.0, minor_radius=.028)
+surface_ring_mesh = bpy.context.object.data
+surface_ring_mesh.materials.append(side_scan_mat)
+surface_rings = []
+for index in range(3):
+    ring = (move_to_story(bpy.context.object, "Lunar surface spectral sweep")
+            if index == 0 else
+            bpy.data.objects.new(f"SCAN | lunar sweep {index:02d}",
+                                 surface_ring_mesh))
+    if index:
+        story.objects.link(ring)
+        ring["asterion_story_object"] = True
+        ring["story_role"] = "Lunar surface spectral sweep"
+    ring.name = f"SCAN | lunar sweep {index:02d}"
+    ring.rotation_euler = (math.pi/2, 0, 0)
+    surface_rings.append(ring)
+
+containment_rings = []
+for index in range(3):
+    ring = bpy.data.objects.new(f"CAPTURE | containment ring {index:02d}",
+                                lock_halo.data)
+    story.objects.link(ring)
+    ring["asterion_story_object"] = True
+    ring["story_role"] = "Core containment cage during transfer"
+    containment_rings.append(ring)
+capture_gate = bpy.data.objects.new("CAPTURE | port pod receiving gate",
+                                    lock_halo.data)
+story.objects.link(capture_gate)
+capture_gate["asterion_story_object"] = True
+capture_gate["story_role"] = "Port pod receiving gate"
+capture_gate.rotation_mode = "QUATERNION"
 
 bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=.32)
 first_packet = move_to_story(bpy.context.object, "Signal and capture energy packet")
@@ -559,6 +609,8 @@ previous_rotation = None
 previous_flight_yaw = None
 previous_scan_quaternion = None
 previous_tractor_quaternion = None
+previous_side_quaternions = {}
+previous_gate_quaternion = None
 for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
     t = (frame-1)/fps
     position, (yaw, pitch, bank) = flight_pose(t)
@@ -648,6 +700,33 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
     scan.keyframe_insert("rotation_quaternion", frame=frame)
     scan.keyframe_insert("scale", frame=frame)
 
+    for ray, side in side_rays:
+        ray_start = position + craft_rotation @ Vector((side*5.0, 1.5, .8))
+        ray_direction = beacon.location-ray_start
+        ray_power = (envelope(t, 43, 45, 49, 51) if side == -1 else
+                     envelope(t, 49, 51, 55, 57))
+        if ray_power > 1e-5 and ray_direction.length > .1:
+            ray.location = (ray_start+beacon.location)/2
+            orientation = ray_direction.to_track_quat("Z", "Y")
+            previous = previous_side_quaternions.get(side)
+            if previous and orientation.dot(previous) < 0:
+                orientation.negate()
+            ray.rotation_quaternion = orientation
+            previous_side_quaternions[side] = orientation.copy()
+        ray.scale = (.075*ray_power, .075*ray_power,
+                     ray_direction.length/2*ray_power)
+        for channel in ("location", "rotation_quaternion", "scale"):
+            ray.keyframe_insert(channel, frame=frame)
+
+    for index, ring in enumerate(surface_rings):
+        start = 43+4.6*index
+        sweep_progress = smooth01((t-start)/4.5)
+        sweep_power = envelope(t, start, start+.35, start+4.0, start+4.5)
+        ring.location = beacon_origin + Vector((0, -0.2, 0))
+        ring.scale = ((2+6*sweep_progress)*sweep_power,)*3
+        ring.keyframe_insert("location", frame=frame)
+        ring.keyframe_insert("scale", frame=frame)
+
     tether_direction = beacon.location-cargo_socket
     tether_power = envelope(t, 72, 73, 79.6, 81.4)
     if tether_power > 1e-5 and tether_direction.length > .1:
@@ -670,6 +749,27 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
     lock_halo.scale = (halo_power*halo_pulse,)*3
     for channel in ("location", "rotation_euler", "scale"):
         lock_halo.keyframe_insert(channel, frame=frame)
+
+    cage_power = envelope(t, 72.5, 73.5, 80.5, 82)
+    for index, ring in enumerate(containment_rings):
+        ring.location = beacon.location
+        ring.rotation_euler = (math.tau*.12*t, index*math.tau/3, 0)
+        cage_size = (1.0-.72*recovery)*cage_power
+        ring.scale = (cage_size,)*3
+        for channel in ("location", "rotation_euler", "scale"):
+            ring.keyframe_insert(channel, frame=frame)
+
+    capture_gate.location = cargo_socket
+    gate_power = envelope(t, 72, 73.2, 80, 82)
+    if gate_power > 1e-5 and tether_direction.length > .1:
+        orientation = tether_direction.to_track_quat("Z", "Y")
+        if previous_gate_quaternion and orientation.dot(previous_gate_quaternion) < 0:
+            orientation.negate()
+        capture_gate.rotation_quaternion = orientation
+        previous_gate_quaternion = orientation.copy()
+    capture_gate.scale = (.95*gate_power,)*3
+    for channel in ("location", "rotation_quaternion", "scale"):
+        capture_gate.keyframe_insert(channel, frame=frame)
 
     for index, packet in enumerate(scan_packets):
         if index < 4:
@@ -722,22 +822,29 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
         obj.keyframe_insert("scale", frame=frame)
         obj.keyframe_insert("rotation_euler", frame=frame)
 
+def animation_curves(obj):
+    action = obj.animation_data.action if obj.animation_data else None
+    if action is None:
+        return []
+    if hasattr(action, "fcurves"):
+        return list(action.fcurves)
+    return [curve for layer in action.layers for strip in layer.strips
+            for bag in strip.channelbags for curve in bag.fcurves]
+
+
 for curve_owner in (camera, flight):
-    action = curve_owner.animation_data.action
-    if action and hasattr(action, "fcurves"):
-        for fcurve in action.fcurves:
-            for key in fcurve.keyframe_points:
-                key.interpolation = "BEZIER"
+    for fcurve in animation_curves(curve_owner):
+        for key in fcurve.keyframe_points:
+            key.interpolation = "BEZIER"
 
 # Endpoint-bound links and packets use straight interpolation between dense
 # samples. Cubic overshoot here would detach a beam from its moving target.
 for curve_owner in (beacon, scan, tractor, lock_halo, capture_flash,
-                    *scan_packets):
-    action = curve_owner.animation_data.action
-    if action and hasattr(action, "fcurves"):
-        for fcurve in action.fcurves:
-            for key in fcurve.keyframe_points:
-                key.interpolation = "LINEAR"
+                    capture_gate, *scan_packets, *surface_rings,
+                    *containment_rings, *(ray for ray, _ in side_rays)):
+    for fcurve in animation_curves(curve_owner):
+        for key in fcurve.keyframe_points:
+            key.interpolation = "LINEAR"
 
 for marker in list(scene.timeline_markers):
     if marker.name.startswith("STORY |"):
@@ -763,9 +870,10 @@ scene["story"] = (
 )
 scene["camera_style"] = "single continuous moving take; forward asteroid runs, warp chases, two-subject survey and cargo push-in, bullet-time debris arcs"
 scene["signal_sequence"] = (
-    "An endpoint-anchored explorer scan tracks the lunar core with a lock halo "
-    "and energy packets. After the hauler rebuild, a cargo tether guides the "
-    "core into the moving port pod and a brief flare confirms capture."
+    "Three endpoint-anchored explorer rays triangulate the lunar core as "
+    "spectral rings sweep its surface. The hauler surrounds the core with "
+    "a containment cage; packets move along a tractor tether toward the "
+    "receiving gate, and a brief port-pod flare confirms capture."
 )
 scene["thruster_fire"] = (
     "Six blue plasma plumes and six ice-blue cores follow their reusable "

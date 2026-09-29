@@ -171,8 +171,17 @@ tractor = bpy.data.objects.get("CAPTURE | cargo tractor tether")
 halo = bpy.data.objects.get("SCAN | core lock halo")
 flash = bpy.data.objects.get("CAPTURE | port pod confirmation flare")
 packets = [obj for obj in objects if obj.name.startswith("SCAN | packet ")]
+side_rays = [obj for obj in objects if "triangulation ray" in obj.name]
+surface_rings = [obj for obj in objects if obj.name.startswith("SCAN | lunar sweep ")]
+containment_rings = [obj for obj in objects
+                     if obj.name.startswith("CAPTURE | containment ring ")]
+capture_gate = bpy.data.objects.get("CAPTURE | port pod receiving gate")
 assert scan and tractor and halo and flash and len(packets) == 6, (
     "The survey and capture sequence is missing its visual cues"
+)
+assert len(side_rays) == 2 and len(surface_rings) == 3 and (
+    len(containment_rings) == 3 and capture_gate), (
+    "The triangulation, lunar sweep, or containment effects are missing"
 )
 original_frame, original_subframe = scene.frame_current, scene.frame_subframe
 try:
@@ -214,6 +223,9 @@ try:
     assert max(scan.scale) < 1e-4, "The survey line persists after scanning"
     scene.frame_set(83*60+1)
     assert max(tractor.scale) < 1e-4, "The cargo tether persists after capture"
+    assert all(max(ring.scale) < 1e-4 for ring in containment_rings), (
+        "The containment cage persists after capture"
+    )
     scene.frame_set(83*60+1)
     socket = flight_rig.matrix_world @ Vector((-4.35, -.40, 1.50))
     assert (beacon.matrix_world.translation-socket).length < .05, (
@@ -224,20 +236,60 @@ finally:
     scene.frame_set(original_frame, subframe=original_subframe)
 assert len([obj for obj in objects if obj.name.startswith("WARP | ion trail")]) >= 24
 hud = bpy.data.collections.get("05 HUD | mission telemetry")
-assert hud is not None and len(hud.objects) == 40, (
+assert hud is not None and len(hud.objects) == 182, (
     "Mission chapter and core-status HUD is incomplete")
 assert all(obj.type == "MESH" and obj.parent == scene.camera
            for obj in hud.objects), "HUD must export as camera-mounted mesh"
+assert sum(bool(obj.get("hud_metric")) for obj in hud.objects) == 126, (
+    "The six live numerical telemetry readouts are incomplete"
+)
+
+
+SEGMENT_DIGITS = {"abcdef": "0", "bc": "1", "abdeg": "2",
+                  "abcdg": "3", "bcfg": "4", "acdfg": "5",
+                  "acdefg": "6", "abc": "7", "abcdefg": "8",
+                  "abcdfg": "9"}
+
+
+def hud_number(metric):
+    characters = []
+    for digit in range(3):
+        active = "".join(segment for segment in "abcdefg"
+                         if bpy.data.objects[
+                             f"HUD | {metric} digit {digit} segment {segment}"
+                         ].scale.x > .5)
+        assert active in SEGMENT_DIGITS, (
+            f"The {metric} readout has a partial or illegible digit: {active}"
+        )
+        characters.append(SEGMENT_DIGITS[active])
+    return int("".join(characters))
+
+
 old_frame, old_subframe = scene.frame_current, scene.frame_subframe
 try:
     scene.frame_set(1)
     start_scales = {obj.name: tuple(obj.scale) for obj in hud.objects}
     assert bpy.data.objects["HUD | phase 01 title"].scale.x > .99
     assert bpy.data.objects["HUD | core state 01"].scale.x > .99
+    assert hud_number("scan") == hud_number("cargo") == 0
+    scene.frame_set(8*60+1)
+    assert hud_number("roll") > 180, "The roll angle ignores the barrel roll"
+    scene.frame_set(50*60+1)
+    assert 35 <= hud_number("scan") <= 55 and hud_number("cargo") == 0
+    scene.frame_set(78*60+1)
+    assert 50 <= hud_number("cargo") <= 70 and hud_number("scan") == 100
+    socket = flight_rig.matrix_world @ Vector((0, 3, 1.2))
+    measured_range = round((beacon.matrix_world.translation-socket).length)
+    assert abs(hud_number("range")-measured_range) <= 1, (
+        "The displayed core range disagrees with the actual ship/core distance"
+    )
     scene.frame_set(83*60+1)
     assert bpy.data.objects["HUD | phase 07 title"].scale.x > .99
     assert bpy.data.objects["HUD | core state 07"].scale.x > .99
     assert bpy.data.objects["HUD | phase 01 title"].scale.x < .01
+    assert hud_number("cargo") == 100 and hud_number("range") < 10
+    scene.frame_set(87*60+1)
+    assert hud_number("speed") > 80, "The speed display ignores the escape warp"
     scene.frame_set(scene.frame_end)
     assert all(max(abs(obj.scale[i]-start_scales[obj.name][i])
                    for i in range(3)) < .001 for obj in hud.objects), (
