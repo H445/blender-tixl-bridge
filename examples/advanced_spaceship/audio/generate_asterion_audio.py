@@ -149,6 +149,10 @@ def score():
         start = 2*bar
         chord = chords[bar % len(chords)]
         level = energy_at(start)
+        # Leave air around the scan and the breakaway. The later warp reprise
+        # earns its weight by bringing the low orchestra back in layers.
+        if 26 <= start < 34 or 62 <= start < 68:
+            level *= .46
         for voice, midi in enumerate(chord):
             place(out, start, note(frequency(midi), 2.4, "organ"),
                   .105*level, (-.60, -.18, .22, .58)[voice])
@@ -176,6 +180,17 @@ def score():
             for j, midi in enumerate(chord[1:]):
                 place(out, start, note(frequency(midi+12), 2.6, "brass"),
                       .085*level, (-.5, 0, .5)[j])
+        if start in (14, 20, 58, 82, 88, 96, 102):
+            for j, midi in enumerate((chord[0]-12, chord[1], chord[2])):
+                place(out, start, note(frequency(midi), 3.1, "brass"),
+                      (.12, .065, .06)[j]*level, (-.36, 0, .36)[j])
+        if 84 <= start < 104 and bar % 2:
+            # A string ostinato lifts the final chase above the break rhythm.
+            for step in range(8):
+                midi = chord[(step*3 + bar) % len(chord)] + 12
+                place(out, start + step*.25, note(frequency(midi), .27, "strings"),
+                      .050*level*(1.25 if step in (0, 5) else 1),
+                      -.52 if step % 2 else .52)
 
     # In the quiet survey, a distinctive delayed five-note signal motif.
     for t in np.arange(38, 59, 2):
@@ -200,6 +215,123 @@ def score():
                   .008*level, .4 if beat%4 == 1 else -.4)
     room(out, .43)
     write("asterion_score_120bpm.wav", out)
+
+
+def electronic_note(hz, length, *, brightness=.5):
+    """Band-limited-ish wavetable stack with a short FM attack and stereo-safe body."""
+    n = seconds(length)
+    t = np.arange(n, dtype=np.float32)/SAMPLE_RATE
+    phase = 2*np.pi*hz*t + (1.2 + brightness*2.4)*np.exp(-t*18)*np.sin(2*np.pi*hz*2.01*t)
+    body = np.sin(phase) + .25*np.sin(2*phase) + .12*brightness*np.sin(3*phase)
+    body = np.tanh(body*(1.3+brightness))
+    return (body*envelope(length, .004, max(.06, length*.22))).astype(np.float32)
+
+
+def electronic_music():
+    """Independent IDM/EDM stem; all triggers remain locked to 120 BPM."""
+    out = np.zeros((COUNT, 2), np.float32)
+    roots = (33, 29, 36, 31, 26, 28)  # Same six-bar harmonic circuit as score.
+    # Section-specific density makes the quiet lunar survey and final chase
+    # feel like different scenes while sharing the same exact 108 s loop.
+    for bar in range(54):
+        start = bar*2.0
+        root = roots[bar % len(roots)]
+        if start < 10:
+            density, gain = 1, .24
+        elif start < 24:
+            density, gain = 4, .62
+        elif start < 36:
+            density, gain = 1, .17
+        elif start < 60:
+            density, gain = 3, .42
+        elif start < 72:
+            density, gain = 1, .20
+        elif start < 84:
+            density, gain = 4, .58
+        elif start < 104:
+            density, gain = 7, .82
+        else:
+            density, gain = 2, .25
+        # Syncopated sub notes fill the spaces between kick transients; short
+        # release means the bass stays legible under the mission effects.
+        bass_steps = (0, 3, 7, 10, 12, 15) if density >= 4 else (0, 7, 12)
+        for step in bass_steps:
+            if density == 1 and step != 0:
+                continue
+            t0 = start + step*SIXTEENTH
+            if t0 >= 108:
+                continue
+            midi = root + (12 if step == 15 else 0)
+            place(out, t0, electronic_note(frequency(midi), .27,
+                                            brightness=.17),
+                  .16*gain*(1.2 if step == 0 else .85),
+                  -.16 if step % 2 else .16)
+        if density >= 3:
+            order = (0, 2, 1, 3, 2, 4, 1, 3, 0, 4, 2, 3, 1, 4, 2, 0)
+            degrees = (0, 3, 7, 10, 12)
+            for step in range(16):
+                if density == 3 and step % 3 != 0:
+                    continue
+                if density == 4 and step % 2 and step not in (7, 15):
+                    continue
+                if density == 7 and bar % 4 == 3 and step in (11, 14):
+                    continue  # Two small dropouts reinforce the chopped break.
+                t0 = start + step*SIXTEENTH
+                if t0 >= 108:
+                    continue
+                midi = root + 24 + degrees[order[(step + bar*3) % 16]]
+                place(out, t0, electronic_note(frequency(midi), .105,
+                                                brightness=.72),
+                      .050*gain*(1.4 if step in (0, 10) else 1),
+                      -.65 if step % 2 else .65)
+        # Four-bar transition fills: stuttering metallic echoes climb into a
+        # new chapter instead of repeating the same bar indefinitely.
+        if density >= 4 and bar % 4 == 3:
+            for step in range(8):
+                t0 = start + 1 + step*SIXTEENTH
+                midi = root + 36 + (0, 7, 10, 12)[step % 4]
+                place(out, t0, electronic_note(frequency(midi), .075,
+                                                brightness=.95),
+                      .018*gain*(1 + step/8),
+                      -.7 + step*.2)
+        if density >= 4 and (start < 24 or start >= 84):
+            # The warp and final chase use a four-on-the-floor foundation;
+            # the independently editable chopped break supplies the syncopation.
+            for beat in range(4):
+                t0 = start + beat*BEAT
+                n = seconds(.27)
+                u = np.arange(n, dtype=np.float32)/SAMPLE_RATE
+                phase = 2*np.pi*(47*u + 68*.026*(1-np.exp(-u/.026)))
+                kick = np.sin(phase)*np.exp(-u*17)
+                place(out, t0, kick, .115*gain*(1.16 if beat == 0 else 1))
+                hat_n = seconds(.056)
+                hu = np.arange(hat_n, dtype=np.float32)/SAMPLE_RATE
+                hiss = RNG.standard_normal(hat_n).astype(np.float32)
+                tick = np.diff(hiss, prepend=0)*np.exp(-hu*86)
+                place(out, t0+.25, tick, .006*gain,
+                      -.48 if beat % 2 else .48)
+    # A wide, granular-feeling percussion shimmer marks each warp entrance.
+    # It is synthesized here, not sampled from a third-party recording.
+    for entrance in (10, 72, 84):
+        n = seconds(1.5)
+        t = np.arange(n, dtype=np.float32)/SAMPLE_RATE
+        noise = RNG.standard_normal(n).astype(np.float32)
+        shimmer = np.diff(noise, prepend=0) * np.exp(-t*4.5)
+        place(out, entrance, shimmer, .009, -.35)
+        place(out, entrance+.125, shimmer, .008, .35)
+    for entrance in (10, 72, 84):
+        # Two-second rising noise and a pitched landing cue announce the cut.
+        n = seconds(2)
+        u = np.arange(n, dtype=np.float32)/SAMPLE_RATE
+        noise = np.diff(RNG.standard_normal(n).astype(np.float32),
+                        prepend=0)
+        rise = noise * smooth(u/2)**2 * smooth((2-u)/.07)
+        place(out, entrance-2, rise, .007, -.30)
+        place(out, entrance, electronic_note(55, 1.1, brightness=.9),
+              .095, .18)
+    room(out, .23)
+    out *= 2.4
+    write("asterion_music_electronic_120bpm.wav", out, peak=.66)
 
 
 def airy_noise(length, lower=65, upper=5000):
@@ -392,10 +524,11 @@ def break_fx():
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stem", choices=("all", "score", "flight", "scan", "cargo", "break"),
+    parser.add_argument("--stem", choices=("all", "score", "electronic", "flight", "scan", "cargo", "break"),
                         default="all")
     stem = parser.parse_args().stem
-    for name, render in (("score", score), ("flight", flight_fx),
+    for name, render in (("score", score), ("electronic", electronic_music),
+                         ("flight", flight_fx),
                          ("scan", scan_fx), ("cargo", cargo_fx),
                          ("break", break_fx)):
         if stem in ("all", name):

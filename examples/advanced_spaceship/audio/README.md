@@ -1,20 +1,22 @@
 # Asterion audio
 
-Five original stereo PCM files span the full 108-second project at 44.1 kHz.
+Six original stereo PCM files span the full 108-second project at 44.1 kHz.
 Each native `Lib.io.audio.AudioClip` has its own visible, editable TiXL timeline
 lane and feeds native `Lib.io.audio.AudioBus`. The bus command and final image
 command meet at `Lib.flow.Execute` before the Output target. Score and flight
 span the composition; scan and cargo cover their cue windows, while three
 chopped-break clips share one lane across the action chapters.
-The score uses 120 BPM in 4/4: 54 bars, 216 beats, and 30 Blender frames per
-beat. It uses original organ-like harmonies, bowed textures, a five-note signal
-figure, low pulses, and sparse percussion. The four effects stems remain
-separate so the flight, survey, recovery, and chopped break levels can be mixed
-independently.
+The music uses 120 BPM in 4/4: 54 bars, 216 beats, and 30 Blender frames per
+beat. The score has low-brass landings, an exposed lunar survey, and a rising
+string ostinato in the final chase. A separate electronic music stem adds
+syncopated sub bass, pitched arpeggios, four-on-the-floor warp kicks, offbeat
+metallic ticks, dropouts, and rising transitions. It is an editable native
+AudioClip, independent of the chopped break and sound effects.
 
 | File | Cue window | Purpose |
 | --- | --- | --- |
-| `asterion_score_120bpm.wav` | 0–108 s | Original dramatic score; quiet survey and debris passages give way to warp and recovery swells. |
+| `asterion_score_120bpm.wav` | 0–108 s | Cinematic harmony, brass landings, string ostinato, and chapter dynamics. |
+| `asterion_music_electronic_120bpm.wav` | 0–108 s | EDM/IDM pulse and arpeggio layer with warp kick, syncopation, transition rises, and quiet intervals. |
 | `asterion_fx_flight.wav` | 0–108 s | Propulsion bed, warp spools/blasts, breakup rumbles, and asteroid evasion. |
 | `asterion_fx_scan.wav` | 43–59 s | Soft magnetic sweeps, subdued spatial pulses, and a scan lock. |
 | `asterion_fx_cargo.wav` | 72–84 s | Tractor field, packet transfers, capture gate, and docking resolution. |
@@ -37,3 +39,9 @@ Run `generate_asterion_audio.py --stem break` to regenerate the chopped break.
 renderer and `examples/install_asterion_break.py`. The latter adds three native
 AudioClips to the existing bus and a matching keyframe curve to the video
 glitch controls. Save and close TiXL through the bridge before running it.
+
+Run `generate_asterion_audio.py --stem score` and `--stem electronic` to
+regenerate the updated music. With TiXL closed through the bridge, run
+`examples/install_asterion_electronic_music.py` once to copy the music into
+`Assets/audio` and add the electronic AudioClip to the existing native bus. The
+installer rejects an edited score and backs up the Home graph outside `Symbols`.
