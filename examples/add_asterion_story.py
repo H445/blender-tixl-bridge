@@ -120,8 +120,14 @@ def baseline_position(t):
     if t < 84:
         return moon_orbit(t)
     if t < 90:
-        return hermite_path(t, 84, 90, moon_orbit(84), ember_orbit(90),
-                            moon_velocity(84), ember_velocity(90))
+        # A direct Hermite chord clips the copper giant near 88 seconds.
+        # Sweep wide of its sunward limb while preserving both endpoint
+        # positions and tangents for the continuous single-take warp.
+        u = (t-84)/6
+        clearance_arc = 70*math.sin(math.pi*u)**2
+        return (hermite_path(t, 84, 90, moon_orbit(84), ember_orbit(90),
+                             moon_velocity(84), ember_velocity(90))
+                + Vector((clearance_arc, 0, 0)))
     if t < 104:
         return ember_orbit(t)
     return hermite_path(t, 104, 108, ember_orbit(104), Vector((0, 0, 0)),

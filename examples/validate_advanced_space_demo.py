@@ -626,6 +626,44 @@ try:
         assert not overlap, f"Moon visually overlaps the hauler at {second}s"
     assert hauler_moon_clearance > 30, (
         f"A hauler component flies through the moon: {hauler_moon_clearance} m")
+    ember_warp_hull_gap = math.inf
+    ember_warp_camera_gap = math.inf
+    for step in range(61):
+        second = 84+step*.1
+        scene.frame_set(round(second*60)+1)
+        center = ember.matrix_world.translation
+        corners = [obj.matrix_world @ Vector(vertex)
+                   for obj in detachable for vertex in obj.bound_box]
+        ember_warp_hull_gap = min(ember_warp_hull_gap,
+                                  *((corner-center).length-18 for corner in corners))
+        camera = scene.camera
+        ember_warp_camera_gap = min(
+            ember_warp_camera_gap,
+            (camera.matrix_world.translation-center).length-18)
+        projected = world_to_camera_view(scene, camera, center)
+        if projected.z <= 0:
+            continue
+        rotation = camera.matrix_world.to_quaternion()
+        right = world_to_camera_view(
+            scene, camera, center+rotation @ Vector((18, 0, 0)))
+        up = world_to_camera_view(
+            scene, camera, center+rotation @ Vector((0, 18, 0)))
+        radius_x = abs(right.x-projected.x)
+        radius_y = abs(up.y-projected.y)
+        hull = [world_to_camera_view(scene, camera, corner) for corner in corners]
+        hull = [point for point in hull if point.z > 0]
+        if not hull:
+            continue
+        x_min, x_max = min(point.x for point in hull), max(point.x for point in hull)
+        y_min, y_max = min(point.y for point in hull), max(point.y for point in hull)
+        overlaps = not (projected.x+radius_x < x_min or
+                        projected.x-radius_x > x_max or
+                        projected.y+radius_y < y_min or
+                        projected.y-radius_y > y_max)
+        assert not overlaps, f"Copper giant visually overlaps the hauler at {second:.1f}s"
+    assert ember_warp_hull_gap > 25 and ember_warp_camera_gap > 15, (
+        f"Escape warp clips the copper giant: hull {ember_warp_hull_gap} m, "
+        f"camera {ember_warp_camera_gap} m")
 finally:
     scene.frame_set(original_frame, subframe=original_subframe)
 
@@ -670,6 +708,8 @@ summary = {
     "shipPlanetOrbits": planet_orbits,
     "cockpitPositions": {name:list(position) for name,position in cockpit_positions.items()},
     "haulerMoonSurfaceClearanceMeters": hauler_moon_clearance,
+    "emberWarpHullSurfaceClearanceMeters": ember_warp_hull_gap,
+    "emberWarpCameraSurfaceClearanceMeters": ember_warp_camera_gap,
     "returnedToRestCount": len(detachable),
     "restoredFrame": original_frame,
     "restoredSubframe": original_subframe,

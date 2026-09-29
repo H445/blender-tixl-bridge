@@ -35,7 +35,7 @@ The scene is 108 seconds at 60 fps. The craft flies on one continuous route whil
 | 36–60 s | EXPLORER scans the core near the moon |
 | 60–72 s | Breakup and HAULER cargo rebuild |
 | 72–84 s | Recover the luminous core into a cargo pod and complete the Tethys orbit |
-| 84–90 s | Escape warp jump |
+| 84–90 s | Escape warp arcs clear of the copper giant's surface |
 | 90–104 s | Complete a fast orbit of the ringed copper giant; COMBAT rebuilds, dodges debris, and rolls |
 | 104–108 s | Return warp to the opening position and camera pose |
 
