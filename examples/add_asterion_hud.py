@@ -6,6 +6,8 @@ The overlay has the same pose at 0 and 108 seconds for the project loop.
 """
 
 import math
+import sys
+from pathlib import Path
 
 import bpy
 from mathutils import Vector
@@ -15,11 +17,24 @@ scene = bpy.context.scene
 camera = scene.camera
 assert camera and scene.render.fps == 60 and scene.frame_end == 6481
 
+# The TiXL output may be viewed in a narrower panel than Blender's 16:9
+# camera frame. Keep every HUD vertex inside a central safe area; scaling
+# only X/Y preserves the camera-facing depth and avoids perspective drift.
+HUD_SAFE_SCALE = .80
+
+
+def hud_xy(x, y):
+    return x*HUD_SAFE_SCALE, y*HUD_SAFE_SCALE
+
 old = bpy.data.collections.get("05 HUD | mission telemetry")
 if old:
     for obj in list(old.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
     bpy.data.collections.remove(old)
+for datablocks in (bpy.data.meshes, bpy.data.curves):
+    for block in list(datablocks):
+        if block.users == 0 and block.name.startswith("HUD |"):
+            datablocks.remove(block)
 hud = bpy.data.collections.new("05 HUD | mission telemetry")
 scene.collection.children.link(hud)
 
@@ -46,7 +61,7 @@ dim = glow("HUD | graphite rails", (.018, .055, .075), 1.0)
 def text_mesh(name, label, x, y, size, material, right=False):
     curve = bpy.data.curves.new(name, "FONT")
     curve.body = label
-    curve.size = size
+    curve.size = size*HUD_SAFE_SCALE
     curve.align_x = "RIGHT" if right else "LEFT"
     curve.space_character = 1.12
     obj = bpy.data.objects.new(name, curve)
@@ -58,7 +73,7 @@ def text_mesh(name, label, x, y, size, material, right=False):
     obj = bpy.context.view_layer.objects.active
     obj.data.materials.append(material)
     obj.parent = camera
-    obj.location = (x, y, -2.0)
+    obj.location = (*hud_xy(x, y), -2.0)
     obj["asterion_hud"] = True
     obj["hud_text"] = label
     return obj
@@ -66,6 +81,8 @@ def text_mesh(name, label, x, y, size, material, right=False):
 
 def rectangle(name, x, y, width, height, material, depth=-2.005):
     mesh = bpy.data.meshes.new(name)
+    width *= HUD_SAFE_SCALE
+    height *= HUD_SAFE_SCALE
     mesh.from_pydata([(0, 0, 0), (width, 0, 0),
                       (width, height, 0), (0, height, 0)],
                      [], [(0, 1, 2, 3)])
@@ -73,7 +90,36 @@ def rectangle(name, x, y, width, height, material, depth=-2.005):
     obj = bpy.data.objects.new(name, mesh)
     hud.objects.link(obj)
     obj.parent = camera
-    obj.location = (x, y, depth)
+    obj.location = (*hud_xy(x, y), depth)
+    obj["asterion_hud"] = True
+    return obj
+
+
+def line_mesh(name, points, thickness, material, x=0, y=0,
+              depth=-1.994):
+    """One camera-facing mesh for an animated scan path or scope arc."""
+    points = [hud_xy(*point) for point in points]
+    thickness *= HUD_SAFE_SCALE
+    vertices, faces = [], []
+    for a, b in zip(points, points[1:]):
+        dx, dy = b[0]-a[0], b[1]-a[1]
+        length = math.hypot(dx, dy)
+        if length < 1e-8:
+            continue
+        nx, ny = -dy/length*thickness/2, dx/length*thickness/2
+        start = len(vertices)
+        vertices.extend([(a[0]+nx, a[1]+ny, 0),
+                         (a[0]-nx, a[1]-ny, 0),
+                         (b[0]-nx, b[1]-ny, 0),
+                         (b[0]+nx, b[1]+ny, 0)])
+        faces.append((start, start+1, start+2, start+3))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.materials.append(material)
+    obj = bpy.data.objects.new(name, mesh)
+    hud.objects.link(obj)
+    obj.parent = camera
+    obj.location = (*hud_xy(x, y), depth)
     obj["asterion_hud"] = True
     return obj
 
@@ -287,12 +333,188 @@ for metric, y, material in (("scan", .278, cyan), ("cargo", .200, amber)):
         for point in curve.keyframe_points:
             point.interpolation = "LINEAR"
 
+
+# A camera-space signal scope gives the telemetry its own scan language. The
+# short arcs and corner brackets stay below the right-hand readouts, leaving
+# the center of the picture clear for the ship and its target.
+scope_x, scope_y = .79, -.065
+for index, (start, span, radius, material) in enumerate((
+    (.15, 1.55*math.pi, .075, cyan),
+    (1.15*math.pi, .70*math.pi, .060, white),
+    (.34*math.pi, .55*math.pi, .091, amber),
+)):
+    points = [(radius*math.cos(start+span*i/32),
+               radius*math.sin(start+span*i/32)) for i in range(33)]
+    arc = line_mesh(f"HUD | signal scope arc {index+1}", points, .0022,
+                    material, scope_x, scope_y)
+    for second, turns in ((0, 0), (36, 3), (72, 6), (108, 9)):
+        arc.rotation_euler.z = 2*math.pi*turns*(1 if index != 1 else -1)
+        arc.keyframe_insert("rotation_euler", frame=round(second*60)+1)
+    for curve in animation_curves(arc):
+        for point in curve.keyframe_points:
+            point.interpolation = "LINEAR"
+
+for index in range(12):
+    angle = 2*math.pi*index/12
+    inner = .087 if index % 3 else .082
+    tick = [(inner*math.cos(angle), inner*math.sin(angle)),
+            (.101*math.cos(angle), .101*math.sin(angle))]
+    line_mesh(f"HUD | scope bearing {index:02d}", tick, .0015, dim,
+              scope_x, scope_y)
+
+line_mesh("HUD | scope horizontal axis", [(-.11, 0), (-.025, 0),
+          (.025, 0), (.11, 0)], .0011, dim, scope_x, scope_y)
+line_mesh("HUD | scope vertical axis", [(0, -.11), (0, -.025),
+          (0, .025), (0, .11)], .0011, dim, scope_x, scope_y)
+beam = line_mesh("HUD | radial scan beam", [(0, 0), (.072, 0)], .0028,
+                 cyan, scope_x, scope_y, depth=-1.991)
+for second in range(0, 109, 4):
+    beam.rotation_euler.z = 2*math.pi*second/4
+    beam.keyframe_insert("rotation_euler", frame=second*60+1)
+for curve in animation_curves(beam):
+    for point in curve.keyframe_points:
+        point.interpolation = "LINEAR"
+
+text_mesh("HUD | scope label", "LUNAR VECTOR / ACTIVE", .57, -.215,
+          .018, cyan)
+for x, y, dx, dy in ((.61, -.065, .025, .025),
+                     (.97, -.065, -.025, .025),
+                     (.61, -.065, .025, -.025),
+                     (.97, -.065, -.025, -.025)):
+    # The brackets deliberately have gaps and unequal arm lengths, like
+    # projected target geometry rather than another rectangular panel.
+    line_mesh(f"HUD | scope bracket {x:.2f} {y:.2f} {dy:+.2f}",
+              [(dx, 0), (0, 0), (0, dy)], .002, cyan, x, y)
+
+# Nested wireforms make the scope read as sampled geometry, while a shallow
+# perspective lattice holds scan data in the lower-right HUD quadrant.
+for sides, radius, material, direction in ((3, .128, cyan, 1),
+                                           (6, .112, amber, -1)):
+    poly = [(radius*math.cos(2*math.pi*i/sides+math.pi/6),
+             radius*math.sin(2*math.pi*i/sides+math.pi/6))
+            for i in range(sides+1)]
+    wire = line_mesh(f"HUD | {sides}-sided scan wireform", poly, .0017,
+                     material, scope_x, scope_y, depth=-1.992)
+    for second in (0, 36, 72, 108):
+        wire.rotation_euler.z = direction*2*math.pi*second/36
+        wire.keyframe_insert("rotation_euler", frame=second*60+1)
+    for curve in animation_curves(wire):
+        for point in curve.keyframe_points:
+            point.interpolation = "LINEAR"
+
+for row in range(5):
+    y = -.305-row*.041
+    left = .49+row*.013
+    right = .965-row*.011
+    line_mesh(f"HUD | depth lattice row {row:02d}",
+              [(left, y), (right, y)], .00125, dim)
+for column in range(7):
+    u = column/6
+    line_mesh(f"HUD | depth lattice ray {column:02d}",
+              [(.49+.475*u, -.305), (.542+.379*u, -.469)],
+              .00125, dim)
+text_mesh("HUD | geometry legend", "GEOMETRY / SIGNAL DEPTH", .49,
+          -.285, .017, cyan)
+grid_scan = line_mesh("HUD | lattice scan blade",
+                      [(.49, -.305), (.542, -.469)], .003, cyan,
+                      depth=-1.990)
+for second in range(0, 109, 2):
+    frame = second*60+1
+    grid_scan.location.x = hud_xy(0 if second % 4 == 0 else .379, 0)[0]
+    grid_scan.keyframe_insert("location", frame=frame)
+for curve in animation_curves(grid_scan):
+    for point in curve.keyframe_points:
+        point.interpolation = "LINEAR"
+
+
+# Isolated HUD glyph failures follow the same deterministic signal/fill
+# events as the 120 BPM audio and TiXL visuals. They never glitch the image
+# beneath the HUD, and every fragment is absent at both loop boundaries.
+audio_path = Path(bpy.data.filepath).parent / "advanced_spaceship" / "audio"
+if str(audio_path) not in sys.path:
+    sys.path.insert(0, str(audio_path))
+from techno_pattern import events, signal_events
+
+fragment_specs = ((-.94, .393, .085, cyan),
+                  (-.69, .393, .048, white),
+                  (.64, .393, .095, amber),
+                  (.79, .393, .052, cyan),
+                  (-.93, -.532, .115, cyan),
+                  (.65, -.532, .092, amber),
+                  (-.91, .194, .145, white),
+                  (.72, .172, .105, cyan),
+                  (-.74, -.436, .174, cyan),
+                  (.68, -.267, .178, amber))
+fragments = []
+for index, (x, y, width, material) in enumerate(fragment_specs):
+    obj = rectangle(f"HUD | signal fault fragment {index+1:02d}",
+                    x, y, width, .0036, material, depth=-1.989)
+    obj.scale = (0, 0, 0)
+    obj.keyframe_insert("scale", frame=1)
+    fragments.append(obj)
+
+fault_events = tuple(e for e in events()
+                     if e.kind in ("signal", "fill", "ghost") or
+                     (e.kind == "snare" and int(e.time*2) % 4 == 0))
+for index, event in enumerate(fault_events):
+    fragment = fragments[index % len(fragments)]
+    start = max(2, round(event.time*60)+1)
+    stop = min(scene.frame_end-1, start+max(2, round(3+5*event.gain)))
+    baseline = fragment_specs[index % len(fragments)]
+    shift = ((index*7) % 9 - 4)*.004
+    fragment.location = (*hud_xy(baseline[0]+shift, baseline[1]), -1.989)
+    fragment.keyframe_insert("location", frame=start)
+    fragment.scale = (1, 1, 1)
+    fragment.keyframe_insert("scale", frame=start)
+    fragment.scale = (0, 0, 0)
+    fragment.keyframe_insert("scale", frame=stop)
+
+# Two spectral duplicates give the readouts a brief, physically displaced
+# signal fault. The original typography stays legible through the hit.
+ghost_labels = (("HUD | signal fault title ghost",
+                 "ASTERION / RESCUE VECTOR", -.96, .49, .039, cyan, False),
+                ("HUD | signal fault status ghost",
+                 "MOON CORE STATUS", .96, .49, .028, amber, True))
+for ghost_index, (name, label, x, y, size, material, right) in enumerate(ghost_labels):
+    ghost = text_mesh(name, label, x, y, size, material, right=right)
+    ghost.location.z = -1.986
+    ghost.scale = (0, 0, 0)
+    ghost.keyframe_insert("scale", frame=1)
+    for event_index, event in enumerate(fault_events):
+        if event_index % 3 != ghost_index:
+            continue
+        start = max(2, round(event.time*60)+1)
+        stop = min(scene.frame_end-1, start+3)
+        direction = 1 if event_index % 2 else -1
+        ghost.location = (*hud_xy(x+direction*.018, y+direction*.006),
+                          -1.986)
+        ghost.keyframe_insert("location", frame=start)
+        ghost.scale = (1, 1, 1)
+        ghost.keyframe_insert("scale", frame=start)
+        ghost.scale = (0, 0, 0)
+        ghost.keyframe_insert("scale", frame=stop)
+    ghost.scale = (0, 0, 0)
+    ghost.keyframe_insert("scale", frame=scene.frame_end)
+    for curve in animation_curves(ghost):
+        for point in curve.keyframe_points:
+            point.interpolation = "CONSTANT"
+for fragment in fragments:
+    fragment.scale = (0, 0, 0)
+    fragment.keyframe_insert("scale", frame=scene.frame_end)
+    for curve in animation_curves(fragment):
+        for point in curve.keyframe_points:
+            point.interpolation = "CONSTANT"
+
 scene["mission_hud"] = (
-    "Camera-mounted mesh typography: ten timed flight chapters, animated route "
+    "Camera-mounted safe-area mesh typography: ten timed flight chapters, animated route "
     "progress, live speed/heading/roll/range digits, scan/cargo completion "
-    "meters, and moon-core search/lock/transfer/secured states; seamless loop"
+    "meters, moon-core search/lock/transfer/secured states, rotating signal "
+    "scope, wireform lattice, radial scan and beat-linked HUD-only text and "
+    "geometry faults; seamless loop"
 )
 scene.frame_set(1)
 print("ASTERION_HUD", {"objects": len(hud.objects), "phases": len(phases),
                        "core_states": len(statuses),
-                       "telemetry_samples": len(telemetry)})
+                       "telemetry_samples": len(telemetry),
+                       "signal_events": len(signal_events()),
+                       "hud_fault_events": len(fault_events)})
