@@ -512,9 +512,16 @@ scene["mission_hud"] = (
     "scope, wireform lattice, radial scan and beat-linked HUD-only text and "
     "geometry faults; seamless loop"
 )
+source_path = str(Path(bpy.data.filepath).parent)
+if source_path not in sys.path:
+    sys.path.insert(0, source_path)
+from asterion_hud_identity import add_identity
+
+identity = add_identity()
 scene.frame_set(1)
 print("ASTERION_HUD", {"objects": len(hud.objects), "phases": len(phases),
                        "core_states": len(statuses),
                        "telemetry_samples": len(telemetry),
                        "signal_events": len(signal_events()),
-                       "hud_fault_events": len(fault_events)})
+                       "hud_fault_events": len(fault_events),
+                       "identity": identity})
