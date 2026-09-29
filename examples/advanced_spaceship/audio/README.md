@@ -1,49 +1,44 @@
-# Asterion audio
+# Asterion sound design
 
-Six original stereo PCM files span the full 108-second project at 44.1 kHz.
-Each native `Lib.io.audio.AudioClip` has its own visible, editable TiXL timeline
-lane and feeds native `Lib.io.audio.AudioBus`. The bus command and final image
-command meet at `Lib.flow.Execute` before the Output target. Electronic music,
-techno drums, and flight span the composition; scan and cargo cover their cue windows, while three
-chopped-break clips share one lane across the action chapters.
-The music uses 120 BPM in 4/4: 54 bars, 216 beats, and 30 Blender frames per
-beat. `techno_pattern.py` chooses different, repeatable events per bar. The
-electronic stem plays D-minor sub bass, pitched stabs, and packet tones. The
-drum stem has synthesized kicks, snares, ghost hits, hats, and fills. Their
-seeded signal accents also animate TiXL's ASCII and SDF effects. Both music
-stems remain editable native AudioClips, separate from the chopped break and
-the flight, scan, and cargo sound effects.
+Eight original stereo PCM stems span the 108-second loop at 44.1 kHz. The
+project runs at 120 BPM (54 bars). Each stem is an editable native TiXL
+`Lib.io.audio.AudioClip`: `AudioReference` → native `AudioBus` → `Execute`
+alongside the final image command. The chopped break uses three TimeClips on
+one lane; the other stems have separate visible lanes.
 
-| File | Cue window | Purpose |
+The shared harmony is Dm9 → B♭maj7 → Fadd9 → Cadd9, two bars per chord,
+with the final two bars resolving to Dm9 before the loop.
+`techno_pattern.py` provides the seeded audio and visual accent schedule;
+`break_pattern.py` owns the chopped-break cuts and corresponding visual gates.
+The 120 BPM accent times remain stable when the harmony changes.
+
+| Stem | Timeline | Role |
 | --- | --- | --- |
-| `asterion_music_electronic_120bpm.wav` | 0–108 s | Seeded D-minor bass, stabs, and packet tones with quieter survey and breakaway passages. |
-| `asterion_music_techno_drums_120bpm.wav` | 0–108 s | Seeded techno kicks, snares, hats, ghost hits, and short fills. |
-| `asterion_fx_flight.wav` | 0–108 s | Propulsion bed, warp spools/blasts, breakup rumbles, and asteroid evasion. |
-| `asterion_fx_scan.wav` | 43–59 s | Soft magnetic sweeps, subdued spatial pulses, and a scan lock. |
-| `asterion_fx_cargo.wav` | 72–84 s | Tractor field, packet transfers, capture gate, and docking resolution. |
-| `asterion_amen_chops_120bpm.wav` | 10–24, 36–60, 72–104 s | Newly synthesized funk break cut into sixteenth-note slices, with repeats, reverses, and bit reduction. Three native AudioClip blocks share one TiXL timeline lane. |
+| `asterion_music_cinematic_120bpm.wav` | 0–108 s | Low ensemble, four-chord pulse, recurring rescue motif, and chapter arrivals. |
+| `asterion_music_electronic_120bpm.wav` | 0–108 s | Harmonic analog bass, broken sequencer, and short stereo answers. |
+| `asterion_music_techno_drums_120bpm.wav` | 0–108 s | Heavy kick, metallic snare, ghost hits, shuffled hats, and fills. |
+| `asterion_amen_chops_120bpm.wav` | 10–24, 36–60, 72–104 s | Original synthesized break cut into reverses, repeats, and crushed slices. |
+| `asterion_fx_flight.wav` | 0–108 s | Reactive engine, staged warp spool/blast/deceleration, dodges, and the retained expansion bass falls. |
+| `asterion_fx_scan.wav` | 43–59 s | Spectral sensor bed, irregular D-minor data grains, and harmonic lock. |
+| `asterion_fx_cargo.wav` | 72–84 s | Tractor field, accelerating servo packets, capture, and tonal resolution. |
+| `asterion_fx_glitch.wav` | 0–108 s | Sparse bit-held transmission faults, ring-modulated packets, and cut-grid clicks. |
 
-Run `generate_asterion_audio.py` to reproduce the WAVs with NumPy (`--stem scan`
-renders only the survey cue). After TiXL has been saved and closed through the
-bridge, run `examples/install_asterion_audio.py` to copy the five main
-files into the project's `Assets/audio` and add the native clip/bus/execute
-nodes. The installer backs up the Home graph and keeps existing visual nodes,
-connections, and TimeClips.
-TiXL's native TimeClips map timeline bars to file seconds. `Audio | mission
-audio bus` owns the master fader. For a project with the earlier bridge-specific
-audio operators, use `examples/upgrade_asterion_audio_timeline.py` with TiXL
-closed through the bridge; it preserves other graph work and replaces only the
-scan WAV.
+The arrangement has space for the first intercept, gains density through the
+first warp, opens into half-time bass falls during each expansion, becomes
+curious and sparse for the survey, tightens for cargo pickup, and reaches its
+most intense groove in the Ember orbit before resolving at the loop seam.
+The zero and 108-second sample endpoints are silent in every stem.
 
-Run `generate_asterion_audio.py --stem break` to regenerate the chopped break.
-`break_pattern.py` owns the 120 BPM chop timestamps used by both the audio
-renderer and `examples/install_asterion_break.py`. The latter adds three native
-AudioClips to the existing bus and a matching keyframe curve to the video
-glitch controls. Save and close TiXL through the bridge before running it.
+Run `generate_asterion_audio.py --stem all` to reproduce the WAVs with NumPy.
+Individual stems can be rendered with `--stem cinematic`, `electronic`,
+`techno`, `flight`, `scan`, `cargo`, `glitch`, or `break`. The synthesized break
+is original; no third-party sample or song recording is required.
 
-Run `generate_asterion_audio.py --stem electronic` and `--stem techno` to
-regenerate the music. For an existing Asterion Home that still contains the old
-score clip, run `examples/install_asterion_techno_refresh.py` after closing TiXL
-through the debug bridge. It removes that clip and asset, adds the techno drum
-clip, installs the refreshed electronic WAV, and animates the native TiXL SDF.
-The installer backs up only the Home graph files outside `Symbols`.
+For an existing Asterion TiXL Home graph, first confirm the live editor graph
+matches its saved `.t3` and `.t3ui`, then close TiXL through the debug bridge.
+Run `examples/refresh_asterion_sound_design.py --dry-run`, then run it without
+`--dry-run` to refresh the project audio assets and add the cinematic and
+glitch AudioClips. It retains the other clips, TimeClips, bus, visual graph,
+and Blender imports. The graph backup stays outside the live `Symbols` tree.
+Restart TiXL through the configured bridge with full process permissions and
+check the AudioClip lanes, bus route, rendered output, and warning log.

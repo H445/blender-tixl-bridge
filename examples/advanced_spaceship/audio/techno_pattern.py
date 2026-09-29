@@ -16,6 +16,22 @@ BARS = 54
 LOOP_SECONDS = 108
 SEED = 740142
 
+# Two bars per harmony: Dm9 → B♭maj7 → Fadd9 → Cadd9, then repeat. All
+# pitched stems use this map so the techno figures and cinematic cues agree.
+HARMONY = (
+    (38, (0, 3, 7, 10, 14, 15, 19, 22)),
+    (34, (0, 4, 7, 11, 14, 16, 19, 23)),
+    (41, (0, 4, 7, 14, 16, 19, 21, 26)),
+    (36, (0, 4, 7, 14, 16, 19, 21, 26)),
+)
+
+
+def harmony_at(time: float) -> tuple[int, tuple[int, ...]]:
+    # Resolve the final two bars to the opening tonic before the 108 s seam.
+    if time >= 104:
+        return HARMONY[0]
+    return HARMONY[(int(time // 2) // 2) % len(HARMONY)]
+
 
 @dataclass(frozen=True)
 class Event:
@@ -46,15 +62,11 @@ def intensity(t: float) -> float:
 
 def events() -> tuple[Event, ...]:
     result: list[Event] = []
-    # Roots and melodic choices stay within D natural minor, matching the
-    # scanner's D/F/G/E notes while leaving the percussion mostly unpitched.
-    roots = (38, 36, 41, 33, 43, 40)
-    degrees = (0, 3, 5, 7, 10, 12, 15, 17)
     for bar in range(BARS):
         start = 2.0 * bar
         level = intensity(start)
         rng = random.Random(SEED + bar * 1009)
-        root = roots[bar % len(roots)]
+        root, degrees = harmony_at(start)
         skip = {rng.randrange(1, 16)} if level >= .7 and bar % 4 == 3 else set()
         for step in range(16):
             if step in skip:
