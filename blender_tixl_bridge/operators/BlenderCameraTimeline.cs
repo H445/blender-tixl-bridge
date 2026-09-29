@@ -91,14 +91,15 @@ public sealed class BlenderCameraTimeline : Instance<BlenderCameraTimeline>
             while(worldIndex+1<_worldStarts.Count && t>=_worldStarts[worldIndex+1])worldIndex++;
         }
         WorldIndex.Value=worldIndex;
-        int countSamples=_samples.Length/12; float frame=t*60; int a=Math.Clamp((int)frame,0,countSamples-1),b=Math.Min(a+1,countSamples-1);
-        float u=frame-a;
-        // Hold the last camera sample before a cut; never interpolate across worlds.
-        if(shot+1<_shots.Count && b/60f>=_shots[shot+1].Start)b=a;
-        Position.Value=Vector3.Lerp(Vec(a,0),Vec(b,0),u);
-        Target.Value=Position.Value+Vector3.Normalize(Vector3.Lerp(Vec(a,3),Vec(b,3),u));
-        Up.Value=Vector3.Normalize(Vector3.Lerp(Vec(a,6),Vec(b,6),u));
-        FieldOfView.Value=_samples[a*12+9]*(1-u)+_samples[b*12+9]*u;
+        // AnimationScene holds transforms at the current 60 Hz source sample.
+        // Use that same sample for the camera pose so camera-parented meshes
+        // (including HUD geometry) cannot slide during live playback.
+        int countSamples=_samples.Length/12;
+        int a=Math.Clamp((int)MathF.Floor(t*60+0.0001f),0,countSamples-1);
+        Position.Value=Vec(a,0);
+        Target.Value=Position.Value+Vector3.Normalize(Vec(a,3));
+        Up.Value=Vector3.Normalize(Vec(a,6));
+        FieldOfView.Value=_samples[a*12+9];
         ClipPlanes.Value=new(_samples[a*12+10],_samples[a*12+11]);
         BlurRadius.Value=0; Cover.Value=0; CoverColor.Value=Vector4.One;
         foreach(var passage in _passages)
