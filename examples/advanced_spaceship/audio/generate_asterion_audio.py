@@ -12,6 +12,8 @@ from pathlib import Path
 
 import numpy as np
 
+from break_pattern import SIXTEENTH, chops
+
 
 SAMPLE_RATE = 44_100
 DURATION = 108
@@ -300,13 +302,101 @@ def cargo_fx():
     write("asterion_fx_cargo.wav", out)
 
 
+def break_fx():
+    """Build an original played-feeling funk break, then slice it like a sampler."""
+    rng = np.random.default_rng(19880617)
+    source = np.zeros((seconds(2), 2), np.float32)
+
+    def add_hit(start, signal, gain=1, pan=0):
+        first = round(start * SAMPLE_RATE)
+        length = min(len(signal), len(source)-first)
+        if length <= 0:
+            return
+        l = math.sqrt((1-pan)/2)*gain
+        r = math.sqrt((1+pan)/2)*gain
+        source[first:first+length, 0] += signal[:length]*l
+        source[first:first+length, 1] += signal[:length]*r
+
+    def colored_noise(length, low, high):
+        n = seconds(length)
+        raw = rng.standard_normal(n).astype(np.float32)
+        freq = np.fft.rfftfreq(n, 1/SAMPLE_RATE)
+        band = np.clip((freq-low)/max(low, 1), 0, 1)
+        band *= np.clip((high-freq)/max(high*.3, 1), 0, 1)
+        filtered = np.fft.irfft(np.fft.rfft(raw)*band, n=n).astype(np.float32)
+        return filtered / max(.001, np.max(np.abs(filtered)))
+
+    def kick():
+        n = seconds(.32)
+        t = np.arange(n, dtype=np.float32)/SAMPLE_RATE
+        phase = 2*np.pi*(48*t + 77*.041*(1-np.exp(-t/.041)))
+        return (np.sin(phase)*np.exp(-t*15)
+                + .16*colored_noise(.32, 80, 1800)*np.exp(-t*55)).astype(np.float32)
+
+    def snare(ghost=False):
+        n = seconds(.24)
+        t = np.arange(n, dtype=np.float32)/SAMPLE_RATE
+        noise = colored_noise(.24, 170, 6500)
+        body = np.sin(2*np.pi*(183*t+8*.018*(1-np.exp(-t/.018))))
+        out = .72*noise*np.exp(-t*17) + .31*body*np.exp(-t*27)
+        return (out*(.43 if ghost else 1)).astype(np.float32)
+
+    def hat(opened=False):
+        length = .20 if opened else .075
+        n = seconds(length)
+        t = np.arange(n, dtype=np.float32)/SAMPLE_RATE
+        return (colored_noise(length, 2400, 16000)
+                * np.exp(-t*(18 if opened else 67))).astype(np.float32)
+
+    for step in range(16):
+        t = step*SIXTEENTH
+        if step in (0, 7, 10):
+            add_hit(t, kick(), .85 if step == 0 else .57)
+        if step in (4, 12):
+            add_hit(t, snare(), .88 if step == 4 else 1.0, -.06)
+        if step in (6, 14, 15):
+            add_hit(t, snare(True), .52 if step == 15 else .32, .08)
+        if step % 2 == 0 or step in (7, 15):
+            add_hit(t, hat(step == 15), .30 if step % 4 else .25,
+                    -.24 if step % 4 else .21)
+    # A little short room makes the newly generated hits feel like one kit.
+    room(source, .22)
+    source = np.tanh(source*1.9).astype(np.float32)
+    source *= .8 / max(.8, float(np.max(np.abs(source))))
+
+    out = np.zeros((COUNT, 2), np.float32)
+    for event in chops():
+        src0 = round(event.source_step*SIXTEENTH*SAMPLE_RATE)
+        src1 = round((event.source_step+1)*SIXTEENTH*SAMPLE_RATE)
+        dst0 = round(event.time*SAMPLE_RATE)
+        dst1 = round((event.time+SIXTEENTH)*SAMPLE_RATE)
+        segment = source[src0:src1].copy()
+        if event.reverse:
+            segment = segment[::-1].copy()
+        if event.crush:
+            segment = np.round(segment*64)/64
+            segment[1::3] = segment[::3][:len(segment[1::3])]
+        needed = dst1-dst0
+        if len(segment) != needed:
+            segment = np.stack([np.interp(np.linspace(0, 1, needed),
+                                          np.linspace(0, 1, len(segment)),
+                                          segment[:,ch]) for ch in range(2)], axis=1)
+        edge = min(seconds(.0025), needed//3)
+        segment[:edge] *= np.linspace(0, 1, edge, dtype=np.float32)[:, None]
+        segment[-edge:] *= np.linspace(1, 0, edge, dtype=np.float32)[:, None]
+        out[dst0:dst1] += segment*event.gain
+    room(out, .10)
+    write("asterion_amen_chops_120bpm.wav", out, peak=.54)
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stem", choices=("all", "score", "flight", "scan", "cargo"),
+    parser.add_argument("--stem", choices=("all", "score", "flight", "scan", "cargo", "break"),
                         default="all")
     stem = parser.parse_args().stem
     for name, render in (("score", score), ("flight", flight_fx),
-                         ("scan", scan_fx), ("cargo", cargo_fx)):
+                         ("scan", scan_fx), ("cargo", cargo_fx),
+                         ("break", break_fx)):
         if stem in ("all", name):
             render()

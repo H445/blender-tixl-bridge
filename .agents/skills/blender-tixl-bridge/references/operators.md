@@ -34,4 +34,12 @@ Native AudioClip TimeClips ─> AudioReference ─> native AudioBus ─┐
 Tone mapping ─────────────────────────────────────────────────────┴─> Execute ─> Output target
 ```
 
+For audio-synced edits, generate the audio chops and TiXL control curves from
+the same beat/event schedule. Keep each native AudioClip's `TimeRange` in bars
+and `SourceRange` in file seconds; route its `AudioReference` to the native
+AudioBus, then evaluate the bus through `Execute` on the final render path.
+Drive visual effect strength with the shared event curve and inspect rendered
+frames on and between accents so a graph connection is not mistaken for a
+visible effect.
+
 Sync preserves the user-owned home graph, TimeClips, and supported editable routes while replacing generated import data. Keep generated imports separate from user edits. If Blender adds or removes worlds, update the corresponding user-owned scene branches deliberately.
