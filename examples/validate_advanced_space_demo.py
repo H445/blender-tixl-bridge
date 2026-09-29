@@ -164,8 +164,19 @@ assert all(any(Path(bpy.path.basename(image.filepath)).name == name
 )
 story_markers = [marker for marker in markers if marker.name.startswith("STORY |")]
 assert len(story_markers) >= 8, "The mission beats are missing from the timeline"
-assert bpy.data.objects.get("SIGNAL | recovered moon core") is not None
+beacon = bpy.data.objects.get("SIGNAL | recovered moon core")
+assert beacon is not None
 assert bpy.data.objects.get("SCAN | explorer to lunar signal") is not None
+original_frame, original_subframe = scene.frame_current, scene.frame_subframe
+try:
+    scene.frame_set(83*60+1)
+    socket = flight_rig.matrix_world @ Vector((-4.35, -.40, 1.50))
+    assert (beacon.matrix_world.translation-socket).length < .05, (
+        "Recovered core is floating outside the hauler cargo pod")
+    assert max(beacon.scale) <= .04, (
+        "Recovered core remains a bright sphere after being stowed")
+finally:
+    scene.frame_set(original_frame, subframe=original_subframe)
 assert len([obj for obj in objects if obj.name.startswith("WARP | ion trail")]) >= 24
 
 

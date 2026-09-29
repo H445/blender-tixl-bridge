@@ -10,7 +10,7 @@ import random
 from pathlib import Path
 
 import bpy
-from mathutils import Vector
+from mathutils import Euler, Vector
 
 
 scene = bpy.context.scene
@@ -463,11 +463,13 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
     camera.keyframe_insert("location", frame=frame)
     camera.keyframe_insert("rotation_euler", frame=frame)
 
-    # Bring the signal into the cargo cradle over eight seconds; its later
-    # motion matches the flight path without adding a new detachable part.
+    # Recover the core into the port cargo pod. The destination follows the
+    # craft's orientation, and the emissive marker contracts once stowed.
     recovery = smooth01((t-73)/9) * (1-smooth01((t-103)/5))
-    beacon.location = beacon_origin.lerp(position + Vector((0, 2, 1.5)), recovery)
-    beacon_size = 1-.4*recovery
+    cargo_socket = position + Euler((pitch, bank, yaw), "XYZ").to_matrix() @ Vector(
+        (-4.35, -.40, 1.50))
+    beacon.location = beacon_origin.lerp(cargo_socket, recovery)
+    beacon_size = 1-.97*recovery
     beacon.scale = (beacon_size,)*3
     beacon.keyframe_insert("location", frame=frame)
     beacon.keyframe_insert("scale", frame=frame)
