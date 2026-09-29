@@ -3,7 +3,7 @@
 - [Asterion Breakaway](advanced_spaceship/README.md) — 108-second looping spacecraft journey with distinct combat, explorer, and hauler builds, two planetary locations, and TiXL effects.
 - [BlendShapeExample](#blendshapeexample) — 16-second four-shape morph demo.
 
-The Asterion home can be refined with `refine_asterion_visuals.py` after TiXL has been closed through the debug bridge. It preserves the score and native AudioClip timeline, reduces full-frame tearing, and adds sparse ASCII accents plus a native turbulent torus SDF signal. The script backs up the original home graph outside `Symbols` before installation.
+The Asterion home can be refined with `refine_asterion_visuals.py` after TiXL has been closed through the debug bridge. It preserves native AudioClip timelines, reduces full-frame tearing, and adds sparse ASCII accents plus a native turbulent torus SDF signal. The script backs up the original home graph outside `Symbols` before installation. `install_asterion_techno_refresh.py` then replaces the old score clip with seeded techno drums and continuously animates that SDF.
 
 ## BlendShapeExample
 

@@ -1,6 +1,6 @@
 """Install native TiXL AudioClip -> AudioBus -> Execute with the editor closed.
 
-Four native AudioClip operators expose separate editable timeline lanes. Their
+Five native AudioClip operators expose separate editable timeline lanes. Their
 AudioReferences feed one native AudioBus, evaluated by Execute with the image.
 """
 
@@ -22,7 +22,8 @@ DEFAULT_GRAPH = (Path.home() / "OneDrive/Documents/TiXL4.3-alpha/"
 AUDIO = Path(__file__).resolve().parent / "advanced_spaceship/audio"
 BACKUPS = Path(__file__).resolve().parent / ".tixl_cache/AsterionBreakaway/graph_backups"
 CLIPS = (
-    ("score", "asterion_score_120bpm.wav", .82),
+    ("electronic", "asterion_music_electronic_120bpm.wav", .82),
+    ("techno", "asterion_music_techno_drums_120bpm.wav", .66),
     ("flight", "asterion_fx_flight.wav", .48),
     ("scan", "asterion_fx_scan.wav", .64),
     ("cargo", "asterion_fx_cargo.wav", .62),
@@ -65,7 +66,8 @@ def inspect_audio(path):
 
 def clip_output(name):
     start, end, layer = {
-        "score": (0, 108, 1), "flight": (0, 108, 2),
+        "electronic": (0, 108, 6), "techno": (0, 108, 1),
+        "flight": (0, 108, 2),
         "scan": (43, 59, 3), "cargo": (72, 84, 4),
     }[name]
     return {"Id": CLIP_TIME_OUTPUT,
@@ -135,10 +137,10 @@ def install(graph, ui, *, existing_scan=None):
             clip.update(Name="Audio | scan clip", InputValues=inputs)
             position = next(item for item in ui["SymbolChildUis"]
                             if item["ChildId"] == clip["Id"])
-            position["Position"] = {"X": 21360, "Y": -1280 + index*290}
+            position["Position"] = {"X": 21360, "Y": -1570 + index*290}
         else:
             clip = child(name + " clip", CLIP_SYMBOL, "Lib.io.audio.AudioClip",
-                         21360, -1280 + index*290, inputs)
+                         21360, -1570 + index*290, inputs)
         clip["Outputs"] = [clip_output(name)]
         graph["Connections"].append(link(clip["Id"], CLIP_OUTPUT,
                                          bus["Id"], BUS_INPUT))
@@ -196,7 +198,7 @@ def main():
     graph_path.write_text(json.dumps(graph, indent=2) + "\n", encoding="utf-8")
     ui_path.write_text(json.dumps(ui, indent=2) + "\n", encoding="utf-8")
     print("ASTERION_AUDIO_INSTALLED", graph_path, "backup", backup,
-          "clips", 4)
+          "clips", len(CLIPS))
 
 
 if __name__ == "__main__":

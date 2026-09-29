@@ -12,13 +12,14 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from install_asterion_audio import (AUDIO, BACKUPS, CLIPS, CLIP_SYMBOL,
+from install_asterion_audio import (AUDIO, BACKUPS, CLIP_SYMBOL,
                                     DEFAULT_GRAPH, GRAPH_ID, TARGET_COMMAND,
                                     inspect_audio, install, link, read_graph, uid)
 
 
 OLD_NAMES = {"Audio | 120 BPM project time", "Audio | mission audio bus",
-             *(f"Audio | {name} clip" for name, _, _ in CLIPS)}
+             *(f"Audio | {name} clip" for name in
+               ("score", "flight", "scan", "cargo"))}
 
 
 def upgrade(graph, ui):
@@ -82,7 +83,7 @@ def main():
                and edge["TargetParentOrChildId"] in ids
                for edge in graph["Connections"])
     print("ASTERION_NATIVE_AUDIO_PLAN", len(ids), "children",
-          len(graph["Connections"]), "connections", "4 AudioClip lanes")
+          len(graph["Connections"]), "connections", "5 AudioClip lanes")
     if args.dry_run:
         return
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

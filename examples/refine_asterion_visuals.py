@@ -83,7 +83,7 @@ def refine(graph, ui):
         return c
 
     # The previous beat curve drove a complete pixel-sort frame. Reserve that
-    # effect for a faint, rare tear; readable ASCII now carries the break cuts.
+    # effect for a faint, rare tear; ASCII can carry selected break cuts.
     for name, factor in (("Break | 120 BPM chop accents", 0.16),
                          ("Break | scanline glitch on chops", 0.24)):
         c = names[name]

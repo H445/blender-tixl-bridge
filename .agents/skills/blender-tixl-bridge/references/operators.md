@@ -41,5 +41,12 @@ AudioBus, then evaluate the bus through `Execute` on the final render path.
 Drive visual effect strength with the shared event curve and inspect rendered
 frames on and between accents so a graph connection is not mistaken for a
 visible effect.
+For randomized music-video sections, seed choices per bar so every build and
+108-second loop repeats exactly while adjacent bars differ. Use one event list
+for percussion, melodic packets, and sparse visual accents. Close all sampled
+curves at the loop seam. A moving SDF needs animation of field parameters or
+space transforms (for example radius, tilt, deformation, and noise offset),
+not merely a blend opacity curve. Compare separated frames and nearby off-beat
+frames before claiming motion or visual variety.
 
 Sync preserves the user-owned home graph, TimeClips, and supported editable routes while replacing generated import data. Keep generated imports separate from user edits. If Blender adds or removes worlds, update the corresponding user-owned scene branches deliberately.

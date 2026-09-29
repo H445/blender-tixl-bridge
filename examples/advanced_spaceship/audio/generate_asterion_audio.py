@@ -1,4 +1,4 @@
-"""Render Asterion's original 120 BPM, 108-second score and isolated effects.
+"""Render Asterion's 120 BPM seeded techno stems and isolated effects.
 
 Only NumPy and Python's standard library are required. Each WAV starts at
 project second zero so TiXL clips can be moved, muted, or mixed independently.
@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from break_pattern import SIXTEENTH, chops
+from techno_pattern import STEP, events
 
 
 SAMPLE_RATE = 44_100
@@ -138,85 +139,6 @@ def write(name, track, peak=.88):
           "bytes", output.stat().st_size)
 
 
-def score():
-    out = np.zeros((COUNT, 2), np.float32)
-    # A minor-centred six-bar harmonic circuit lands on A at the loop seam.
-    chords = ((45, 52, 57, 60), (41, 48, 53, 57), (48, 55, 60, 64),
-              (43, 50, 55, 59), (38, 45, 50, 53), (40, 47, 52, 56))
-    motif = (69, 72, 76, 72, 67, 72, 76, 79, 81, 76, 72, 69,
-             65, 69, 72, 69, 67, 71, 74, 71, 69, 64, 67, 71)
-    for bar in range(54):
-        start = 2*bar
-        chord = chords[bar % len(chords)]
-        level = energy_at(start)
-        # Leave air around the scan and the breakaway. The later warp reprise
-        # earns its weight by bringing the low orchestra back in layers.
-        if 26 <= start < 34 or 62 <= start < 68:
-            level *= .46
-        for voice, midi in enumerate(chord):
-            place(out, start, note(frequency(midi), 2.4, "organ"),
-                  .105*level, (-.60, -.18, .22, .58)[voice])
-        # Low ostinato grows into large pulses on the warp and storm passages.
-        for beat in range(4):
-            t = start + beat*BEAT
-            dynamic = energy_at(t)
-            place(out, t, note(frequency(chord[0]-12), .42, "bass"),
-                  .18*dynamic*(1.25 if beat == 0 else .67))
-            if dynamic > .45:
-                place(out, t+.25, note(frequency(chord[1]), .22, "strings"),
-                      .045*dynamic, .35 if beat % 2 else -.35)
-        if bar % 2 == 0 and 20 <= start < 104:
-            for voice, midi in enumerate(chord[1:]):
-                place(out, start+.08, note(frequency(midi+12), 3.75, "strings"),
-                      .067*level, (-.6, .05, .6)[voice])
-        # Four-note rising answer, restrained during the floating debris shots.
-        if bar % 4 in (0, 2):
-            for step in range(4):
-                t = start + .25 + step*.375
-                place(out, t, note(frequency(motif[(bar*2+step) % len(motif)]),
-                                   1.02, "bell"), .10*energy_at(t),
-                      -.42 + .28*step)
-        if start in (12, 22, 72, 84, 90, 100):
-            for j, midi in enumerate(chord[1:]):
-                place(out, start, note(frequency(midi+12), 2.6, "brass"),
-                      .085*level, (-.5, 0, .5)[j])
-        if start in (14, 20, 58, 82, 88, 96, 102):
-            for j, midi in enumerate((chord[0]-12, chord[1], chord[2])):
-                place(out, start, note(frequency(midi), 3.1, "brass"),
-                      (.12, .065, .06)[j]*level, (-.36, 0, .36)[j])
-        if 84 <= start < 104 and bar % 2:
-            # A string ostinato lifts the final chase above the break rhythm.
-            for step in range(8):
-                midi = chord[(step*3 + bar) % len(chord)] + 12
-                place(out, start + step*.25, note(frequency(midi), .27, "strings"),
-                      .050*level*(1.25 if step in (0, 5) else 1),
-                      -.52 if step % 2 else .52)
-
-    # In the quiet survey, a distinctive delayed five-note signal motif.
-    for t in np.arange(38, 59, 2):
-        for j, midi in enumerate((81, 76, 72, 79, 76)):
-            place(out, float(t+j*.25), note(frequency(midi), 1.1, "bell"),
-                  .035, -.5+j*.25)
-
-    # Cinematic low impacts and restrained IDM ticks; strictly beat aligned.
-    for beat in range(216):
-        t = beat*BEAT
-        level = energy_at(t)
-        if beat % 4 == 0 and level > .48:
-            n = seconds(.48)
-            x = np.arange(n, dtype=np.float32)/SAMPLE_RATE
-            kick = np.sin(2*np.pi*(48*x + 33*.030*(1-np.exp(-x/.030))))
-            place(out, t, kick*np.exp(-x*14), .17*level)
-        if beat % 2 == 1 and level > .4:
-            n = seconds(.10)
-            hiss = RNG.standard_normal(n).astype(np.float32)
-            hiss = np.diff(hiss, prepend=0)
-            place(out, t, hiss*np.exp(-np.arange(n)/SAMPLE_RATE*42),
-                  .008*level, .4 if beat%4 == 1 else -.4)
-    room(out, .43)
-    write("asterion_score_120bpm.wav", out)
-
-
 def electronic_note(hz, length, *, brightness=.5):
     """Band-limited-ish wavetable stack with a short FM attack and stereo-safe body."""
     n = seconds(length)
@@ -228,110 +150,72 @@ def electronic_note(hz, length, *, brightness=.5):
 
 
 def electronic_music():
-    """Independent IDM/EDM stem; all triggers remain locked to 120 BPM."""
+    """Seeded D-minor bass, stabs, and packet tones with changing bar patterns."""
     out = np.zeros((COUNT, 2), np.float32)
-    roots = (33, 29, 36, 31, 26, 28)  # Same six-bar harmonic circuit as score.
-    # Section-specific density makes the quiet lunar survey and final chase
-    # feel like different scenes while sharing the same exact 108 s loop.
-    for bar in range(54):
-        start = bar*2.0
-        root = roots[bar % len(roots)]
-        if start < 10:
-            density, gain = 1, .24
-        elif start < 24:
-            density, gain = 4, .62
-        elif start < 36:
-            density, gain = 1, .17
-        elif start < 60:
-            density, gain = 3, .42
-        elif start < 72:
-            density, gain = 1, .20
-        elif start < 84:
-            density, gain = 4, .58
-        elif start < 104:
-            density, gain = 7, .82
-        else:
-            density, gain = 2, .25
-        # Syncopated sub notes fill the spaces between kick transients; short
-        # release means the bass stays legible under the mission effects.
-        bass_steps = (0, 3, 7, 10, 12, 15) if density >= 4 else (0, 7, 12)
-        for step in bass_steps:
-            if density == 1 and step != 0:
-                continue
-            t0 = start + step*SIXTEENTH
-            if t0 >= 108:
-                continue
-            midi = root + (12 if step == 15 else 0)
-            place(out, t0, electronic_note(frequency(midi), .27,
-                                            brightness=.17),
-                  .16*gain*(1.2 if step == 0 else .85),
-                  -.16 if step % 2 else .16)
-        if density >= 3:
-            order = (0, 2, 1, 3, 2, 4, 1, 3, 0, 4, 2, 3, 1, 4, 2, 0)
-            degrees = (0, 3, 7, 10, 12)
-            for step in range(16):
-                if density == 3 and step % 3 != 0:
-                    continue
-                if density == 4 and step % 2 and step not in (7, 15):
-                    continue
-                if density == 7 and bar % 4 == 3 and step in (11, 14):
-                    continue  # Two small dropouts reinforce the chopped break.
-                t0 = start + step*SIXTEENTH
-                if t0 >= 108:
-                    continue
-                midi = root + 24 + degrees[order[(step + bar*3) % 16]]
-                place(out, t0, electronic_note(frequency(midi), .105,
-                                                brightness=.72),
-                      .050*gain*(1.4 if step in (0, 10) else 1),
-                      -.65 if step % 2 else .65)
-        # Four-bar transition fills: stuttering metallic echoes climb into a
-        # new chapter instead of repeating the same bar indefinitely.
-        if density >= 4 and bar % 4 == 3:
-            for step in range(8):
-                t0 = start + 1 + step*SIXTEENTH
-                midi = root + 36 + (0, 7, 10, 12)[step % 4]
-                place(out, t0, electronic_note(frequency(midi), .075,
-                                                brightness=.95),
-                      .018*gain*(1 + step/8),
-                      -.7 + step*.2)
-        if density >= 4 and (start < 24 or start >= 84):
-            # The warp and final chase use a four-on-the-floor foundation;
-            # the independently editable chopped break supplies the syncopation.
-            for beat in range(4):
-                t0 = start + beat*BEAT
-                n = seconds(.27)
-                u = np.arange(n, dtype=np.float32)/SAMPLE_RATE
-                phase = 2*np.pi*(47*u + 68*.026*(1-np.exp(-u/.026)))
-                kick = np.sin(phase)*np.exp(-u*17)
-                place(out, t0, kick, .115*gain*(1.16 if beat == 0 else 1))
-                hat_n = seconds(.056)
-                hu = np.arange(hat_n, dtype=np.float32)/SAMPLE_RATE
-                hiss = RNG.standard_normal(hat_n).astype(np.float32)
-                tick = np.diff(hiss, prepend=0)*np.exp(-hu*86)
-                place(out, t0+.25, tick, .006*gain,
-                      -.48 if beat % 2 else .48)
-    # A wide, granular-feeling percussion shimmer marks each warp entrance.
-    # It is synthesized here, not sampled from a third-party recording.
+    for event in events():
+        if event.kind == "bass":
+            tone = electronic_note(frequency(event.note), .28, brightness=.27)
+            place(out, event.time, tone, .20 * event.gain, event.pan)
+        elif event.kind == "stab":
+            tone = electronic_note(frequency(event.note), .17,
+                                   brightness=.55 + .32 * event.gain)
+            place(out, event.time, tone, .095 * event.gain, event.pan)
+            # A short stereo answer establishes an evolving, not fixed, riff.
+            if event.time + .1875 < DURATION:
+                place(out, event.time + .1875, tone[:seconds(.11)],
+                      .031 * event.gain, -event.pan)
+        elif event.kind in ("signal", "fill"):
+            tone = electronic_note(frequency(event.note), .105, brightness=.96)
+            place(out, event.time, tone, .060 * event.gain, event.pan)
     for entrance in (10, 72, 84):
-        n = seconds(1.5)
-        t = np.arange(n, dtype=np.float32)/SAMPLE_RATE
-        noise = RNG.standard_normal(n).astype(np.float32)
-        shimmer = np.diff(noise, prepend=0) * np.exp(-t*4.5)
-        place(out, entrance, shimmer, .009, -.35)
-        place(out, entrance+.125, shimmer, .008, .35)
-    for entrance in (10, 72, 84):
-        # Two-second rising noise and a pitched landing cue announce the cut.
-        n = seconds(2)
-        u = np.arange(n, dtype=np.float32)/SAMPLE_RATE
-        noise = np.diff(RNG.standard_normal(n).astype(np.float32),
-                        prepend=0)
-        rise = noise * smooth(u/2)**2 * smooth((2-u)/.07)
-        place(out, entrance-2, rise, .007, -.30)
-        place(out, entrance, electronic_note(55, 1.1, brightness=.9),
-              .095, .18)
-    room(out, .23)
-    out *= 2.4
-    write("asterion_music_electronic_120bpm.wav", out, peak=.66)
+        # Pitched engine-like landings tie the electronics to the flight.
+        place(out, entrance, electronic_note(73.42, 1.15, brightness=.88),
+              .13, -.22)
+        place(out, entrance + .125,
+              electronic_note(146.83, .58, brightness=.74), .045, .38)
+    room(out, .19)
+    out *= 2.2
+    write("asterion_music_electronic_120bpm.wav", out, peak=.68)
+
+
+def techno_percussion():
+    """Original drum synthesis driven by the same seeded bar events as TiXL."""
+    out = np.zeros((COUNT, 2), np.float32)
+    rng = np.random.default_rng(19790814)
+
+    n = seconds(.36)
+    t = np.arange(n, dtype=np.float32) / SAMPLE_RATE
+    phase = 2 * np.pi * (45*t + 95*.024*(1-np.exp(-t/.024)))
+    kick = (np.sin(phase) * np.exp(-t*15)
+            + .08 * rng.standard_normal(n).astype(np.float32) * np.exp(-t*92))
+
+    n = seconds(.28)
+    t = np.arange(n, dtype=np.float32) / SAMPLE_RATE
+    snare_noise = np.diff(rng.standard_normal(n).astype(np.float32), prepend=0)
+    snare = (.23*np.sin(2*np.pi*187*t) + .30*snare_noise) * np.exp(-t*20)
+
+    n = seconds(.085)
+    t = np.arange(n, dtype=np.float32) / SAMPLE_RATE
+    hat = np.diff(rng.standard_normal(n).astype(np.float32), prepend=0)
+    hat *= np.exp(-t*76)
+
+    for event in events():
+        if event.kind == "kick":
+            place(out, event.time, kick, .30*event.gain, event.pan)
+        elif event.kind == "snare":
+            place(out, event.time, snare, .36*event.gain, event.pan)
+        elif event.kind == "ghost":
+            place(out, event.time, snare, .15*event.gain, event.pan)
+        elif event.kind == "hat":
+            place(out, event.time, hat, .090*event.gain, event.pan)
+        elif event.kind == "fill":
+            for repeat in range(3):
+                place(out, event.time + repeat*STEP/3,
+                      hat[:seconds(.045)], .11*event.gain*(1-repeat*.18),
+                      event.pan if repeat % 2 == 0 else -event.pan)
+    room(out, .12)
+    out *= 1.7
+    write("asterion_music_techno_drums_120bpm.wav", out, peak=.72)
 
 
 def airy_noise(length, lower=65, upper=5000):
@@ -387,7 +271,7 @@ def flight_fx():
 def scan_fx():
     out = np.zeros((COUNT, 2), np.float32)
     # Soft, wide magnetic sweeps replace the shrill repeating sonar chirps.
-    # The half-bar pulses are felt as a scan cycle without masking the score.
+    # The half-bar pulses suggest a scan cycle without masking the music.
     for start, length, pan in ((43, 7.5, -.55), (49, 8.5, .55)):
         n = seconds(length)
         t = np.arange(n, dtype=np.float32) / SAMPLE_RATE
@@ -524,10 +408,11 @@ def break_fx():
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stem", choices=("all", "score", "electronic", "flight", "scan", "cargo", "break"),
+    parser.add_argument("--stem", choices=("all", "electronic", "techno", "flight", "scan", "cargo", "break"),
                         default="all")
     stem = parser.parse_args().stem
-    for name, render in (("score", score), ("electronic", electronic_music),
+    for name, render in (("electronic", electronic_music),
+                         ("techno", techno_percussion),
                          ("flight", flight_fx),
                          ("scan", scan_fx), ("cargo", cargo_fx),
                          ("break", break_fx)):

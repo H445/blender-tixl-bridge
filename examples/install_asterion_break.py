@@ -99,7 +99,7 @@ def install(graph, ui):
 
     for index, (start, end) in enumerate(ACTIVE_WINDOWS):
         clip = child(f"{start:02d}-{end:03d}s chopped drums", CLIP_SYMBOL,
-                     "Lib.io.audio.AudioClip", 21360, -2150+index*290,
+                     "Lib.io.audio.AudioClip", 21360, -2440+index*290,
                      [value("625951af-5f99-4171-b5b0-c97413121f56",
                             "System.String",
                             f"AsterionBreakaway:audio/{BREAK_FILE}"),

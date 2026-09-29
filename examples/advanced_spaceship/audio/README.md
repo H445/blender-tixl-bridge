@@ -3,20 +3,21 @@
 Six original stereo PCM files span the full 108-second project at 44.1 kHz.
 Each native `Lib.io.audio.AudioClip` has its own visible, editable TiXL timeline
 lane and feeds native `Lib.io.audio.AudioBus`. The bus command and final image
-command meet at `Lib.flow.Execute` before the Output target. Score and flight
-span the composition; scan and cargo cover their cue windows, while three
+command meet at `Lib.flow.Execute` before the Output target. Electronic music,
+techno drums, and flight span the composition; scan and cargo cover their cue windows, while three
 chopped-break clips share one lane across the action chapters.
 The music uses 120 BPM in 4/4: 54 bars, 216 beats, and 30 Blender frames per
-beat. The score has low-brass landings, an exposed lunar survey, and a rising
-string ostinato in the final chase. A separate electronic music stem adds
-syncopated sub bass, pitched arpeggios, four-on-the-floor warp kicks, offbeat
-metallic ticks, dropouts, and rising transitions. It is an editable native
-AudioClip, independent of the chopped break and sound effects.
+beat. `techno_pattern.py` chooses different, repeatable events per bar. The
+electronic stem plays D-minor sub bass, pitched stabs, and packet tones. The
+drum stem has synthesized kicks, snares, ghost hits, hats, and fills. Their
+seeded signal accents also animate TiXL's ASCII and SDF effects. Both music
+stems remain editable native AudioClips, separate from the chopped break and
+the flight, scan, and cargo sound effects.
 
 | File | Cue window | Purpose |
 | --- | --- | --- |
-| `asterion_score_120bpm.wav` | 0–108 s | Cinematic harmony, brass landings, string ostinato, and chapter dynamics. |
-| `asterion_music_electronic_120bpm.wav` | 0–108 s | EDM/IDM pulse and arpeggio layer with warp kick, syncopation, transition rises, and quiet intervals. |
+| `asterion_music_electronic_120bpm.wav` | 0–108 s | Seeded D-minor bass, stabs, and packet tones with quieter survey and breakaway passages. |
+| `asterion_music_techno_drums_120bpm.wav` | 0–108 s | Seeded techno kicks, snares, hats, ghost hits, and short fills. |
 | `asterion_fx_flight.wav` | 0–108 s | Propulsion bed, warp spools/blasts, breakup rumbles, and asteroid evasion. |
 | `asterion_fx_scan.wav` | 43–59 s | Soft magnetic sweeps, subdued spatial pulses, and a scan lock. |
 | `asterion_fx_cargo.wav` | 72–84 s | Tractor field, packet transfers, capture gate, and docking resolution. |
@@ -24,7 +25,7 @@ AudioClip, independent of the chopped break and sound effects.
 
 Run `generate_asterion_audio.py` to reproduce the WAVs with NumPy (`--stem scan`
 renders only the survey cue). After TiXL has been saved and closed through the
-bridge, run `examples/install_asterion_audio.py` to copy the original four
+bridge, run `examples/install_asterion_audio.py` to copy the five main
 files into the project's `Assets/audio` and add the native clip/bus/execute
 nodes. The installer backs up the Home graph and keeps existing visual nodes,
 connections, and TimeClips.
@@ -40,8 +41,9 @@ renderer and `examples/install_asterion_break.py`. The latter adds three native
 AudioClips to the existing bus and a matching keyframe curve to the video
 glitch controls. Save and close TiXL through the bridge before running it.
 
-Run `generate_asterion_audio.py --stem score` and `--stem electronic` to
-regenerate the updated music. With TiXL closed through the bridge, run
-`examples/install_asterion_electronic_music.py` once to copy the music into
-`Assets/audio` and add the electronic AudioClip to the existing native bus. The
-installer rejects an edited score and backs up the Home graph outside `Symbols`.
+Run `generate_asterion_audio.py --stem electronic` and `--stem techno` to
+regenerate the music. For an existing Asterion Home that still contains the old
+score clip, run `examples/install_asterion_techno_refresh.py` after closing TiXL
+through the debug bridge. It removes that clip and asset, adds the techno drum
+clip, installs the refreshed electronic WAV, and animates the native TiXL SDF.
+The installer backs up only the Home graph files outside `Symbols`.
