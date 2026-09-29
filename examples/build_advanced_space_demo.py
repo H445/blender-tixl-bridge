@@ -192,8 +192,8 @@ copper = pbr("03 | heat-scarred copper alloy", (0.53, 0.26, 0.11), 0.93, 0.38,
 white = pbr("04 | photovoltaic ceramic cover", (0.66, 0.72, 0.75), 0.24, 0.32,
             albedo="solar_ceramic.png", orm="solar_orm.png",
             normal="solar_normal.png")
-canopy_mat = pbr("04b | smoked iridium cockpit glazing", (0.015, 0.055, 0.085),
-                 0.54, 0.12)
+canopy_mat = pbr("04b | smoked iridium cockpit glazing", (0.10, 0.20, 0.27),
+                 0.42, 0.22)
 blue = pbr("05 | ion blue emitter", (0.04, 0.16, 0.28), 0.38, 0.22,
            emission_color=(0.045, 0.43, 0.95), emission_strength=7.0)
 amber = pbr("06 | warning amber emitter", (0.24, 0.10, 0.015), 0.25, 0.3,
@@ -476,6 +476,61 @@ def poly_prism(name, outline, z_bottom, z_top, material, coll=craft):
     return obj
 
 
+def cockpit_shell():
+    """A low, sloped flight deck seated against the tapered pressure hull."""
+    outline = [(-.42, 4.00), (.42, 4.00), (.78, 2.90), (.84, 1.22),
+               (.50, .62), (-.50, .62), (-.84, 1.22), (-.78, 2.90)]
+    base_z = [.35, .35, .56, .83, .84, .84, .83, .56]
+    roof_y = [3.69, 3.69, 2.77, 1.36, .84, .84, 1.36, 2.77]
+    roof_z = [.92, .92, 1.43, 1.72, 1.43, 1.43, 1.72, 1.43]
+    center = Vector((0, 2.30, 1.02))
+    vertices = []
+    for ring in range(3):
+        for index, (x, y) in enumerate(outline):
+            if ring == 0:
+                point = (x, y, base_z[index])
+            elif ring == 1:
+                point = (x*.97, y, base_z[index]+.14)
+            else:
+                point = (x*.72, roof_y[index], roof_z[index])
+            vertices.append(tuple(Vector(point)-center))
+    faces = [tuple(reversed(range(8)))]
+    faces.extend((i, (i+1)%8, (i+1)%8+8, i+8) for i in range(8))
+    faces.extend((i+8, (i+1)%8+8, (i+1)%8+16, i+16) for i in range(8))
+    faces.append(tuple(range(16, 24)))
+    # The nose-to-tail outline winds clockwise when viewed from above.
+    faces = [tuple(reversed(face)) for face in faces]
+    obj = mesh_object("COCKPIT | faceted iridium canopy", vertices, faces,
+                      canopy_mat, craft, extra_materials=(copper, hull),
+                      face_materials=[2] + [1]*8 + [0]*8 + [0])
+    obj.location = center
+    obj["flight_deck_seated"] = True
+    return obj
+
+
+def cockpit_frame_rail(side):
+    """One continuous shoulder rail follows each canopy's sloping glass edge."""
+    stations = [(side*.32, 3.70, .91), (side*.56, 2.77, 1.43),
+                (side*.60, 1.36, 1.72), (side*.36, .84, 1.43)]
+    center = sum((Vector(point) for point in stations), Vector())/len(stations)
+    vertices = []
+    for point in stations:
+        x, y, z = point
+        vertices.extend(tuple(Vector((x+dx, y, z+dz))-center)
+                        for dx, dz in ((-.055,-.045),(.055,-.045),
+                                       (.055,.045),(-.055,.045)))
+    faces = [(3,2,1,0)]
+    for station in range(len(stations)-1):
+        base = station*4
+        faces.extend((base+i, base+(i+1)%4,
+                      base+(i+1)%4+4, base+i+4) for i in range(4))
+    faces.append(tuple(range((len(stations)-1)*4, len(stations)*4)))
+    obj = mesh_object(f"COCKPIT-RAIL-{side:+d} | titanium frame",
+                      vertices, faces, copper, craft)
+    obj.location = center
+    return obj
+
+
 def sky_sphere(name, material, coll, radius=350, segments=96, rings=48):
     # Inward-facing equirectangular UV mesh is visible throughout the orbit.
     # The seam has duplicate vertices so the image spans the sphere exactly once.
@@ -526,20 +581,15 @@ for i, (a,b,w0,w1,h0,h1) in enumerate([
 ]):
     detachable(tapered(f"FUSELAGE-{i:02d} | pressure shell", a,b,w0,w1,h0,h1,hull), "spine", i)
 
-# A raised, faceted two-seat bridge breaks the dorsal slab silhouette. Opaque
-# iridium glass gives predictable glTF/TiXL PBR without unsupported refraction.
-detachable(poly_prism("COCKPIT | faceted iridium canopy",
-                      [(-.42,4.00),(.42,4.00),(.78,2.90),(.84,1.22),
-                       (.50,.62),(-.50,.62),(-.84,1.22),(-.78,2.90)],
-                      .89,1.48,canopy_mat),"spine",205)
+# The shared flight deck has a sloped nose, glazing, metal skirt, and two
+# shoulder rails. It stays seated on the pressure hull in every configuration.
+detachable(cockpit_shell(),"spine",205)
 for side in (-1,1):
-    detachable(poly_prism(f"COCKPIT-RAIL-{side:+d} | titanium frame",
-                          [(side*.82,1.0),(side*.96,1.0),
-                           (side*.91,3.0),(side*.60,3.95),(side*.47,3.95)],
-                          1.02,1.13,copper),"spine",206+(side+1)//2)
+    detachable(cockpit_frame_rail(side),"spine",206+(side+1)//2)
     for section in range(5):
+        y = 3.48-section*.45
         detachable(box(f"COCKPIT-HUD-{side:+d}-{section}",
-                       (.045,.18,.025),(side*.51,3.48-section*.45,1.49),
+                       (.045,.18,.025),(side*.40,y,1.73-.22*(y-1.2)),
                        blue,bevel=.007),"spine",210+section+(side+1)*3)
 
 # Sixteen station ribs, 64 armor tiles, 48 individually identifiable recessed
@@ -700,8 +750,8 @@ for side in (-1,1):
                          .21,.035,copper,
                          segments=16),"EXPLORER")
 
-# HAULER: broad twin cargo rails, twelve tall transport modules and reinforced
-# container ribs give a bulky rectangular planform with a raised cargo deck.
+# HAULER: two supported, evenly spaced cargo banks surround an unobstructed
+# central flight deck instead of overlapping into an opaque wall.
 for side in (-1,1):
     role_object(box(f"HAULER | heavy cargo cradle rail {side:+d}",
                     (.55,10.8,.72),(side*5.4,-1.2,.28),copper,bevel=.065),"HAULER")
@@ -710,20 +760,24 @@ for side in (-1,1):
                         (.55,.20,1.65),(side*5.4,2.9-station*1.55,.82),
                         dark,bevel=.025),"HAULER")
 for row in range(4):
-    yy=2.3-row*2.35
+    # Four broad deck plates tie the two cargo banks into a deliberate,
+    # load-bearing silhouette while leaving a 3.4 m cockpit corridor.
+    deck_side = -1 if row < 2 else 1
+    deck_y = 1.50 if row % 2 == 0 else -3.20
+    deck_length = 4.60 if row % 2 == 0 else 6.20
     role_object(box(f"HAULER-CARGO-DECK-{row:02d}",
-                    (7.6,.36,.34),(0,yy,.87),dark,bevel=.045),"HAULER")
+                    (3.0,deck_length,.38),(deck_side*3.20,deck_y,.68),
+                    dark,bevel=.045),"HAULER")
     for col in range(3):
-        # Twin outboard banks leave a visible, protected command corridor.
-        # Each side carries two rows of three reused container modules.
+        # Six serial containers on each side have a 0.28 m longitudinal gap.
         xx=-4.35 if row<2 else 4.35
-        pod_y=2.4-(row%2)*3.1-col*1.75
+        pod_y=3.2-((row%2)*3+col)*1.8
         role_object(box(f"HAULER-CARGO-{row:02d}-{col:02d}",
-                        (2.15,1.62,1.34),(xx,pod_y,1.70),
+                        (2.15,1.52,1.15),(xx,pod_y,1.50),
                         white if (row+col)%3==0 else hull,bevel=.11),"HAULER")
         for edge in (-1,1):
             role_object(box(f"HAULER-CONTAINER-STRAP-{row:02d}-{col:02d}-{edge:+d}",
-                            (.10,1.55,1.48),(xx+edge*.83,pod_y,1.70),
+                            (.10,1.48,1.25),(xx+edge*.83,pod_y,1.50),
                             copper,bevel=.018),"HAULER")
 
 # A portable space environment: textured emissive geometry and real meshes,
@@ -889,12 +943,6 @@ for idx,obj in enumerate(parts):
         # and hinged wings change the outline around this common load path.
         explorer=rest.copy()
         hauler=rest.copy()
-        if obj.name.startswith(("COCKPIT |", "COCKPIT-RAIL-", "COCKPIT-HUD-")):
-            # One intact flight deck slides onto the survey neck or rises
-            # above the hauler's open central corridor. Its glazing, frame,
-            # and HUD move as a coherent assembly rather than floating apart.
-            explorer += Vector((0,1.50,.55))
-            hauler += Vector((0,1.80,.90))
     # Each object fires independently, then joins two starkly different
     # layouts. Key hold frames make the three role silhouettes unambiguous.
     trajectory=[(1,rest,(0,0,0),(1,1,1)),
@@ -939,13 +987,15 @@ for role, objects in role_parts.items():
             if "ten-metre" in obj.name:
                 combat=Vector((0,0,-1.15))
                 combat_scale=(.72,.60,.72)
-                hauler=Vector((0,4.35,1.15))
-                hauler_scale=(.92,.55,.90)
+                # The survey spar becomes a protected longitudinal keel below
+                # the hauler's shared pressure hull, not a stalk above it.
+                hauler=Vector((0,-1.15,-.78))
+                hauler_scale=(1.35,.86,1.30)
             elif "forward survey head" in obj.name:
                 combat=Vector((0,2.45,-1.15))
                 combat_scale=(.80,.80,.80)
-                hauler=Vector((0,6.5,1.15))
-                hauler_scale=(.9,.9,.9)
+                hauler=Vector((0,-4.55,-.78))
+                hauler_scale=(1.25,.78,1.25)
             elif "ARRAY-TRUSS" in obj.name:
                 side=-1 if original.x<0 else 1
                 combat=Vector((side*3.0,original.y,-.06))
@@ -1011,7 +1061,7 @@ for role, objects in role_parts.items():
                 side=-1 if row<2 else 1
                 combat=Vector((side*(2.45+col*1.12)+local_x*.50,
                                1.1-(row%2)*2.15-col*.30,
-                               .53+(original.z-1.70)*.50))
+                               .53+(original.z-1.50)*.50))
                 combat_scale=(.50,.52,.50)
                 explorer=Vector(((col-1)*1.10+local_x*.43,
                                  2.6-row*1.9,1.02))

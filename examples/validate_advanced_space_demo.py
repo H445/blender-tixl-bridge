@@ -15,6 +15,7 @@ import runpy
 from pathlib import Path
 
 import bpy
+from bpy_extras.object_utils import world_to_camera_view
 from mathutils import Vector
 
 
@@ -506,7 +507,7 @@ assert min(configuration_distances.values()) > 0.5, (
 )
 
 # The hull itself follows one circular trajectory around each destination.
-# Check the shared cockpit and both cargo banks at their assembled holds.
+# Check the shared seated flight deck and both non-overlapping cargo banks.
 planet_orbits = {}
 try:
     for name, start, end, planet, minimum in (
@@ -528,15 +529,71 @@ try:
     for name, frame in (("COMBAT",1),("EXPLORER",2161),("HAULER",4321)):
         scene.frame_set(frame)
         cockpit_positions[name] = canopy.location.copy()
+        assert canopy.get("flight_deck_seated"), "The cockpit has no seated flight deck"
+        for vertex in list(canopy.data.vertices)[:8]:
+            local = canopy.location+vertex.co
+            roof = (.12+(.90-.12)*(5.1-local.y)/4.0
+                    if local.y >= 1.1 else .90)
+            assert -.10 < local.z-roof < .16, (
+                f"{name} cockpit base floats above or cuts through the hull: "
+                f"y={local.y}, delta={local.z-roof}")
     scene.frame_set(4321)
     cargo_port = bpy.data.objects["HAULER-CARGO-00-00"].location.copy()
     cargo_starboard = bpy.data.objects["HAULER-CARGO-02-00"].location.copy()
-    assert (cockpit_positions["EXPLORER"].y > cockpit_positions["COMBAT"].y+1
-            and cockpit_positions["EXPLORER"].z > cockpit_positions["COMBAT"].z+.4), (
-        "Explorer cockpit did not move onto its survey neck")
-    assert (cockpit_positions["HAULER"].z > 1.8
-            and cargo_port.x < -3.5 and cargo_starboard.x > 3.5), (
-        "Hauler cockpit or twin cargo banks obstruct the command corridor")
+    assert all((position-cockpit_positions["COMBAT"]).length < .01
+               for position in cockpit_positions.values()), (
+        "The flight deck detaches from the shared pressure hull")
+    assert cargo_port.x < -3.5 and cargo_starboard.x > 3.5, (
+        "Hauler cargo banks obstruct the command corridor")
+    for row in range(4):
+        deck = bpy.data.objects[f"HAULER-CARGO-DECK-{row:02d}"]
+        pod = bpy.data.objects[f"HAULER-CARGO-{row:02d}-00"]
+        deck_top = deck.location.z+deck.dimensions.z/2
+        pod_bottom = pod.location.z-pod.dimensions.z/2
+        assert abs(deck.location.x) > 3.0 and deck.dimensions.x >= 2.8, (
+            f"Hauler deck {row} does not support the outboard cargo bank")
+        assert 0 <= pod_bottom-deck_top < .12, (
+            f"Hauler cargo floats above its deck: {row}, {pod_bottom-deck_top}")
+    for rows in ((0, 1), (2, 3)):
+        bank = sorted((bpy.data.objects[f"HAULER-CARGO-{row:02d}-{col:02d}"]
+                       for row in rows for col in range(3)),
+                      key=lambda obj: obj.location.y, reverse=True)
+        for front, rear in zip(bank, bank[1:]):
+            gap = front.location.y-rear.location.y-(front.dimensions.y+rear.dimensions.y)/2
+            assert gap > .15, f"Hauler cargo pods overlap: {front.name}, {rear.name}"
+    moon = bpy.data.objects["Tethys analogue | cratered moon"]
+    hauler_moon_clearance = math.inf
+    for second in range(72, 85):
+        scene.frame_set(second*60+1)
+        center = moon.matrix_world.translation
+        corners = [obj.matrix_world @ Vector(vertex)
+                   for obj in detachable for vertex in obj.bound_box]
+        hauler_moon_clearance = min(hauler_moon_clearance,
+                                   *( (corner-center).length-17 for corner in corners))
+        camera = scene.camera
+        projected_moon = world_to_camera_view(scene, camera, center)
+        if projected_moon.z <= 0:
+            continue
+        camera_rotation = camera.matrix_world.to_quaternion()
+        moon_right = world_to_camera_view(
+            scene, camera, center+camera_rotation @ Vector((17, 0, 0)))
+        moon_up = world_to_camera_view(
+            scene, camera, center+camera_rotation @ Vector((0, 17, 0)))
+        radius_x = abs(moon_right.x-projected_moon.x)
+        radius_y = abs(moon_up.y-projected_moon.y)
+        hull = [world_to_camera_view(scene, camera, corner) for corner in corners]
+        hull = [point for point in hull if point.z > 0]
+        if not hull:
+            continue
+        x_min, x_max = min(point.x for point in hull), max(point.x for point in hull)
+        y_min, y_max = min(point.y for point in hull), max(point.y for point in hull)
+        overlap = not (projected_moon.x+radius_x < x_min or
+                       projected_moon.x-radius_x > x_max or
+                       projected_moon.y+radius_y < y_min or
+                       projected_moon.y-radius_y > y_max)
+        assert not overlap, f"Moon visually overlaps the hauler at {second}s"
+    assert hauler_moon_clearance > 30, (
+        f"A hauler component flies through the moon: {hauler_moon_clearance} m")
 finally:
     scene.frame_set(original_frame, subframe=original_subframe)
 
@@ -580,6 +637,7 @@ summary = {
     "configurationBoundsDistance": configuration_distances,
     "shipPlanetOrbits": planet_orbits,
     "cockpitPositions": {name:list(position) for name,position in cockpit_positions.items()},
+    "haulerMoonSurfaceClearanceMeters": hauler_moon_clearance,
     "returnedToRestCount": len(detachable),
     "restoredFrame": original_frame,
     "restoredSubframe": original_subframe,

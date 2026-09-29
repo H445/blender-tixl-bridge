@@ -424,8 +424,10 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
 
     # A roving camera: wide moon approach, close survey, faster pursuit, then
     # a slowed arc around each breakaway. No camera cuts or instant relocations.
+    moon_side = envelope(t, 62, 72, 80, 90)
     orbit = (-.97 + math.tau*5*t/108 + .34*math.sin(math.tau*t/54)
              - 1.7*envelope(t, 30, 37, 58, 68)
+             + 2.25*moon_side
              + math.pi*envelope(t, 78, 92, 99, 108))
     slow_arc = max(envelope(t, 24, 27, 32, 36),
                    envelope(t, 60, 63, 68, 72),
