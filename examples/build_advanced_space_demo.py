@@ -899,6 +899,52 @@ def slowed_burst(frame, start, start_angle, start_scale,
             tuple(a+(b-a)*fraction for a,b in zip(start_scale,end_scale)))
 
 
+TUMBLE_WINDOWS = (
+    ((541, 0.0), (580, .07), (900, .68), (1041, .88), (1261, 1.0)),
+    ((1801, 0.0), (1840, .07), (2180, .65), (2251, .78),
+     (2461, .94), (2521, 1.0)),
+    ((3061, 0.0), (3100, .07), (3230, .58), (3301, .78),
+     (SOURCE_LAST, 1.0)),
+)
+
+
+def tumble_turns(obj, window_index):
+    """Choose repeatable, distinct spin axes for each reusable part."""
+    signature = fabrication_signature(f"{obj.name}|tumble|{window_index}")
+    dominant = signature[0] % 3
+    secondary = (dominant + 1 + signature[1] % 2) % 3
+    large_part = obj.dimensions.length > 4.0
+    revolutions = [0, 0, 0]
+    revolutions[dominant] = (2 if large_part else 3) * (
+        -1 if signature[2] & 1 else 1)
+    revolutions[secondary] = -1 if signature[3] & 1 else 1
+    return Vector(revolutions) * math.tau
+
+
+def tumble_progress(frame, knots):
+    if frame <= knots[0][0]:
+        return 0.0
+    if frame >= knots[-1][0]:
+        return 1.0
+    for (start, a), (end, b) in zip(knots, knots[1:]):
+        if frame <= end:
+            return a + (b-a) * (frame-start) / (end-start)
+    raise AssertionError("unreachable tumble frame")
+
+
+def with_bullet_time_spin(obj, trajectory):
+    """Unwrap full turns so animation stays smooth and hold poses stay exact."""
+    turns = [tumble_turns(obj, index)
+             for index in range(len(TUMBLE_WINDOWS))]
+    result = []
+    for frame, position, angle, scale in trajectory:
+        offset = Vector((0, 0, 0))
+        for window_turns, knots in zip(turns, TUMBLE_WINDOWS):
+            offset += window_turns * tumble_progress(frame, knots)
+        result.append((frame, position, Vector(angle) + offset, scale))
+    return result
+
+
 for idx,obj in enumerate(parts):
     rest=obj.location.copy()
     group=obj.get("assembly_group")
@@ -970,7 +1016,7 @@ for idx,obj in enumerate(parts):
                              projectile,spin,(1,1,1),.35),
                 (3301,projectile,spin,(1,1,1)),
                 (SOURCE_LAST,rest,(0,0,0),(1,1,1))]
-    for frame,position,angle,scale in trajectory:
+    for frame,position,angle,scale in with_bullet_time_spin(obj, trajectory):
         pose(obj,frame,position,angle,scale)
     obj["projectile_travel_m"] = round(travel,3)
 
@@ -1099,7 +1145,7 @@ for role, objects in role_parts.items():
                                  projectile,spin,combat_scale,.35),
                     (3301,projectile,spin,combat_scale),
                     (SOURCE_LAST,combat,combat_angle,combat_scale))
-        for frame,position,angle,scale in trajectory:
+        for frame,position,angle,scale in with_bullet_time_spin(obj, trajectory):
             pose(obj,frame,position,angle,scale)
         obj["projectile_travel_m"] = round(travel,3)
 
@@ -1110,8 +1156,8 @@ noise_summary = noise_tools["apply_rotation_noise"](
     noise_tools["ASTERION_WINDOWS"],
 )
 scene["breakup_rotation_noise"] = (
-    "Per-part seeded XYZ F-curve noise in three breakup windows; "
-    "smooth blend to each assembled ship"
+    "Per-part seeded XYZ F-curve noise plus two or three full dominant-axis "
+    "turns in each bullet-time expansion; smooth blend to assembled ships"
 )
 print("ASTERION_ROTATION_NOISE", noise_summary)
 

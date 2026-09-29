@@ -210,9 +210,15 @@ def local_pose(obj):
 def pose_differs(first, second, epsilon=1e-4):
     first_loc, first_rot, first_scale = first
     second_loc, second_rot, second_scale = second
+    first_matrix = first_rot.to_matrix()
+    second_matrix = second_rot.to_matrix()
+    rotation_differs = any(
+        abs(first_matrix[row][col] - second_matrix[row][col]) > epsilon
+        for row in range(3) for col in range(3)
+    )
     return (
         (first_loc - second_loc).length > epsilon
-        or first_rot.rotation_difference(second_rot).angle > epsilon
+        or rotation_differs
         or (first_scale - second_scale).length > epsilon
     )
 
@@ -473,6 +479,8 @@ noise_tools = runpy.run_path(str(ROOT / "apply_breakaway_rotation_noise.py"))
 noise_windows = noise_tools["ASTERION_WINDOWS"]
 noise_prefix = noise_tools["PREFIX"]
 noise_count = 0
+tumble_samples = ((580, 900), (1840, 2180), (3100, 3230))
+minimum_spin_radians = float("inf")
 for obj in detachable:
     curves = noise_tools["rotation_curves"](obj)
     for axis in range(3):
@@ -489,6 +497,19 @@ for obj in detachable:
                 f"{obj.name} has a mistimed breakup rotation modifier"
             )
         noise_count += len(modifiers)
+    for first_source, second_source in tumble_samples:
+        first_frame = retimed_frame(first_source)
+        second_frame = retimed_frame(second_source)
+        def keyed_value(curve, frame):
+            return next(point.co.y for point in curve.keyframe_points
+                        if abs(point.co.x - frame) < .01)
+        spin = max(abs(keyed_value(curves[axis], second_frame)
+                       - keyed_value(curves[axis], first_frame))
+                   for axis in range(3))
+        minimum_spin_radians = min(minimum_spin_radians, spin)
+        assert spin > 4.8, (
+            f"{obj.name} barely turns during the bullet-time hold: {spin:.2f} rad"
+        )
 
 noise_motion = {}
 try:
@@ -698,6 +719,7 @@ summary = {
     "barrelRollRadians": roll_turns,
     "bulletTime": bullet_time,
     "breakupRotationNoiseModifiers": noise_count,
+    "minimumBulletTimeSpinRadians": minimum_spin_radians,
     "breakupRotationMotion": noise_motion,
     "animatedDetachableCount": len(animated_detachable),
     "packedTextureImageCount": len(packed_images),
