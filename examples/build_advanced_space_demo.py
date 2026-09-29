@@ -91,8 +91,8 @@ scene.render.image_settings.file_format = "PNG"
 scene.view_settings.view_transform = "AgX"
 scene["tixl_project_name"] = "AsterionBreakaway"
 scene["demo_duration_seconds"] = SECONDS
-scene["demo_phases"] = "0-24 COMBAT orbit; 24-36 breakaway to EXPLORER; 36-60 EXPLORER orbit; 60-72 breakaway to HAULER; 72-96 HAULER orbit; 96-108 return to COMBAT"
-scene["variant_hold_frames"] = "COMBAT 1-1441; EXPLORER 2161-3601; HAULER 4321-5761"
+scene["demo_phases"] = "0-24 COMBAT orbit; 24-36 breakaway to EXPLORER; 36-60 EXPLORER orbit; 60-72 breakaway to HAULER; 72-96 HAULER orbit; 96-104 rebuild COMBAT; 104-108 return warp"
+scene["variant_hold_frames"] = "COMBAT 1-1441 and 6241-6481; EXPLORER 2161-3601; HAULER 4321-5761"
 scene["texture_source"] = "GPT Images 2.5 surface maps; NASA/Goddard space panorama; see examples/advanced_spaceship/textures"
 
 world = bpy.data.worlds.new("Near-black interstellar ambient")
@@ -196,6 +196,9 @@ canopy_mat = pbr("04b | smoked iridium cockpit glazing", (0.10, 0.20, 0.27),
                  0.42, 0.22)
 blue = pbr("05 | ion blue emitter", (0.04, 0.16, 0.28), 0.38, 0.22,
            emission_color=(0.045, 0.43, 0.95), emission_strength=7.0)
+nozzle_blue = pbr("05b | cobalt engine nozzle", (0.008, 0.035, 0.18),
+                  0.3, 0.28, emission_color=(0.002, 0.32, 0.8),
+                  emission_strength=1.4)
 amber = pbr("06 | warning amber emitter", (0.24, 0.10, 0.015), 0.25, 0.3,
             emission_color=(1.0, 0.29, 0.035), emission_strength=3.0)
 starfield = pbr("07 | NASA Goddard deep star map", (0, 0, 0), 0, 1,
@@ -663,7 +666,7 @@ for side in (-1,1):
                        "engine-left" if side<0 else "engine-right", 10+pod*5+k)
         detachable(ring(f"NOZZLE-{side:+d}-{pod}", (x,-6.93,0),.34,.075,copper),
                    "engine-left" if side<0 else "engine-right", 100+pod)
-        detachable(sphere(f"THRUSTER-{side:+d}-{pod}",(x,-6.98,0),.25,blue,craft,16,8),
+        detachable(sphere(f"THRUSTER-{side:+d}-{pod}",(x,-6.98,0),.25,nozzle_blue,craft,16,8),
                    "engine-left" if side<0 else "engine-right", 110+pod)
 
 # Nose sensors, dorsal guns, twin keel antennae and surface greebles.
@@ -904,7 +907,7 @@ TUMBLE_WINDOWS = (
     ((1801, 0.0), (1840, .07), (2180, .65), (2251, .78),
      (2461, .94), (2521, 1.0)),
     ((3061, 0.0), (3100, .07), (3230, .58), (3301, .78),
-     (SOURCE_LAST, 1.0)),
+     (3421, 1.0)),
 )
 
 
@@ -1015,6 +1018,7 @@ for idx,obj in enumerate(parts):
                 slowed_burst(3230,hauler,hauler_angle,hauler_scale,
                              projectile,spin,(1,1,1),.35),
                 (3301,projectile,spin,(1,1,1)),
+                (3421,rest,(0,0,0),(1,1,1)),
                 (SOURCE_LAST,rest,(0,0,0),(1,1,1))]
     for frame,position,angle,scale in with_bullet_time_spin(obj, trajectory):
         pose(obj,frame,position,angle,scale)
@@ -1144,6 +1148,7 @@ for role, objects in role_parts.items():
                     slowed_burst(3230,hauler,hauler_angle,hauler_scale,
                                  projectile,spin,combat_scale,.35),
                     (3301,projectile,spin,combat_scale),
+                    (3421,combat,combat_angle,combat_scale),
                     (SOURCE_LAST,combat,combat_angle,combat_scale))
         for frame,position,angle,scale in with_bullet_time_spin(obj, trajectory):
             pose(obj,frame,position,angle,scale)

@@ -413,6 +413,114 @@ for index in range(28):
     streaks.append((obj, x, z, randomizer.uniform(-20, 30)))
 
 
+# Actual engine fire stays attached to each reusable thruster, even while the
+# ship's modules tumble independently. Shared meshes keep the six pairs small.
+def plasma_shell_material():
+    material = bpy.data.materials.get("STORY | cobalt exhaust") or \
+        bpy.data.materials.new("STORY | cobalt exhaust")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    nodes.clear()
+    output = nodes.new("ShaderNodeOutputMaterial")
+    shader = nodes.new("ShaderNodeBsdfPrincipled")
+    shader.inputs["Base Color"].default_value = (.002, .015, .18, 1)
+    shader.inputs["Roughness"].default_value = 1
+    shader.inputs["Emission Color"].default_value = (.002, .37, .9, 1)
+    shader.inputs["Emission Strength"].default_value = .7
+    shader.inputs["Alpha"].default_value = .72
+    material.node_tree.links.new(shader.outputs["BSDF"], output.inputs["Surface"])
+    material.surface_render_method = "DITHERED"
+    material.diffuse_color = (.002, .37, .9, .72)
+    return material
+
+
+plume_outer = plasma_shell_material()
+plume_core = emission("STORY | ice-blue exhaust core", (.002, .42, .8), .8)
+
+
+def plume_mesh(name, profile, material, turbulent=False):
+    sides = 12
+    vertices = []
+    for ring_index, (y, radius) in enumerate(profile):
+        for index in range(sides):
+            angle = math.tau * index / sides
+            vertex_radius = radius
+            if turbulent:
+                # An uneven shell and multiple taper stations break up the
+                # rigid cone silhouette without relying on a TiXL-only shader.
+                vertex_radius *= (1 + .11*math.sin(3*angle + 1.7*ring_index)
+                                  + .06*math.sin(5*angle - 2.3*ring_index))
+            vertices.append((vertex_radius * math.cos(angle), y,
+                             vertex_radius * math.sin(angle)))
+    faces = [tuple(range(sides-1, -1, -1))]
+    for ring_index in range(len(profile)-1):
+        for index in range(sides):
+            a = ring_index*sides+index
+            b = ring_index*sides+(index+1)%sides
+            faces.append((a, b, b+sides, a+sides))
+    faces.append(tuple((len(profile)-1)*sides+index
+                       for index in range(sides)))
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    mesh.materials.append(material)
+    return mesh
+
+
+outer_mesh = plume_mesh("COBALT | sculpted exhaust", (
+    (0.0, .16), (-.12, .27), (-.36, .23), (-.68, .13), (-1.0, .008)),
+    plume_outer, turbulent=True)
+core_mesh = plume_mesh("ICE BLUE | hot exhaust core", (
+    (0.0, .085), (-.18, .13), (-.55, .085), (-1.0, .006)),
+    plume_core)
+engine_fire = []
+for side in (-1, 1):
+    for pod in range(3):
+        thruster = bpy.data.objects[f"THRUSTER-{side:+d}-{pod}"]
+        for layer, mesh in (("plasma", outer_mesh), ("core", core_mesh)):
+            obj = bpy.data.objects.new(
+                f"THRUST | {layer} {side:+d}-{pod}", mesh)
+            story.objects.link(obj)
+            obj.parent = thruster
+            obj.location = (0, -.18, 0)
+            obj["asterion_story_object"] = True
+            obj["story_role"] = "Speed and steering reactive engine fire"
+            obj["thruster_side"] = side
+            engine_fire.append((obj, side, pod, layer))
+
+
+def engine_response(t):
+    # The endpoint repeats frame zero exactly, including exhaust brightness.
+    sample_t = 0.0 if t >= 108 else t
+    first = max(0.0, sample_t-.06)
+    last = min(108.0, sample_t+.06)
+    duration = max(last-first, .001)
+    first_position, (first_yaw, first_pitch, first_bank) = flight_pose(first)
+    last_position, (last_yaw, last_pitch, last_bank) = flight_pose(last)
+    speed = (last_position-first_position).length / duration
+
+    def turn_rate(first_angle, last_angle):
+        delta = math.atan2(math.sin(last_angle-first_angle),
+                           math.cos(last_angle-first_angle))
+        return delta / duration
+
+    yaw_rate = turn_rate(first_yaw, last_yaw)
+    pitch_rate = turn_rate(first_pitch, last_pitch)
+    bank_rate = turn_rate(first_bank, last_bank)
+    warp = max(envelope(sample_t, 10.3, 11.5, 15.1, 16.5),
+               envelope(sample_t, 83.1, 84.5, 89.1, 90.5),
+               envelope(sample_t, 103.7, 104.8, 106.4, 107.8))
+    breakaway = max(envelope(sample_t, 24, 24.8, 34.6, 36),
+                    envelope(sample_t, 60, 60.8, 70.6, 72),
+                    envelope(sample_t, 96, 96.8, 102.7, 104))
+    visible = 1-.987*breakaway
+    speed_power = min(1.0, (max(speed-4.0, 0.0)/88.0)**.65)
+    turn = max(-.48, min(.48, .70*yaw_rate+.13*bank_rate))
+    gimbal_yaw = max(-.19, min(.19, -.10*yaw_rate))
+    gimbal_pitch = max(-.13, min(.13, .08*pitch_rate))
+    return speed, warp, speed_power, turn, gimbal_yaw, gimbal_pitch, visible
+
+
 camera.animation_data_clear()
 flight.animation_data_clear()
 previous_rotation = None
@@ -497,6 +605,29 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
         obj.keyframe_insert("location", frame=frame)
         obj.keyframe_insert("scale", frame=frame)
 
+    speed, warp_power, speed_power, turn, gimbal_yaw, gimbal_pitch, visible = engine_response(t)
+    throttle = .28 + 1.3*speed_power + 1.8*warp_power
+    blast_length = 1.0 + 2.2*throttle + 2.5*warp_power
+    plume_width = .75 + .12*throttle + .35*warp_power
+    for obj, side, pod, layer in engine_fire:
+        # The outside engines carry slightly more visible exhaust, while the
+        # stronger side switches with the sign of the turn/roll.
+        pod_gain = (1.0, 1.09, 1.16)[pod]
+        steering_gain = 1.0 + side*turn
+        length = blast_length * pod_gain * steering_gain
+        width = plume_width * (.90 + .06*pod)
+        if layer == "core":
+            length *= .78
+            width *= .77
+        pulse_time = 0.0 if t >= 108 else t
+        pulse = (1 + .065*math.sin(math.tau*(1.7*pulse_time+.17*pod+.11*side))
+                 + .025*math.sin(math.tau*(2.1*pulse_time+.29*pod)))
+        length *= pulse
+        obj.scale = (width*visible, length*visible, width*visible)
+        obj.rotation_euler = (gimbal_pitch, pod*.73+side*.19, gimbal_yaw)
+        obj.keyframe_insert("scale", frame=frame)
+        obj.keyframe_insert("rotation_euler", frame=frame)
+
 for curve_owner in (camera, flight):
     action = curve_owner.animation_data.action
     if action and hasattr(action, "fcurves"):
@@ -527,6 +658,12 @@ scene["story"] = (
     "through a final jump to repeat the signal pursuit."
 )
 scene["camera_style"] = "single continuous moving take; forward asteroid runs, warp chases, survey push-in, bullet-time debris arcs"
+scene["thruster_fire"] = (
+    "Six blue plasma plumes and six ice-blue cores follow their reusable "
+    "engine parts; speed scales the fire, steering biases port/starboard, "
+    "breakaways suppress the fire, and each assembled warp spools into a "
+    "sustained blast before easing down"
+)
 scene["demo_phases"] = (
     "0-11 asteroid slalom; 11-16 arrival warp; 16-24 lunar field loop; "
     "24-36 evasive breakaway; 36-60 survey; 60-72 cargo rebuild; "

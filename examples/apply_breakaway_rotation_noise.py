@@ -18,7 +18,7 @@ PREFIX = "Bridge breakup rotation | "
 ASTERION_WINDOWS = (
     ("combat to explorer", 1441, 2161),
     ("explorer to hauler", 3601, 4321),
-    ("hauler to combat", 5761, 6481),
+    ("hauler to combat", 5761, 6241),
 )
 
 

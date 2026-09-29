@@ -451,6 +451,46 @@ for label, start, end in (("first", 6.3, 9.2), ("lunar", 18.0, 21.4),
     roll_turns[label] = turn
 scene.frame_set(original_frame, subframe=original_subframe)
 
+plasma = [obj for obj in objects if obj.name.startswith("THRUST | plasma ")]
+cores = [obj for obj in objects if obj.name.startswith("THRUST | core ")]
+assert len(plasma) == len(cores) == 6, "Six paired engine fires are required"
+assert len({obj.data for obj in plasma}) == 1 and len({obj.data for obj in cores}) == 1, (
+    "Thruster geometry should be shared by all six engine instances"
+)
+assert all(obj.parent and obj.parent.name.startswith("THRUSTER-")
+           and obj.parent.get("asterion_part", False)
+           for obj in plasma + cores), (
+    "Engine fire must follow the reusable thruster parts during breakup"
+)
+thrust_lengths = {}
+for second in (0, 3, 8, 13, 16, 20, 29, 50, 66, 87, 90, 94,
+               100, 103, 104, 105, 107, 108):
+    scene.frame_set(second*60+1)
+    thrust_lengths[second] = sum(obj.scale.y for obj in plasma)/len(plasma)
+assert thrust_lengths[13] > thrust_lengths[0]*3, "Arrival warp lacks a thrust blast"
+assert thrust_lengths[87] > thrust_lengths[13], "Fast escape warp lacks stronger fire"
+assert thrust_lengths[16] < thrust_lengths[13]*.55, "Arrival thrust does not wind down"
+assert thrust_lengths[90] < thrust_lengths[87]*.55, "Escape thrust does not wind down"
+assert thrust_lengths[105] > thrust_lengths[107], "Return warp does not wind down"
+for separated, assembled in ((29, 20), (66, 50), (100, 94)):
+    assert thrust_lengths[separated] < thrust_lengths[assembled]*.08, (
+        f"Breakaway exhaust remains visible at {separated} seconds"
+    )
+assert thrust_lengths[104] > thrust_lengths[103]*5, (
+    "Return warp does not relight the engines after reassembly"
+)
+assert abs(thrust_lengths[108]-thrust_lengths[0]) < 1e-4, (
+    "Engine fire breaks the 108-second loop seam"
+)
+scene.frame_set(3*60+1)
+early_turn = (bpy.data.objects["THRUST | plasma +1-2"].scale.y
+              - bpy.data.objects["THRUST | plasma -1-2"].scale.y)
+scene.frame_set(8*60+1)
+later_turn = (bpy.data.objects["THRUST | plasma +1-2"].scale.y
+              - bpy.data.objects["THRUST | plasma -1-2"].scale.y)
+assert early_turn*later_turn < 0, "Differential thrust ignores turn direction"
+scene.frame_set(original_frame, subframe=original_subframe)
+
 
 def mean_motion(first, last):
     return sum((sampled_poses[last][obj.name][0]
@@ -540,6 +580,13 @@ assert not return_errors, (
     f"{len(return_errors)} detachable parts do not return to their frame-1 pose; "
     f"examples: {return_errors[:8]}"
 )
+scene.frame_set(104*60+1)
+unassembled_at_warp = [obj.name for obj in detachable
+                       if pose_differs(sampled_poses[1][obj.name], local_pose(obj))]
+assert not unassembled_at_warp, (
+    f"The final warp begins with detached ship parts: {unassembled_at_warp[:8]}"
+)
+scene.frame_set(original_frame, subframe=original_subframe)
 
 
 def bounds_distance(a, b):
@@ -717,6 +764,8 @@ summary = {
     "asteroidFieldClearanceMeters": all_asteroid_clearances,
     "spaceDustGrains": sum(len(obj.data.vertices)//4 for obj in dust_lanes),
     "barrelRollRadians": roll_turns,
+    "thrusterFireCount": len(plasma) + len(cores),
+    "thrustLengths": thrust_lengths,
     "bulletTime": bullet_time,
     "breakupRotationNoiseModifiers": noise_count,
     "minimumBulletTimeSpinRadians": minimum_spin_radians,
