@@ -184,6 +184,8 @@ cyan = emission("STORY | ion warp cyan", (.08, .68, 1.0), 8)
 violet = emission("STORY | ion warp violet", (.57, .17, 1.0), 7)
 signal_mat = emission("STORY | distress signal amber", (1.0, .48, .08), 8)
 scan_mat = emission("STORY | survey beam", (.12, 1.0, .72), 4)
+tractor_mat = emission("STORY | capture tether", (.02, .65, 1.0), 2.1)
+packet_mat = emission("STORY | scan packets", (.08, .88, 1.0), 2.8)
 
 
 def ember_material():
@@ -255,6 +257,36 @@ bpy.ops.mesh.primitive_cylinder_add(vertices=10, radius=1, depth=2)
 scan = move_to_story(bpy.context.object, "Visible explorer survey link")
 scan.name = "SCAN | explorer to lunar signal"
 scan.data.materials.append(scan_mat)
+scan.rotation_mode = "QUATERNION"
+
+bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=1, depth=2)
+tractor = move_to_story(bpy.context.object, "Cargo-to-core capture tether")
+tractor.name = "CAPTURE | cargo tractor tether"
+tractor.data.materials.append(tractor_mat)
+tractor.rotation_mode = "QUATERNION"
+
+bpy.ops.mesh.primitive_torus_add(major_segments=64, minor_segments=8,
+                                 major_radius=2.0, minor_radius=.055)
+lock_halo = move_to_story(bpy.context.object, "Survey lock and core tracking halo")
+lock_halo.name = "SCAN | core lock halo"
+lock_halo.data.materials.append(packet_mat)
+
+bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=.32)
+first_packet = move_to_story(bpy.context.object, "Signal and capture energy packet")
+first_packet.name = "SCAN | packet 00"
+first_packet.data.materials.append(packet_mat)
+scan_packets = [first_packet]
+for index in range(1, 6):
+    obj = bpy.data.objects.new(f"SCAN | packet {index:02d}", first_packet.data)
+    story.objects.link(obj)
+    obj["asterion_story_object"] = True
+    obj["story_role"] = "Signal and capture energy packet"
+    scan_packets.append(obj)
+
+bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=1)
+capture_flash = move_to_story(bpy.context.object, "Core seated in cargo pod")
+capture_flash.name = "CAPTURE | port pod confirmation flare"
+capture_flash.data.materials.append(packet_mat)
 
 # The escape warp reveals a warmer, ringed system. Its PBR maps and static
 # lighting make this leg visually distinct from the psychedelic cratered moon.
@@ -525,6 +557,8 @@ camera.animation_data_clear()
 flight.animation_data_clear()
 previous_rotation = None
 previous_flight_yaw = None
+previous_scan_quaternion = None
+previous_tractor_quaternion = None
 for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
     t = (frame-1)/fps
     position, (yaw, pitch, bank) = flight_pose(t)
@@ -535,6 +569,18 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
     flight.rotation_euler = (pitch, bank, yaw)
     flight.keyframe_insert("location", frame=frame)
     flight.keyframe_insert("rotation_euler", frame=frame)
+
+    # Keep the signal at its lunar origin until recovery, then draw it into
+    # the moving port-pod socket. Compute this before aiming the camera so
+    # both subjects use positions from the same sample, without a frame lag.
+    recovery = smooth01((t-73)/9) * (1-smooth01((t-103)/5))
+    craft_rotation = Euler((pitch, bank, yaw), "XYZ").to_matrix()
+    cargo_socket = position + craft_rotation @ Vector((-4.35, -.40, 1.50))
+    beacon.location = beacon_origin.lerp(cargo_socket, recovery)
+    beacon_size = 1-.97*recovery
+    beacon.scale = (beacon_size,)*3
+    beacon.keyframe_insert("location", frame=frame)
+    beacon.keyframe_insert("scale", frame=frame)
 
     # A roving camera: wide moon approach, close survey, faster pursuit, then
     # a slowed arc around each breakaway. No camera cuts or instant relocations.
@@ -560,7 +606,16 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
     separation = offset.length
     if separation < 28:
         offset += offset.normalized() * ((28-separation)*smooth01((28-separation)/8))
-    camera.location = position + offset
+    # The survey and capture camera frames both the ship and the signal.
+    # It keeps the orbital camera's azimuth, preserving each craft's full
+    # rotation, while pulling back for the two-subject view and pushing in
+    # as the core reaches the pod. The whole take remains continuous.
+    signal_focus = max(envelope(t, 36, 41, 54, 62),
+                       envelope(t, 68, 72, 80, 84))
+    capture_push = smooth01((t-74)/6)
+    signal_midpoint = position.lerp(beacon.location, .5)
+    signal_camera = signal_midpoint + offset.normalized() * (125-55*capture_push)
+    camera.location = (position + offset).lerp(signal_camera, signal_focus)
     moon_center = MOON_CENTER
     moon_delta = camera.location-moon_center
     moon_clearance = moon_delta.length
@@ -569,6 +624,7 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
             (29-moon_clearance)*smooth01((29-moon_clearance)/12))
     target = position + forward*(1 + 1.5*warp)
     target.z += .5 + 2.5*survey
+    target = target.lerp(signal_midpoint, signal_focus)
     rotation = (target-camera.location).to_track_quat("-Z", "Y").to_euler()
     if previous_rotation is not None:
         rotation.make_compatible(previous_rotation)
@@ -577,26 +633,64 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
     camera.keyframe_insert("location", frame=frame)
     camera.keyframe_insert("rotation_euler", frame=frame)
 
-    # Recover the core into the port cargo pod. The destination follows the
-    # craft's orientation, and the emissive marker contracts once stowed.
-    recovery = smooth01((t-73)/9) * (1-smooth01((t-103)/5))
-    cargo_socket = position + Euler((pitch, bank, yaw), "XYZ").to_matrix() @ Vector(
-        (-4.35, -.40, 1.50))
-    beacon.location = beacon_origin.lerp(cargo_socket, recovery)
-    beacon_size = 1-.97*recovery
-    beacon.scale = (beacon_size,)*3
-    beacon.keyframe_insert("location", frame=frame)
-    beacon.keyframe_insert("scale", frame=frame)
-
-    scan_start = position + Vector((0, 3, 0))
+    scan_start = position + craft_rotation @ Vector((0, 3, 1.2))
     direction = beacon.location - scan_start
-    scan.location = (scan_start + beacon.location)/2
-    scan.rotation_euler = direction.to_track_quat("Z", "Y").to_euler()
     beam = envelope(t, 42, 45, 55, 58)
-    scan.scale = (.055*beam, .055*beam, direction.length/2*beam)
+    if beam > 1e-5 and direction.length > .1:
+        scan.location = (scan_start + beacon.location)/2
+        orientation = direction.to_track_quat("Z", "Y")
+        if previous_scan_quaternion and orientation.dot(previous_scan_quaternion) < 0:
+            orientation.negate()
+        scan.rotation_quaternion = orientation
+        previous_scan_quaternion = orientation.copy()
+    scan.scale = (.17*beam, .17*beam, direction.length/2*beam)
     scan.keyframe_insert("location", frame=frame)
-    scan.keyframe_insert("rotation_euler", frame=frame)
+    scan.keyframe_insert("rotation_quaternion", frame=frame)
     scan.keyframe_insert("scale", frame=frame)
+
+    tether_direction = beacon.location-cargo_socket
+    tether_power = envelope(t, 72, 73, 79.6, 81.4)
+    if tether_power > 1e-5 and tether_direction.length > .1:
+        tractor.location = (beacon.location+cargo_socket)/2
+        orientation = tether_direction.to_track_quat("Z", "Y")
+        if previous_tractor_quaternion and orientation.dot(previous_tractor_quaternion) < 0:
+            orientation.negate()
+        tractor.rotation_quaternion = orientation
+        previous_tractor_quaternion = orientation.copy()
+    tractor.scale = (.13*tether_power, .13*tether_power,
+                     tether_direction.length/2*tether_power)
+    for channel in ("location", "rotation_quaternion", "scale"):
+        tractor.keyframe_insert(channel, frame=frame)
+
+    halo_power = envelope(t, 37, 40, 79.5, 82) * (1-.7*recovery)
+    halo_pulse = 1+.12*math.sin(math.tau*.8*t)
+    lock_halo.location = beacon.location
+    lock_halo.rotation_euler = (camera.location-beacon.location).to_track_quat(
+        "Z", "Y").to_euler()
+    lock_halo.scale = (halo_power*halo_pulse,)*3
+    for channel in ("location", "rotation_euler", "scale"):
+        lock_halo.keyframe_insert(channel, frame=frame)
+
+    for index, packet in enumerate(scan_packets):
+        if index < 4:
+            start = 43+3.05*index
+            progress = smooth01((t-start)/2.4)
+            power = envelope(t, start, start+.28, start+2.08, start+2.4)
+            packet.location = scan_start.lerp(beacon.location, progress)
+        else:
+            start = 73+2.8*(index-4)
+            progress = smooth01((t-start)/3.0)
+            power = envelope(t, start, start+.25, start+2.7, start+3.0)
+            packet.location = beacon.location.lerp(cargo_socket, progress)
+        packet.scale = (1.9*power,)*3
+        packet.keyframe_insert("location", frame=frame)
+        packet.keyframe_insert("scale", frame=frame)
+
+    capture_flash.location = cargo_socket
+    flash_power = envelope(t, 79.2, 80, 80.5, 82)
+    capture_flash.scale = (.8*flash_power,)*3
+    capture_flash.keyframe_insert("location", frame=frame)
+    capture_flash.keyframe_insert("scale", frame=frame)
 
     for index, (obj, x, z, phase) in enumerate(streaks):
         streak_power = warp
@@ -635,6 +729,16 @@ for curve_owner in (camera, flight):
             for key in fcurve.keyframe_points:
                 key.interpolation = "BEZIER"
 
+# Endpoint-bound links and packets use straight interpolation between dense
+# samples. Cubic overshoot here would detach a beam from its moving target.
+for curve_owner in (beacon, scan, tractor, lock_halo, capture_flash,
+                    *scan_packets):
+    action = curve_owner.animation_data.action
+    if action and hasattr(action, "fcurves"):
+        for fcurve in action.fcurves:
+            for key in fcurve.keyframe_points:
+                key.interpolation = "LINEAR"
+
 for marker in list(scene.timeline_markers):
     if marker.name.startswith("STORY |"):
         scene.timeline_markers.remove(marker)
@@ -657,7 +761,12 @@ scene["story"] = (
     "warp jump to the ember giant, then rebuilds its combat shell and returns "
     "through a final jump to repeat the signal pursuit."
 )
-scene["camera_style"] = "single continuous moving take; forward asteroid runs, warp chases, survey push-in, bullet-time debris arcs"
+scene["camera_style"] = "single continuous moving take; forward asteroid runs, warp chases, two-subject survey and cargo push-in, bullet-time debris arcs"
+scene["signal_sequence"] = (
+    "An endpoint-anchored explorer scan tracks the lunar core with a lock halo "
+    "and energy packets. After the hauler rebuild, a cargo tether guides the "
+    "core into the moving port pod and a brief flare confirms capture."
+)
 scene["thruster_fire"] = (
     "Six blue plasma plumes and six ice-blue cores follow their reusable "
     "engine parts; speed scales the fire, steering biases port/starboard, "

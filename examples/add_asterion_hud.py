@@ -148,9 +148,11 @@ for index, (start, end, title, detail) in enumerate(phases):
 
 statuses = [
     (0, 36, "SEARCHING", cyan),
-    (36, 60, "SIGNAL LOCKED", amber),
-    (60, 73, "EXTRACTION READY", amber),
-    (73, 82, "TRANSFER IN PROGRESS", amber),
+    (36, 43, "SIGNAL LOCKED", amber),
+    (43, 58, "SPECTRAL SCAN", cyan),
+    (58, 73, "CORE VECTOR SOLVED", amber),
+    (73, 76, "TRACTOR LOCK", amber),
+    (76, 82, "TRANSFER IN PROGRESS", amber),
     (82, 104, "SECURED / PORT POD", cyan),
     (104, 108, "SEARCHING", cyan),
 ]

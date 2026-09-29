@@ -166,9 +166,54 @@ story_markers = [marker for marker in markers if marker.name.startswith("STORY |
 assert len(story_markers) >= 8, "The mission beats are missing from the timeline"
 beacon = bpy.data.objects.get("SIGNAL | recovered moon core")
 assert beacon is not None
-assert bpy.data.objects.get("SCAN | explorer to lunar signal") is not None
+scan = bpy.data.objects.get("SCAN | explorer to lunar signal")
+tractor = bpy.data.objects.get("CAPTURE | cargo tractor tether")
+halo = bpy.data.objects.get("SCAN | core lock halo")
+flash = bpy.data.objects.get("CAPTURE | port pod confirmation flare")
+packets = [obj for obj in objects if obj.name.startswith("SCAN | packet ")]
+assert scan and tractor and halo and flash and len(packets) == 6, (
+    "The survey and capture sequence is missing its visual cues"
+)
 original_frame, original_subframe = scene.frame_current, scene.frame_subframe
 try:
+    from bpy_extras.object_utils import world_to_camera_view
+
+    for link, start, end, socket_local in (
+        (scan, 45, 55, Vector((0, 3, 1.2))),
+        (tractor, 73, 79, Vector((-4.35, -.40, 1.50))),
+    ):
+        previous_orientation = None
+        for frame in range(start*60+1, end*60+2, 6):
+            scene.frame_set(frame)
+            bpy.context.view_layer.update()
+            socket = flight_rig.matrix_world @ socket_local
+            core = beacon.matrix_world.translation
+            first = link.matrix_world @ Vector((0, 0, -1))
+            last = link.matrix_world @ Vector((0, 0, 1))
+            endpoint_error = min((first-socket).length+(last-core).length,
+                                 (last-socket).length+(first-core).length)
+            assert endpoint_error < .15, (
+                f"{link.name} detaches from the ship or core: {endpoint_error} m"
+            )
+            orientation = link.matrix_world.to_quaternion()
+            if previous_orientation:
+                assert previous_orientation.rotation_difference(orientation).angle < .03, (
+                    f"{link.name} snaps between adjacent beam samples"
+                )
+            previous_orientation = orientation
+    for second in (46, 50, 54, 75, 78, 80):
+        scene.frame_set(second*60+1)
+        bpy.context.view_layer.update()
+        for subject in (flight_rig, beacon):
+            uv = world_to_camera_view(scene, scene.camera,
+                                      subject.matrix_world.translation)
+            assert uv.z > 0 and .05 < uv.x < .95 and .05 < uv.y < .95, (
+                f"The camera loses {subject.name} during survey/capture at {second}s: {uv}"
+            )
+    scene.frame_set(59*60+1)
+    assert max(scan.scale) < 1e-4, "The survey line persists after scanning"
+    scene.frame_set(83*60+1)
+    assert max(tractor.scale) < 1e-4, "The cargo tether persists after capture"
     scene.frame_set(83*60+1)
     socket = flight_rig.matrix_world @ Vector((-4.35, -.40, 1.50))
     assert (beacon.matrix_world.translation-socket).length < .05, (
@@ -179,7 +224,7 @@ finally:
     scene.frame_set(original_frame, subframe=original_subframe)
 assert len([obj for obj in objects if obj.name.startswith("WARP | ion trail")]) >= 24
 hud = bpy.data.collections.get("05 HUD | mission telemetry")
-assert hud is not None and len(hud.objects) == 38, (
+assert hud is not None and len(hud.objects) == 40, (
     "Mission chapter and core-status HUD is incomplete")
 assert all(obj.type == "MESH" and obj.parent == scene.camera
            for obj in hud.objects), "HUD must export as camera-mounted mesh"
@@ -191,7 +236,7 @@ try:
     assert bpy.data.objects["HUD | core state 01"].scale.x > .99
     scene.frame_set(83*60+1)
     assert bpy.data.objects["HUD | phase 07 title"].scale.x > .99
-    assert bpy.data.objects["HUD | core state 05"].scale.x > .99
+    assert bpy.data.objects["HUD | core state 07"].scale.x > .99
     assert bpy.data.objects["HUD | phase 01 title"].scale.x < .01
     scene.frame_set(scene.frame_end)
     assert all(max(abs(obj.scale[i]-start_scales[obj.name][i])
