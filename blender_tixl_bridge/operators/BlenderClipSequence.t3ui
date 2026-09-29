@@ -1,8 +1,9 @@
 {
   "FormatVersion": 3,
   "Id": "6defae81-c198-5bee-91e6-3160d17651dd",
-  "Description": "Selects the active Blender Source Clip and exposes its mapped source time and HasActiveClip state. One global sequence controls the camera and world switch; each world's sequence connects its source clips to that world's Animation Scene through World Clip Time. Insert float operators after a world sequence to retime it independently.",
+  "Description": "Selects the active Blender Source Clip and exposes its mapped source time and HasActiveClip state. A positive Loop Duration wraps the full lane and its TimeClip source mapping; zero leaves timing unlooped. Set the same duration on global and world lanes to repeat a whole composition. Insert float operators after a world sequence to retime it independently.",
   "InputUis": [
-    {"InputId": "36bf79ae-84ac-5691-b8cb-a65d2e055d1a", "GroupTitle": "Blender clips", "Description": "Connect all source clips to the global sequence, or just this world's clips to its world sequence."}
+    {"InputId": "36bf79ae-84ac-5691-b8cb-a65d2e055d1a", "GroupTitle": "Blender clips", "Description": "Connect all source clips to the global sequence, or just this world's clips to its world sequence."},
+    {"InputId": "887bf3b5-45fa-4db1-a056-199d0a088931", "GroupTitle": "Timing", "Description": "Seconds for one complete repeat. Set to zero for normal timeline behavior. Use the same duration on all sequences in a looping composition."}
   ]
 }

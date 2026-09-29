@@ -1,10 +1,10 @@
 # Asterion Breakaway demo
 
-A 108-second Blender-to-TiXL rescue scene: a combat craft answers a signal at the Tethys moon, warps in, rebuilds as an explorer to scan a core, changes into a hauler to retrieve it, then escapes and reforms its combat shell. One persistent set of 500 spacecraft meshes breaks into individually animated parts and rebuilds as three distinct configurations. Every part is visible and reused in COMBAT, EXPLORER, and HAULER. One camera follows the mission in a continuous take.
+A 108-second Blender-to-TiXL looping rescue scene: a combat craft answers a signal at the psychedelic Tethys moon, rebuilds as an explorer and hauler, warps to a copper storm giant, then returns through a final jump to its opening pose. One persistent set of 500 spacecraft meshes breaks into individually animated parts and rebuilds as three distinct configurations. Every part is visible and reused in COMBAT, EXPLORER, and HAULER. One camera follows the journey in a continuous take.
 
 ## Materials and texture assets
 
-Five GPT-generated surface images and ten aligned technical maps are supplied in `textures/`. The five surface families each have albedo, tangent normal, and packed occlusion/roughness/metallic maps. The background uses NASA/Goddard's 16,384 × 8,192 equirectangular star map as an emission texture, replacing the 1,774 × 887 generated panorama.
+Five GPT-generated surface images and ten aligned technical maps are supplied in `textures/`. The copper giant adds three deterministic procedural maps made by `generate_ember_planet_maps.py`. All six surface families have albedo, tangent normal, and packed occlusion/roughness/metallic maps. The background uses NASA/Goddard's 16,384 × 8,192 equirectangular star map as an emission texture, replacing the 1,774 × 887 generated panorama.
 
 | File | Prompt theme |
 | --- | --- |
@@ -13,9 +13,10 @@ Five GPT-generated surface images and ten aligned technical maps are supplied in
 | `heat_titanium.png` | Heat-scarred copper titanium alloy for exposed structural parts |
 | `solar_ceramic.png` | Blue-black photovoltaic ceramic cells with silver traces |
 | `moon_albedo.png` | Gray cratered moon regolith with varied impact detail |
+| `ember_albedo.png` | Copper cloud bands and two turbulent storm systems |
 | `nasa_starmap_16k.jpg` | NASA/Goddard Deep Star Maps spherical star panorama |
 
-The builder requires every map and packs it into the blend. The Blender glTF export includes base color, normal, metallic/roughness, and occlusion links for the five textured surface families. Uniform cockpit glazing and small light emitters use direct PBR values. The surface prompts, map derivation method, NASA credit, usage terms, and file hashes are recorded in [textures/GENERATION.md](textures/GENERATION.md).
+The builder requires every map and packs it into the blend. The Blender glTF export includes base color, normal, metallic/roughness, and occlusion links for all six textured surface families. Uniform cockpit glazing and small light emitters use direct PBR values. The surface prompts, map derivation method, NASA credit, usage terms, and file hashes are recorded in [textures/GENERATION.md](textures/GENERATION.md).
 
 ## Build in Blender
 
@@ -35,9 +36,10 @@ The scene is 108 seconds at 60 fps. The craft flies on an animated rig while all
 | 60–72 s | Breakup and HAULER cargo rebuild |
 | 72–84 s | Recover the luminous core |
 | 84–90 s | Escape warp jump |
-| 90–108 s | Evasive exit and COMBAT rebuild for escort |
+| 90–104 s | Orbit the ringed copper giant; COMBAT rebuilds for escort |
+| 104–108 s | Return warp to the opening position and camera pose |
 
-The same hull, survey, and cargo meshes form all three ships. Each module has combat, explorer, hauler, and projectile poses, so the transition exercises hundreds of independent transform records without adding or removing craft parts. During all three breakups, every reusable piece also gets its own seeded XYZ rotation noise, with smooth fade-in and fade-out so the rebuilt ships settle into their exact poses. Larger parts tumble less than small fittings; the slowed debris intervals retain gentle angular drift. The reusable `../apply_breakaway_rotation_noise.py` recipe accepts any animated mesh collection and breakup frame windows. `../add_asterion_story.py` adds the mission flight, camera, scan beam, retrieved core, and warp trails without replacing any craft pieces. Both scripts are rerunnable through Blender MCP. `../validate_advanced_space_demo.py` checks reuse, packed maps, all three full orbits, the two warp displacements, camera continuity, and the slowed debris intervals.
+The same hull, survey, and cargo meshes form all three ships. Each module has combat, explorer, hauler, and projectile poses, so the transition exercises hundreds of independent transform records without adding or removing craft parts. During all three breakups, every reusable piece also gets its own seeded XYZ rotation noise, with smooth fade-in and fade-out so the rebuilt ships settle into their exact poses. Larger parts tumble less than small fittings; the slowed debris intervals retain gentle angular drift. The reusable `../apply_breakaway_rotation_noise.py` recipe accepts any animated mesh collection and breakup frame windows. `../add_asterion_story.py` adds the mission flight, camera, scan beam, retrieved core, two planets, and warp trails without replacing any craft pieces. Both scripts are rerunnable through Blender MCP. `../validate_advanced_space_demo.py` checks reuse, packed maps, all three full orbits, camera continuity, the project seam, and the slowed debris intervals.
 
 ## Design references
 
@@ -47,9 +49,9 @@ The role silhouettes draw on [Starbound's official visual gallery](https://plays
 
 With the saved scene open through Blender MCP TCP, sync it using the bridge workflow and the configured TiXL operator project. In TiXL, inspect the generated world graph and texture routes, then evaluate and capture renders at the COMBAT, breakup, EXPLORER, HAULER, and final assembly markers. Confirm the rendered output as well as graph connections. Existing TiXL projects can retain their editable 60-second TimeClips across syncs. After closing TiXL through its debug bridge, run `../retime_advanced_space_demo_clips.py` on that project's `Symbols/AsterionBreakaway.t3` and restart TiXL through the bridge. The retimer changes only the seven known source clips and refuses to overwrite unexpected timing.
 
-The current reference run synced successfully to TiXL 4.3.0.2. Its generated cache contains 500 animated reusable craft parts. The single 108-second camera rail has 6,480 samples. The validated camera orbit covers more than 360° for each assembled role; the two warp displacements are 26.6 m and 84.3 m. The editable home graph has 86 children and 164 connections, with no missing child or connection references. The 16K panorama remains embedded in the glTF scene. Current TiXL renders show [clean pursuit](previews/story_clean_pursuit.png), [arrival warp](previews/story_arrival_warp.png), [lunar scan](previews/story_lunar_scan.png), and [escape warp](previews/story_escape_warp.png).
+The current reference run synced successfully to TiXL 4.3.0.2. Its generated cache contains 500 animated reusable craft parts. The single 108-second camera rail has 6,480 samples. The validated camera orbit covers more than 360° for each assembled role. The editable home graph has 94 children and 175 connections, with no missing child or connection references. Both clip lanes have a 108-second loop duration; TiXL renders at 0, 108, and 216 seconds were pixel identical. The 16K panorama remains embedded in the glTF scene. Current TiXL renders show [restored lunar color](previews/story_lunar_color_restored.png), [copper giant with native surface and ring dust](previews/story_ember_dust.png), [arrival warp](previews/story_arrival_warp.png), and [escape warp](previews/story_escape_warp.png).
 
-The current output captures verify the camera views and effect variation. `../tune_asterion_story_fx.py` is the guarded, reproducible edit for the TiXL home graph: it adds brighter, slowly breathing Bloom and a starburst glow, and uses a sampled mission curve to blend RGB distortion and rhythmic tears only into selected warp, scan, and breakup windows. It backs up the home graph outside `Symbols` before modifying it. TiXL's output-evaluation counters do not establish continuous scene-rendering performance; use workload-specific profiling for that question.
+The current output captures verify the camera views and effect variation. `../tune_asterion_story_fx.py` adds mission-paced Bloom and intermittent signal glitches. `../tune_asterion_loop.py` restores the moon's precise selector, wraps both clip lanes, and resets the moon feedback at each project seam. `../add_asterion_planet_dust.py` adds TiXL point clouds on the storm giant's atmosphere and rings with small randomized motes rotating over the loop. These scripts back up the saved home graph outside `Symbols` before modifying it. TiXL's output-evaluation counters do not establish continuous scene-rendering performance; use workload-specific profiling for that question.
 
 ## Selected moon effects in TiXL
 

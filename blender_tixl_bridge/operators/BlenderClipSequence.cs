@@ -13,6 +13,9 @@ public sealed class BlenderClipSequence : Instance<BlenderClipSequence>
     [Input(Guid = "36bf79ae-84ac-5691-b8cb-a65d2e055d1a")]
     public readonly MultiInputSlot<float> Clips = new();
 
+    [Input(Guid = "887bf3b5-45fa-4db1-a056-199d0a088931")]
+    public readonly InputSlot<float> LoopDurationSeconds = new();
+
     [Output(Guid = "0b2900ec-dd39-55a7-8738-2e07d265f78c", DirtyFlagTrigger = DirtyFlagTrigger.Animated)]
     public readonly Slot<float> TimeSeconds = new();
 
@@ -26,6 +29,25 @@ public sealed class BlenderClipSequence : Instance<BlenderClipSequence>
     }
 
     private void Update(EvaluationContext context)
+    {
+        // A positive loop duration wraps the entire clip lane, including the
+        // TimeClip's own source-range mapping. Zero preserves normal TiXL timing.
+        var loopSeconds = LoopDurationSeconds.GetValue(context);
+        var loopBars = loopSeconds * Math.Max(1, context.Playback.Bpm) / 240.0;
+        var originalTime = context.LocalTime;
+        if (loopBars > 0)
+            context.LocalTime = originalTime - loopBars * Math.Floor(originalTime / loopBars);
+        try
+        {
+            UpdateAtLocalTime(context);
+        }
+        finally
+        {
+            context.LocalTime = originalTime;
+        }
+    }
+
+    private void UpdateAtLocalTime(EvaluationContext context)
     {
         var inputs = Clips.GetCollectedTypedInputs();
         Slot<float>? selected = null;

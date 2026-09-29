@@ -149,8 +149,17 @@ assert flight_rig is not None, "The narrative flight rig is missing"
 assert all(obj.parent == flight_rig for obj in detachable), (
     "All reusable craft pieces must travel on the shared flight rig"
 )
-assert all(obj.parent == flight_rig for obj in objects if obj.type == "LIGHT"), (
+assert all(obj.parent == flight_rig for obj in objects
+           if obj.type == "LIGHT" and not obj.name.startswith("EMBER |")), (
     "Craft lighting must follow the ship through the mission"
+)
+ember = bpy.data.objects.get("EMBER | storm giant")
+assert ember and ember.type == "MESH", "The second planetary location is missing"
+assert bpy.data.objects.get("EMBER | broken dust rings") is not None
+assert all(any(Path(bpy.path.basename(image.filepath)).name == name
+               for image in packed_images) for name in
+           ("ember_albedo.png", "ember_normal.png", "ember_orm.png")), (
+    "The second planet needs its complete PBR map set"
 )
 story_markers = [marker for marker in markers if marker.name.startswith("STORY |")]
 assert len(story_markers) >= 8, "The mission beats are missing from the timeline"
@@ -272,6 +281,16 @@ try:
 finally:
     scene.frame_set(original_frame, subframe=original_subframe)
     bpy.context.view_layer.update()
+
+start_camera, start_rig = camera_samples[1][0], camera_samples[1][2]
+end_camera, end_rig = camera_samples[scene.frame_end][0], camera_samples[scene.frame_end][2]
+assert (start_camera-end_camera).length < .001 and (start_rig-end_rig).length < .001, (
+    "The ship and camera must meet their opening positions at the project loop seam"
+)
+assert camera_samples[1][1].rotation_difference(
+    camera_samples[scene.frame_end][1]).angle < .001, (
+    "The camera orientation must match across the complete project loop"
+)
 
 animated_detachable = [
     obj for obj in detachable

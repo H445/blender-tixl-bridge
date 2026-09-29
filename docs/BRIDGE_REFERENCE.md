@@ -82,7 +82,7 @@ The bridge installs twelve shared operators under `PrismalLabs.BlenderExport`:
 | Operator | Role |
 | --- | --- |
 | `BlenderSourceClip` | Editable source TimeClip. |
-| `BlenderClipSequence` | Maps active source clips to source time. |
+| `BlenderClipSequence` | Maps active source clips to source time. A positive `LoopDurationSeconds` wraps the full clip lane before TimeClip mapping. Set the same duration on the global camera lane and each world lane for a whole-project loop; zero disables wrapping. |
 | `BlenderWorldClipTime` | Separates global camera time from per-world timing. |
 | `BlenderCameraTimeline` | Samples the exported camera and selects the active world. |
 | `BlenderAnimationScene` | Applies transform, visibility, material, and morph animation to glTF scenes. |

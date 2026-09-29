@@ -5,7 +5,7 @@ The bridge installs twelve operators under `PrismalLabs.BlenderExport`. Agents s
 | Operator | Capability and correct use |
 | --- | --- |
 | `BlenderSourceClip` | Editable source `TimeClip`. Moving/stretching changes placement; its source range remains Blender-export seconds. Feed both the global sequence and its world's sequence. |
-| `BlenderClipSequence` | Selects the active source clip and emits mapped source time plus active state. Use one global sequence and one sequence per world. |
+| `BlenderClipSequence` | Selects the active source clip and emits mapped source time plus active state. Use one global sequence and one sequence per world. Set `LoopDurationSeconds` to the same positive duration on every lane to repeat the entire composition; zero keeps ordinary timeline behavior. The wrap applies before each TimeClip maps source time. |
 | `BlenderWorldClipTime` | Reconciles global camera time with a world's time. Insert native float operators on the world-time wire to retime only that world. |
 | `BlenderCameraTimeline` | Reads `camera_60hz.bin` and timeline JSON, producing pose, lens, clip planes, mapped source time, and active world. |
 | `BlenderAnimationScene` | Applies transform, visibility, PBR/emission, and morph caches to matching glTF data at `TimeSeconds`; exposes opaque, transparent, and combined scenes. |

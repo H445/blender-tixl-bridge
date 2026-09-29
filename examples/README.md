@@ -1,6 +1,6 @@
 # Examples
 
-- [Asterion Breakaway](advanced_spaceship/README.md) — 60-second modular spacecraft demo with distinct combat, explorer, and hauler builds, TiXL renders, and playback evidence.
+- [Asterion Breakaway](advanced_spaceship/README.md) — 108-second looping spacecraft journey with distinct combat, explorer, and hauler builds, two planetary locations, and TiXL effects.
 - [BlendShapeExample](#blendshapeexample) — 16-second four-shape morph demo.
 
 ## BlendShapeExample

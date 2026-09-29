@@ -29,6 +29,7 @@ REQUIRED_TEXTURES = (
     "heat_titanium.png", "copper_normal.png", "copper_orm.png",
     "solar_ceramic.png", "solar_normal.png", "solar_orm.png",
     "moon_albedo.png", "moon_normal.png", "moon_orm.png",
+    "ember_albedo.png", "ember_normal.png", "ember_orm.png",
     "nasa_starmap_16k.jpg",
 )
 missing_textures = [name for name in REQUIRED_TEXTURES if not (ASSETS / name).is_file()]

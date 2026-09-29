@@ -2,7 +2,8 @@
   "FormatVersion": 3,
   "Id": "6defae81-c198-5bee-91e6-3160d17651dd",
   "Inputs": [
-    {"Id": "36bf79ae-84ac-5691-b8cb-a65d2e055d1a", "DefaultValue": 0.0}
+    {"Id": "36bf79ae-84ac-5691-b8cb-a65d2e055d1a", "DefaultValue": 0.0},
+    {"Id": "887bf3b5-45fa-4db1-a056-199d0a088931", "DefaultValue": 0.0}
   ],
   "Children": [],
   "Connections": []
