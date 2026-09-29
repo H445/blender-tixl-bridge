@@ -115,6 +115,8 @@ def add_identity() -> dict:
     pale = _material("HUD | identity low-key credit", (.19, .48, .60), 1.25)
     try:
         # A persistent systems credit, aligned with the existing lower HUD rail.
+        _plate(hud, camera, f"{PREFIX} Prismal Labs backing",
+               .545, -.559, .426, .041, dark, depth=-1.984)
         _text(hud, camera, f"{PREFIX} Prismal Labs credit",
               "PRISMAL LABS  /  MISSION SYSTEMS", .96, -.547, .023,
               pale, right=True)
@@ -132,7 +134,7 @@ def add_identity() -> dict:
         scene["mission_hud_identity"] = (
             "Prismal Labs systems credit in the lower HUD; H445 inverse-video "
             "call sign flickers on ten mission beats and vanishes at the loop seam")
-        return {"identityObjects": 4, "flashes": len(FLASH_SECONDS),
+        return {"identityObjects": 5, "flashes": len(FLASH_SECONDS),
                 "staticCredit": "PRISMAL LABS  /  MISSION SYSTEMS"}
     finally:
         bpy.ops.object.select_all(action="DESELECT")

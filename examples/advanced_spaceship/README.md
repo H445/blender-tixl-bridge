@@ -4,7 +4,9 @@ A 108-second Blender-to-TiXL looping rescue scene: a combat craft slaloms throug
 
 The [audio package](audio/README.md) supplies two seeded 120 BPM techno music stems, chopped break drums, and separate propulsion, lunar scanning, and cargo effects. Eight editable native TiXL AudioClips route through a shared AudioBus with clip and master levels. The same accent schedule drives sparse video cuts and a continuously changing TiXL SDF signal.
 
-The camera-mounted mission HUD carries a small **Prismal Labs / Mission Systems** credit beneath the right-side scan panel. **H445** appears as a brief inverse-video signal fault on ten selected mission beats, with a two-frame cyan displacement; it is absent at both loop boundaries. [`asterion_hud_identity.py`](../asterion_hud_identity.py) can refresh these four identity meshes without rebuilding the telemetry HUD, and `add_asterion_hud.py` includes them on a full HUD rebuild.
+The camera-mounted mission HUD carries a small **Prismal Labs / Mission Systems** credit on a narrow dark backing beneath the right-side scan panel. **H445** appears as a brief inverse-video signal fault on ten selected mission beats, with a two-frame cyan displacement; it is absent at both loop boundaries. [`asterion_hud_identity.py`](../asterion_hud_identity.py) can refresh these five identity meshes without rebuilding the telemetry HUD, and `add_asterion_hud.py` includes them on a full HUD rebuild.
+
+The HUD keeps chapter and moon-core labels at fixed positions, holds numeric telemetry for two seconds per reading, and limits small edge glitches to spaced signal accents. Its flight metrics remain independent of the ship's 60 Hz motion. Rebuild the HUD through `add_asterion_hud.py` using Blender MCP when revising this behavior.
 
 Blender renders this scene at **1920 × 1080** at 100% scale. The saved TiXL Home graph also uses **1920 × 1080** for its scene and output render targets. With TiXL closed, [`set_asterion_resolution.py`](../set_asterion_resolution.py) can validate and restore that TiXL setting after an older graph is installed; it stages the graph and backs up the original outside `Symbols` before applying the change.
 
