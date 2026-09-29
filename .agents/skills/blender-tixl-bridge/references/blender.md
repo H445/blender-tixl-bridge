@@ -38,6 +38,7 @@ print(json.dumps({
 Require a saved file and either an active camera or camera-bound timeline markers. With no `tixl_worlds` property, the active scene becomes one world named `main`. When `tixl_worlds` exists, parse its JSON and verify that every entry has a unique non-empty name, an existing collection, and a contiguous time range. World names cannot contain `/` or `\\`.
 
 The exporter supports meshes and UV textures through glTF, object transforms, visibility, shape keys, PBR base color and emission, lights, and active-camera or marker-based camera cuts. It samples runtime animation at 60 Hz. Do not promise exact transfer of arbitrary procedural Blender shaders or physical refraction.
+Static objects tagged `tixl_sdf` (`sphere`, `box`, `torus`) export as native TiXL SDF/raymarch nodes instead of glTF meshes. Check `sdf_fields` in each world manifest and the generated import graph for field → raymarch → world command edges. Arbitrary Geometry Nodes SDF grids only transfer as evaluated meshes after Blender converts them to a mesh; do not claim native field parity for those grids. Reject animated proxies and unsupported transforms instead of approximating them silently.
 
 ### Configure the installed add-on through Blender MCP
 

@@ -8,8 +8,10 @@ Blender owns the source scene. The bridge produces replaceable caches and instal
 - Object transforms, visibility, shape keys, material base color and emission, and lights sampled at 60 Hz.
 - The active camera, lens and clipping data, plus camera-bound timeline markers for cuts.
 - One generated import branch per configured world, with scene switching, rendering, and final resolution control.
+- Static Blender objects tagged `tixl_sdf` as sphere, box, or torus become native TiXL signed-distance fields and raymarch commands in the generated world branch.
 
 Procedural Blender shaders, arbitrary World-node networks, and physical refraction are not guaranteed to match. Build TiXL-side equivalents when glTF cannot represent the source.
+Arbitrary Geometry Nodes SDF grids are not transferred as editable fields. Convert them to a mesh for evaluated-surface export, or use a supported analytic SDF proxy. Native SDF proxies must be static; unsupported animation, nonuniform sphere/torus scale, and box rotation fail preflight instead of silently flattening the field.
 
 Transform baking groups consecutive samples for each record into contiguous writes.
 The writer shares an 8 MiB buffered-payload budget across all world records, with

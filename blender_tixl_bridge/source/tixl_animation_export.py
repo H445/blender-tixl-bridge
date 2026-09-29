@@ -253,12 +253,15 @@ def export_world(scene, world, coll_name):
     coll = scene.collection if coll_name == scene.collection.name else bpy.data.collections.get(coll_name)
     if coll is None:
         raise RuntimeError(f"missing world collection: {coll_name}")
+    from blender_sdf_export import collect, kind as sdf_kind
+    sdf_fields = collect(coll)
     temp = bpy.data.collections.new("TiXL Runtime Export / " + world)
     scene.collection.children.link(temp)
     records, opaque, glass = [], [], []
     lights = []
     set_output_frame(scene, WORLD_CLIPS[world][0])
-    sources = [o for o in coll.all_objects if o.type in {"MESH", "CURVE", "SURFACE", "FONT"}]
+    sources = [o for o in coll.all_objects if o.type in {"MESH", "CURVE", "SURFACE", "FONT"}
+               and sdf_kind(o) is None]
     for light in (o for o in coll.all_objects if o.type == "LIGHT"):
         lights.append({"name": light.name, "type": light.data.type,
                        "position": [round(float(v), 6) for v in light.matrix_world.translation],
@@ -319,6 +322,7 @@ def export_world(scene, world, coll_name):
                 "animation_metadata": cache_meta.name,
                 "channels": channels_path.name,
                 "lights": lights,
+                "sdf_fields": sdf_fields,
                 "active_clip": WORLD_CLIPS.get(world, (1, END)),
                 "material_animation_tracks": material_tracks(source_materials),
                 "runtime_contract": "GLB local geometry; absolute world matrices in cache"}

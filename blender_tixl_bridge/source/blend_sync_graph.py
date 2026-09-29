@@ -97,6 +97,8 @@ def generate(blend: Path, cache: Path, manifest: dict) -> list[Path]:
         old = template_ids[key]
         clone_child(old, core_ids[old], key, blend.stem)
     branch_maps = []
+    branch_y = []
+    y_offset = 0
     for index, world in enumerate(worlds):
         name = world["world"]
         keys = ["world"]
@@ -107,9 +109,11 @@ def generate(blend: Path, cache: Path, manifest: dict) -> list[Path]:
                      "world_glass_solid_draw"]
         mapping = {template_ids[key]: identity(f"world/{index}/{key}") for key in keys}
         branch_maps.append(mapping)
+        branch_y.append(y_offset)
         for key in keys:
             old = template_ids[key]
-            clone_child(old, mapping[old], key, name, index * 380)
+            clone_child(old, mapping[old], key, name, y_offset)
+        y_offset += max(380, 250 + 185 * len(world.get("sdf_fields", [])))
     t3["Children"] = children
     zero = "00000000-0000-0000-0000-000000000000"
     connections = []
@@ -136,6 +140,78 @@ def generate(blend: Path, cache: Path, manifest: dict) -> list[Path]:
                 or (source in mapping and target == template_ids["scene_switch"])):
                 if (source in combined and target in combined):
                     connections.append(mapped_edge(edge, combined))
+    # Author-declared Blender SDF proxies become editable native TiXL fields.
+    # The import graph is replaceable, so object identity drives stable IDs.
+    sdf_defs = {
+        "sphere": ("fc2a33fc-d957-4113-8096-92d4dcbe14b5",
+                   "Lib.field.generate.sdf.SphereSDF",
+                   "02f7d494-72ed-4247-88d7-0cbb730edf65"),
+        "box": ("860da1cd-b341-4bc5-965a-4a9c295831f4",
+                "Lib.field.generate.sdf.BoxSDF",
+                "9153c53c-0b19-4ce4-b086-e448d78ef032"),
+        "torus": ("a54e0946-71d0-4985-90bc-184cdb1b6b34",
+                  "Lib.field.generate.sdf.TorusSDF",
+                  "14cd4d1f-0b9b-43c4-93cc-d730c137cee8"),
+    }
+    def sdf_value(slot, type_name, raw):
+        return {"Id": slot, "Type": type_name, "Value": raw}
+    def sdf_child(child_id, symbol_id, symbol_name, name, inputs, x, y):
+        children.append({"Id": child_id, "SymbolId": symbol_id,
+                         "SymbolName": symbol_name, "Name": name,
+                         "InputValues": inputs, "Outputs": []})
+        uis.append({"ChildId": child_id, "Position": {"X": x, "Y": y}})
+    for world_index, world in enumerate(worlds):
+        group_id = branch_maps[world_index][template_ids["world"]]
+        for field_index, field in enumerate(world.get("sdf_fields", [])):
+            shape = field["kind"]
+            if shape not in sdf_defs:
+                raise ValueError(f"Unsupported exported SDF shape: {shape}")
+            base = f"world/{world_index}/sdf/{field['name']}"
+            field_id = identity(base + "/field")
+            ray_id = identity(base + "/raymarch")
+            row = branch_y[world_index] + 255 + field_index * 185
+            symbol, symbol_name, result_slot = sdf_defs[shape]
+            inputs = []
+            if shape == "sphere":
+                inputs = [sdf_value("ca582e39-37d7-4df6-b942-e2330f2bf2c6",
+                                    "System.Numerics.Vector3", field["center"]),
+                          sdf_value("3dd7c779-7982-4e7c-b4ce-f1915f477ad0",
+                                    "System.Single", field["radius"])]
+            elif shape == "box":
+                inputs = [sdf_value("951b2983-1359-41e4-8fb0-8d97c50ed8d6",
+                                    "System.Numerics.Vector3", field["center"]),
+                          sdf_value("c4ef07b4-853b-48d4-9ade-c93ee849071a",
+                                    "System.Numerics.Vector3", field["size"]),
+                          sdf_value("734179fa-aaf8-46d0-b827-e71555dad6a0",
+                                    "System.Single", 1.0)]
+            else:
+                inputs = [sdf_value("dbc72bd7-6191-4145-a69f-d17b3808b3ab",
+                                    "System.Numerics.Vector3", field["center"]),
+                          sdf_value("5fe2ab92-f8e5-400d-b5a3-197f20570d6f",
+                                    "System.Single", field["radius"]),
+                          sdf_value("6a392bc1-2adf-4a50-bb3f-5d4f2a63bf0b",
+                                    "System.Single", field["thickness"]),
+                          sdf_value("522a9640-ca8c-47e6-ad36-5c316a9092ae",
+                                    "System.Int32", field["axis"])]
+            sdf_child(field_id, symbol, symbol_name, f"{world['world']} / {field['name']} SDF",
+                      inputs, -245, row)
+            sdf_child(ray_id, "9323e32f-078c-4156-941b-203f4c265ff5",
+                      "Lib.field.render.RaymarchField", f"{world['world']} / {field['name']} raymarch",
+                      [sdf_value("9715075b-b02b-4290-9332-9bbfe67933f2",
+                                 "System.Numerics.Vector4", field["color"]),
+                       sdf_value("adeb374b-bce0-4af2-867b-efb3ce6289c9",
+                                 "System.Single", 10000.0),
+                       sdf_value("0700d5cb-6a1e-43ad-b7fb-b9b7b1415584",
+                                 "System.Boolean", True)], 515, row)
+            connections.extend([
+                {"SourceParentOrChildId": field_id, "SourceSlotId": result_slot,
+                 "TargetParentOrChildId": ray_id,
+                 "TargetSlotId": "340ca675-9356-4548-ba64-732181bebeef"},
+                {"SourceParentOrChildId": ray_id,
+                 "SourceSlotId": "e178ef02-c9ac-48cd-a8cb-df3aec5941bb",
+                 "TargetParentOrChildId": group_id,
+                 "TargetSlotId": "9e961f73-1ee7-4369-9ac7-5c653e570b6f"},
+            ])
     # Keep the import neutral: the old template's glow/blur/cover look belonged
     # to its source film. Users can add those effects in the editable home graph.
     render_to_bloom = next(edge for edge in template_connections

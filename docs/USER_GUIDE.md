@@ -94,6 +94,18 @@ In the editable TiXL project graph, find the world branch containing the object 
 
 Insert a native mesh operator between **select mesh → replace mesh** and an image operator between one of **select textures → replace textures**. For example, AsterionBreakaway drives **DisplaceMeshNoise.Amount** from **AnimValue** using mapped world time, and routes the moon's albedo through an animated **Pixelate** glitch. The image shader preserves the moon's depth behind the ship. Other objects keep their own geometry, materials, transforms, and animation. Duplicate the selector and effect branch to edit another primitive independently. This is graph selection by Blender object name; viewport picking is not provided by the bridge.
 
+## Native SDF shapes from Blender
+
+For a static analytic shape, add a mesh object or Empty in Blender and set its Object custom property `tixl_sdf` to `sphere`, `box`, or `torus`. Sync creates a matching native TiXL SDF field and raymarch command in that object's world branch. The proxy's Blender mesh is omitted from the glTF import, so the native field is the visible result. Use `tixl_sdf_color` as four RGBA numbers to set its TiXL color.
+
+- `sphere`: set `tixl_sdf_radius` (default 0.5); uniform object scale is required.
+- `box`: object dimensions set its full size; rotation is currently unsupported.
+- `torus`: set `tixl_sdf_radius` (default 0.5) and `tixl_sdf_thickness` (default 0.08); uniform scale and an axis aligned to world X, Y, or Z are required.
+
+The bridge converts Blender coordinates to TiXL coordinates and rejects unsupported tagged shapes, animation, or transforms during sync. It supports at most 32 native fields per world. Blender Geometry Nodes can create arbitrary SDF grids, but TiXL has no corresponding grid loader in this bridge. If you convert such a grid to a mesh in Blender, the evaluated surface follows the usual mesh export path; the editable distance field itself is not transferred.
+
+The [SDF probe render](screenshots/sdf-probe.png) shows a Blender-tagged sphere and torus rendered by TiXL's native field operators.
+
 ## Update the add-on
 
 The add-on checks the latest published bridge release once when Blender starts.

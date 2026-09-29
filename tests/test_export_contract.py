@@ -25,7 +25,7 @@ class ExportContractTest(unittest.TestCase):
         self.blender.write_bytes(b"binary-v1")
         self.source = self.root / "source"
         self.source.mkdir()
-        for name in ("export_contract.py", "blend_sync_worker.py", "tixl_animation_export.py", "animation_writer.py"):
+        for name in export_contract._EXPORT_SOURCES:
             (self.source / name).write_text(f"# {name} v1\n", encoding="utf-8")
         self.gltf = self.root / "gltf"
         (self.gltf / "nested").mkdir(parents=True)

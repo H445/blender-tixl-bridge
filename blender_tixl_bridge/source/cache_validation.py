@@ -252,8 +252,42 @@ def validate_export_payload(stage: Path, manifest: dict) -> bool:
         name = world["world"]
         metadata = _read_json(world_dir / f"{name}_animation.json", "animation metadata")
         expected_nodes = {row["export_name"] for row in metadata["records"]}
+        sdf_fields = world.get("sdf_fields", [])
+        if not isinstance(sdf_fields, list) or len(sdf_fields) > 32:
+            _fail(f"Invalid SDF field list for {name}")
+        sdf_names = set()
+        for field in sdf_fields:
+            if not isinstance(field, dict) or field.get("kind") not in {"sphere", "box", "torus"}:
+                _fail(f"Invalid SDF field for {name}")
+            label = field.get("name")
+            if not isinstance(label, str) or not label or label in sdf_names:
+                _fail(f"Invalid or duplicate SDF name for {name}")
+            sdf_names.add(label)
+            for vector_name, keys in (("center", "XYZ"), ("color", "XYZW")):
+                vector = field.get(vector_name)
+                if not isinstance(vector, dict) or any(
+                    key not in vector or isinstance(vector[key], bool)
+                    or not isinstance(vector[key], (int, float))
+                    or not math.isfinite(vector[key]) for key in keys
+                ):
+                    _fail(f"Invalid SDF {vector_name} for {name}/{label}")
+            if field["kind"] == "box":
+                size = field.get("size")
+                if not isinstance(size, dict) or any(
+                    key not in size or isinstance(size[key], bool)
+                    or not isinstance(size[key], (int, float))
+                    or not math.isfinite(size[key]) or size[key] <= 0 for key in "XYZ"
+                ):
+                    _fail(f"Invalid SDF box size for {name}/{label}")
+            else:
+                for key in (("radius", "thickness") if field["kind"] == "torus" else ("radius",)):
+                    number = field.get(key)
+                    if isinstance(number, bool) or not isinstance(number, (int, float)) or not math.isfinite(number) or number <= 0:
+                        _fail(f"Invalid SDF {key} for {name}/{label}")
+                if field["kind"] == "torus" and field.get("axis") not in (0, 1, 2):
+                    _fail(f"Invalid SDF axis for {name}/{label}")
         glbs = world.get("glbs")
-        if not isinstance(glbs, dict) or not glbs:
+        if not isinstance(glbs, dict) or (not glbs and not sdf_fields):
             _fail(f"World has no GLB passes: {name}")
         nodes = set()
         for part in glbs:
