@@ -73,7 +73,7 @@ For geometry, **Select mesh** feeds **Replace mesh**. Keep their zero-based `Pri
 
 **Preload all Blender worlds** initializes scene and animation branches on the first paused evaluation. The light operator caches world manifests and channels. The selected world then feeds the camera, environment, render target, tone mapping, and **Output target**.
 
-New homes use the grid and lane defaults in `blender_tixl_bridge/templates/home_layout.json`. Sync preserves positions rearranged in TiXL. Home graphs have an internal **Resolution** node and no symbol ports; the generated import symbol keeps its ports for reuse inside other graphs.
+New homes use the grid and lane defaults in `blender_tixl_bridge/templates/home_layout.json`. Sync preserves positions rearranged in TiXL. When a graph grows, `tools/layout_tixl_graph.py` can stage a connection-driven layout that changes only `.t3ui` child positions, then apply it after a clean-session restart; the agent procedure is in `.agents/skills/blender-tixl-bridge/references/graph-layout.md`. Home graphs have an internal **Resolution** node and no symbol ports; the generated import symbol keeps its ports for reuse inside other graphs.
 
 ## Reusable TiXL operators
 

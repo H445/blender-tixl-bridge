@@ -15,6 +15,7 @@ Load only the reference required for the current task; follow conditional links 
 | Saved-source sync / output verification | [Sync](references/sync.md) |
 | Add-on configuration / precise scene recipes | [Blender](references/blender.md) |
 | TiXL graph edits | [Edit](references/edit.md) and [operator semantics](references/operators.md) |
+| TiXL graph readability or dynamic graph layout | [Graph layout](references/graph-layout.md), then [Sync](references/sync.md) for restart and output checks |
 | Stale/blank output | [Troubleshooting](references/troubleshoot.md) |
 | Bounded snapshots, log follow, or opt-in output capture | [Diagnostics](references/diagnostics.md) |
 | Capability refresh failure / transport setup | [Discovery](references/discovery.md) |
