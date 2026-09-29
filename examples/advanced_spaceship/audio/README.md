@@ -29,6 +29,16 @@ curious and sparse for the survey, tightens for cargo pickup, and reaches its
 most intense groove in the Ember orbit before resolving at the loop seam.
 The zero and 108-second sample endpoints are silent in every stem.
 
+The current TiXL Home graph keeps Blender source clips on lane 0 and places
+the eight audio stem groups on lanes 1–8. The chopped break uses three clips
+on lane 4. `examples/rebalance_asterion_audio.py` stages or reapplies those
+lanes, clears accidental music mutes, sets the clip and bus levels, and fits
+the saved TiXL timeline and render export range to all 54 bars. Audit the
+candidate with `tools/audit_tixl_audio.py --graph <staged.t3> --assets
+<TiXL-project-Assets>`. The measured stereo sum peaks at about 0.705 with
+no clipped samples at the current levels. The project has no unused WAVs;
+all eight assets are referenced by its AudioClips.
+
 Run `generate_asterion_audio.py --stem all` to reproduce the WAVs with NumPy.
 Individual stems can be rendered with `--stem cinematic`, `electronic`,
 `techno`, `flight`, `scan`, `cargo`, `glitch`, or `break`. The synthesized break

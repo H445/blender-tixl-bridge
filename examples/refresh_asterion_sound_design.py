@@ -90,11 +90,15 @@ def prepare(graph: dict, ui: dict) -> tuple[dict, dict, bool]:
     top = min(positions[clip["Id"]]["Y"] for clip in existing)
     for index, (name, filename, volume, layer) in enumerate(NEW_LANES):
         edge_id = uid("sound-design/"+filename)
-        if name in names or any(c["Id"] == edge_id for c in children):
-            current = names.get(name)
-            if current is None or current["Id"] != edge_id:
+        current = next((child for child in children if child["Id"] == edge_id), None)
+        if current is not None:
+            current_path = next((item["Value"] for item in current.get("InputValues", [])
+                                 if item["Id"] == PATH_SLOT), None)
+            if current["SymbolName"] != "Lib.io.audio.AudioClip" or current_path != f"{namespace}:audio/{filename}":
                 raise ValueError(f"Conflicting audio lane: {name}")
             continue
+        if name in names:
+            raise ValueError(f"Conflicting audio lane name: {name}")
         clip = {"Id": edge_id, "SymbolId": CLIP_SYMBOL,
                 "SymbolName": "Lib.io.audio.AudioClip", "Name": name,
                 "InputValues": [

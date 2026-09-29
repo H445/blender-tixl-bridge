@@ -20,3 +20,5 @@ For a staged offline graph edit, use [graph-edit](../blender-tixl-graph-edit/SKI
 ## Verify the result
 
 Check that each WAV resolves, TimeClips appear at the intended bars, all clip outputs reach the bus, the bus reaches `Execute`, and the final image route remains connected. Listen across cues, offbeats, transitions, and the seam; compare rendered frames on and between shared accent events. After disk structural edits restart TiXL, then inspect the live graph, audio/output, and warning log. Offline preparation can prove file and graph consistency, but live sound/render verification remains pending until TiXL is reopened.
+
+For stereo PCM16 projects, `python tools/audit_tixl_audio.py --graph "<Home.t3>"` reports lane collisions, mute state, clip/bus levels, peak and RMS by stem, six-second mix windows, and clipped sample count. Use `--assets "<project Assets>"` when auditing a staged graph outside the project. Measure the candidate mix before applying level changes; a low peak alone does not prove perceptual balance, so listen in TiXL afterward.
