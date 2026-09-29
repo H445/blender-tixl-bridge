@@ -59,52 +59,105 @@ def envelope(t, enter, full, leave, gone):
     return smooth01((t-enter)/(full-enter)) * (1-smooth01((t-leave)/(gone-leave)))
 
 
-# Place and attitude control are separate: the craft can bank, brake and turn
-# while the one-shot camera keeps moving. The fast passages at 11-16 and 84-90
-# seconds are two deliberate warp jumps. A third jump closes the journey.
-waypoints = [
-    (0, (0, 0, 0)), (8, (2, 8, 1)), (11, (5, 13, 2)),
-    (16, (14, 38, 4)), (24, (21, 44, 0)), (34, (25, 45, -4)),
-    (45, (28, 50, -7)), (58, (31, 54, -8)), (72, (27, 50, -6)),
-    (80, (23, 47, -4)), (84, (21, 44, -3)), (90, (-30, -22, 9)),
-    (96, (-34, -33, 10)), (102, (-43, -39, 11)),
-    (104, (-45, -37, 11)), (106, (-20, -15, 4)), (108, (0, 0, 0)),
-]
-attitudes = [
-    (0, -.12, 0, 0), (8, -.25, -.04, .16),
-    (16, -.12, .04, -.10), (24, .34, -.10, .38),
-    (36, .15, .06, -.27), (45, .24, -.04, .12),
-    (58, -.08, .06, -.18), (72, -.62, -.06, .28),
-    (80, -1.02, .08, -.42), (84, -1.82, -.10, .43),
-    (90, -2.52, .05, -.27), (96, -2.93, -.07, .22),
-    (104, -4.20, .04, -.30), (108, -.12-math.tau, 0, 0),
-]
+# The actual craft trajectory, rather than the camera, circles both planets.
+# Every join shares position and tangent, including the 108 -> 0 project seam.
+MOON_CENTER = Vector((65, 185, -40))
+EMBER_CENTER = Vector((-55, -57, 8))
+MOON_THETA = math.atan2(45, -35)
+EMBER_THETA = math.atan2(-73, 30)
+MOON_OMEGA = -math.tau/68
+EMBER_OMEGA = math.tau/14
+START_VELOCITY = Vector((0, 8, 0))
+CRUISE_VELOCITY = Vector((2, 15, 0))
 
 
-def hermite_scalar(t, points):
-    for index in range(len(points)-1):
-        t0, value0 = points[index]
-        t1, value1 = points[index+1]
-        if t <= t1:
-            dt = t1-t0
-            u = max(0, min(1, (t-t0)/dt))
-            def slope(i):
-                before = points[max(0, i-1)]
-                after = points[min(len(points)-1, i+1)]
-                return (after[1]-before[1])/(after[0]-before[0])
-            m0, m1 = slope(index)*dt, slope(index+1)*dt
-            return ((2*u**3-3*u*u+1)*value0 + (u**3-2*u*u+u)*m0
-                    + (-2*u**3+3*u*u)*value1 + (u**3-u*u)*m1)
-    return points[-1][1]
+def orbit_position(center, radius, z_offset, phase, theta0, sweep):
+    theta = theta0+phase*sweep
+    return center + Vector((radius*math.cos(theta), radius*math.sin(theta),
+                            z_offset+4*math.sin(phase*math.tau)))
 
 
-paths = [[(t, xyz[axis]) for t, xyz in waypoints] for axis in range(3)]
-angles = [[(row[0], row[axis]) for row in attitudes] for axis in range(1, 4)]
+def orbit_velocity(radius, phase, theta0, omega, period):
+    theta = theta0+phase*omega*period
+    return Vector((-radius*omega*math.sin(theta), radius*omega*math.cos(theta),
+                   4*math.tau/period*math.cos(phase*math.tau)))
+
+
+def moon_orbit(t):
+    phase = (t-16)/68
+    return orbit_position(MOON_CENTER, 64, 42, phase, MOON_THETA, -math.tau)
+
+
+def moon_velocity(t):
+    phase = (t-16)/68
+    return orbit_velocity(64, phase, MOON_THETA, MOON_OMEGA, 68)
+
+
+def ember_orbit(t):
+    phase = (t-90)/14
+    return orbit_position(EMBER_CENTER, 79, 8, phase, EMBER_THETA, math.tau)
+
+
+def ember_velocity(t):
+    phase = (t-90)/14
+    return orbit_velocity(79, phase, EMBER_THETA, EMBER_OMEGA, 14)
+
+
+def hermite_path(t, start, end, first, last, first_speed, last_speed):
+    duration = end-start
+    u = max(0, min(1, (t-start)/duration))
+    return ((2*u**3-3*u*u+1)*first + (u**3-2*u*u+u)*duration*first_speed
+            + (-2*u**3+3*u*u)*last + (u**3-u*u)*duration*last_speed)
+
+
+def baseline_position(t):
+    if t < 11:
+        return hermite_path(t, 0, 11, Vector((0, 0, 0)), Vector((10, 110, 2)),
+                            START_VELOCITY, CRUISE_VELOCITY)
+    if t < 16:
+        return hermite_path(t, 11, 16, Vector((10, 110, 2)), moon_orbit(16),
+                            CRUISE_VELOCITY, moon_velocity(16))
+    if t < 84:
+        return moon_orbit(t)
+    if t < 90:
+        return hermite_path(t, 84, 90, moon_orbit(84), ember_orbit(90),
+                            moon_velocity(84), ember_velocity(90))
+    if t < 104:
+        return ember_orbit(t)
+    return hermite_path(t, 104, 108, ember_orbit(104), Vector((0, 0, 0)),
+                        ember_velocity(104), START_VELOCITY)
+
+
+# The pilot moves around the rocks, rather than simply rolling in place. The
+# envelopes have zero edge velocity and keep the rocks clear of the hull.
+dodges = ((7.3, 2.0, 5.0, 9.0, 12.0, Vector((16, 0, 2))),
+          (19.3, 14.0, 16.5, 24.0, 29.0, Vector((0, -2, 13))),
+          (95.2, 87.5, 90.0, 105.0, 107.5, Vector((0, 0, 14))))
+rolls = ((6.3, 9.2), (18.0, 21.4), (93.5, 97.0))
+
+
+def flight_position(t):
+    position = baseline_position(t)
+    for _, enter, full, leave, gone, displacement in dodges:
+        position += displacement * envelope(t, enter, full, leave, gone)
+    return position
 
 
 def flight_pose(t):
-    return Vector(hermite_scalar(t, points) for points in paths), tuple(
-        hermite_scalar(t, points) for points in angles)
+    position = flight_position(t)
+    if t <= 0 or t >= 108:
+        velocity = START_VELOCITY
+    else:
+        before = flight_position(max(0, t-.02))
+        after = flight_position(min(108, t+.02))
+        velocity = after-before
+    yaw = math.atan2(-velocity.x, velocity.y)
+    pitch = math.atan2(velocity.z, math.hypot(velocity.x, velocity.y))
+    bank = .18*math.sin(math.tau*2*t/108)
+    # Roll around the craft's longitudinal Y axis. Complete turns remain in
+    # the Euler channel so TiXL sees the rotation rather than a static pose.
+    bank += sum(math.tau*smooth01((t-start)/(end-start)) for start, end in rolls)
+    return position, (yaw, pitch, bank)
 
 
 def emission(name, color, strength):
@@ -181,9 +234,12 @@ def move_to_story(obj, role):
     return obj
 
 
-# The amber signal is at the near surface of the moon. During the hauler beat
-# the recovered core travels into the cargo cradle and leaves with the ship.
-beacon_origin = Vector((41, 61, -14))
+# Move the moon into the destination system rather than placing it beside the
+# opening asteroid run. The core remains just outside its near surface.
+moon = bpy.data.objects.get("Tethys analogue | cratered moon")
+assert moon is not None, "The Tethys moon is missing"
+moon.location = MOON_CENTER
+beacon_origin = Vector((65, 166, -40))
 bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, radius=.72)
 beacon = move_to_story(bpy.context.object, "Distress signal and recovered core")
 beacon.name = "SIGNAL | recovered moon core"
@@ -196,7 +252,7 @@ scan.data.materials.append(scan_mat)
 
 # The escape warp reveals a warmer, ringed system. Its PBR maps and static
 # lighting make this leg visually distinct from the psychedelic cratered moon.
-ember_center = Vector((-55, -57, 8))
+ember_center = EMBER_CENTER
 bpy.ops.mesh.primitive_uv_sphere_add(segments=72, ring_count=36, radius=18,
                                      location=ember_center)
 ember = move_to_story(bpy.context.object, "Second destination: copper storm giant")
@@ -239,6 +295,89 @@ key.location = (-36, -28, 36)
 key.rotation_euler = (ember_center-key.location).to_track_quat("-Z", "Y").to_euler()
 
 
+# Distinct, stationary rock fields provide scale and parallax for the ship's
+# three evasions. Their central rocks occupy the unmodified flight corridor;
+# the animated rig clears them through the timed lateral/vertical dodges.
+rock_material = bpy.data.materials.get("08 | cratered moon regolith")
+assert rock_material is not None, "The asteroid field needs the packed regolith PBR maps"
+
+asteroids = []
+rock_offsets = ((0, 0, 0), (-25, -8, 10), (28, 7, -10),
+                (-20, 13, -14), (27, -14, 13), (-33, 4, -4), (35, -3, 6),
+                (-39, -17, 16), (42, 18, -15), (-18, -23, 18),
+                (22, 24, -17), (-47, 10, 2), (48, -11, -2),
+                (-31, 28, 12), (34, -29, -11), (-53, -5, -8))
+for encounter, (second, *_) in enumerate(dodges):
+    center = baseline_position(second)
+    if encounter == 1:
+        center.y += 5  # keep the exit from the lunar field open
+    for index, offset in enumerate(rock_offsets):
+        seed = random.Random(51000 + 101*encounter + index)
+        radius = (2.8 if index == 0 else seed.uniform(.9, 2.4))
+        rock_position = center + Vector(offset)
+        if encounter > 0 and index > 0:
+            # The center rock prompts an actual dodge. Its satellites sit in
+            # inner/outer shells, clear of the full circular flight path.
+            planet = MOON_CENTER if encounter == 1 else EMBER_CENTER
+            radial = Vector((center.x-planet.x, center.y-planet.y, 0)).normalized()
+            tangential = Vector((-radial.y, radial.x, 0))
+            shell = (-37 if index % 2 else 39)
+            if encounter == 1 and index == 3:
+                shell = 54  # clear the inbound warp before the lunar orbit
+            cross = (((index*7) % 11)-5)*5.5
+            rock_position = (center + radial*shell + tangential*cross
+                             + Vector((0, 0, seed.uniform(-14, 14))))
+        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=3, radius=1,
+                                             location=rock_position)
+        rock = move_to_story(bpy.context.object, "Stationary asteroid for evasive flight")
+        rock.name = f"ASTEROID | field {encounter+1} rock {index+1:02d}"
+        for vertex in rock.data.vertices:
+            x, y, z = vertex.co
+            shape = (1 + .13*math.sin(3.2*x+2.4*y+encounter)
+                     + .09*math.sin(5.1*y-3.4*z+index)
+                     + .055*seed.uniform(-1, 1))
+            vertex.co *= radius*shape
+        for polygon in rock.data.polygons:
+            polygon.use_smooth = True
+        rock.data.materials.append(rock_material)
+        rock.rotation_euler = tuple(seed.uniform(-math.pi, math.pi) for _ in range(3))
+        asteroids.append(rock)
+
+
+# Five sparse, static dust lanes make long-distance and warp movement legible
+# through parallax. Each lane is one mesh, keeping TiXL's object graph compact.
+dust_materials = [emission("STORY | cold interstellar dust", (.27, .48, .68), 1.2),
+                  emission("STORY | ember interstellar dust", (.72, .39, .16), 1.2)]
+dust_lanes = []
+for lane, (begin, end, warm) in enumerate(((1, 11, False), (11, 16, False),
+                                          (16, 28, False), (84, 90, True),
+                                          (90, 107, True))):
+    dust_rng = random.Random(72900 + lane)
+    vertices, faces = [], []
+    for grain in range(230):
+        t = dust_rng.uniform(begin, end)
+        center = baseline_position(t) + Vector((dust_rng.uniform(-34, 34),
+                                                dust_rng.uniform(-8, 8),
+                                                dust_rng.uniform(-24, 24)))
+        radius = dust_rng.uniform(.045, .13)
+        base = len(vertices)
+        vertices.extend((center + Vector((radius, 0, 0)),
+                         center + Vector((0, radius, 0)),
+                         center + Vector((0, 0, radius)),
+                         center + Vector((-radius, -radius, -radius))))
+        faces.extend(((base, base+2, base+1), (base, base+1, base+3),
+                      (base, base+3, base+2), (base+1, base+2, base+3)))
+    dust_mesh = bpy.data.meshes.new(f"DUST | flight lane {lane+1} mesh")
+    dust_mesh.from_pydata(vertices, [], faces)
+    dust_mesh.update()
+    dust_mesh.materials.append(dust_materials[int(warm)])
+    dust = bpy.data.objects.new(f"DUST | flight lane {lane+1}", dust_mesh)
+    story.objects.link(dust)
+    dust["asterion_story_object"] = True
+    dust["story_role"] = "Sparse static space dust for flight parallax"
+    dust_lanes.append(dust)
+
+
 # Short streak meshes use a narrow hexagonal prism along local Y. Scaling
 # them to zero hides them without material-opacity tricks in glTF/TiXL.
 streaks = []
@@ -271,9 +410,13 @@ for index in range(28):
 camera.animation_data_clear()
 flight.animation_data_clear()
 previous_rotation = None
+previous_flight_yaw = None
 for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
     t = (frame-1)/fps
     position, (yaw, pitch, bank) = flight_pose(t)
+    if previous_flight_yaw is not None:
+        yaw += round((previous_flight_yaw-yaw)/math.tau)*math.tau
+    previous_flight_yaw = yaw
     flight.location = position
     flight.rotation_euler = (pitch, bank, yaw)
     flight.keyframe_insert("location", frame=frame)
@@ -281,7 +424,9 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
 
     # A roving camera: wide moon approach, close survey, faster pursuit, then
     # a slowed arc around each breakaway. No camera cuts or instant relocations.
-    orbit = -.97 + math.tau*5*t/108 + .34*math.sin(math.tau*t/54)
+    orbit = (-.97 + math.tau*5*t/108 + .34*math.sin(math.tau*t/54)
+             - 1.7*envelope(t, 30, 37, 58, 68)
+             + math.pi*envelope(t, 78, 92, 99, 108))
     slow_arc = max(envelope(t, 24, 27, 32, 36),
                    envelope(t, 60, 63, 68, 72),
                    envelope(t, 96, 99, 102, 104))
@@ -300,7 +445,7 @@ for frame in list(range(1, scene.frame_end, 12)) + [scene.frame_end]:
     if separation < 28:
         offset += offset.normalized() * ((28-separation)*smooth01((28-separation)/8))
     camera.location = position + offset
-    moon_center = Vector((41, 80, -14))
+    moon_center = MOON_CENTER
     moon_delta = camera.location-moon_center
     moon_clearance = moon_delta.length
     if moon_clearance < 29:
@@ -353,28 +498,32 @@ for marker in list(scene.timeline_markers):
     if marker.name.startswith("STORY |"):
         scene.timeline_markers.remove(marker)
 for second, label in [
-    (0, "Signal detected"), (11, "Warp to Tethys"),
+    (0, "Signal detected"), (7, "Asteroid slalom and barrel roll"),
+    (11, "Warp to Tethys"), (19, "Lunar field loop"),
     (24, "Armor separates under threat"), (36, "Explorer surveys signal"),
     (60, "Reconfigure for recovery"), (73, "Core retrieved"),
     (84, "Escape warp"), (90, "Ember ring orbit"),
+    (94, "Ring debris barrel roll"),
     (96, "Combat rebuild and escort"), (104, "Return warp"),
 ]:
     scene.timeline_markers.new("STORY | " + label, frame=int(second*fps+1))
 
 scene["story"] = (
-    "A distress signal from Tethys draws the combat craft through warp. "
+    "A distress signal from Tethys draws the combat craft through asteroid "
+    "fields and warp. It dodges and barrel-rolls between the rocks. "
     "Under threat it sheds armor and rebuilds as an explorer to scan the core; "
     "it reforms as a hauler to retrieve the core, escapes through a second "
     "warp jump to the ember giant, then rebuilds its combat shell and returns "
     "through a final jump to repeat the signal pursuit."
 )
-scene["camera_style"] = "single continuous moving take; warp chases, survey push-in, bullet-time debris arcs"
+scene["camera_style"] = "single continuous moving take; forward asteroid runs, warp chases, survey push-in, bullet-time debris arcs"
 scene["demo_phases"] = (
-    "0-11 signal pursuit; 11-16 arrival warp; 16-24 lunar approach; "
+    "0-11 asteroid slalom; 11-16 arrival warp; 16-24 lunar field loop; "
     "24-36 evasive breakaway; 36-60 survey; 60-72 cargo rebuild; "
-    "72-84 recovery; 84-90 escape warp; 90-104 ember system; "
+    "72-84 recovery; 84-90 escape warp; 90-104 ember debris dodge; "
     "104-108 return warp; 108=0 seamless project loop"
 )
 scene.frame_set(1)
 print("ASTERION_STORY", {"parts": len(parts), "streaks": len(streaks),
+                        "asteroids": len(asteroids), "dust_grains": 230*len(dust_lanes),
                         "duration_s": scene.frame_end/fps})

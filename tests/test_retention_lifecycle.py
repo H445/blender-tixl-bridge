@@ -63,6 +63,26 @@ class RetentionLifecycleTest(unittest.TestCase):
         self.assertTrue(legacy.is_dir())
         self.assertEqual(report["categories"]["backups"]["kept"], [backup.name])
 
+    def test_missing_historical_graph_reference_does_not_block_pruning(self):
+        names = [self.generation(i) for i in range(1, 4)]
+        backup = new_backup(self.cache / "project_backups", "home")
+        missing = "f" * 32
+        atomic_json(backup / "Home.t3", {"Value": str(self.cache / "generations" / missing / "mesh.glb")})
+        atomic_json(self.cache / "current_generation.json", {"schema": 1, "generation": names[2]})
+        report = cleanup(self.cache, editor_is_running=False)
+        self.assertEqual(report["categories"]["generations"]["status"], "pruned")
+        self.assertEqual({p.name for p in (self.cache / "generations").iterdir()}, {names[2]})
+        self.assertTrue(backup.is_dir())
+
+    def test_pruned_failed_stage_does_not_block_later_cleanup(self):
+        names = [self.generation(i) for i in range(1, 3)]
+        atomic_json(self.cache / "sync_logs" / "failed_run.json", {
+            "schema": 1, "status": "failed", "runId": "old", "backups": [], "stage": "f" * 32})
+        atomic_json(self.cache / "current_generation.json", {"schema": 1, "generation": names[1]})
+        report = cleanup(self.cache, editor_is_running=False)
+        self.assertEqual(report["categories"]["generations"]["status"], "pruned")
+        self.assertEqual({p.name for p in (self.cache / "generations").iterdir()}, {names[1]})
+
     def test_open_editor_and_unreadable_saved_graph_both_defer_generation_deletion(self):
         names = [self.generation(i) for i in range(1, 4)]
         report = cleanup(self.cache, editor_is_running=True)

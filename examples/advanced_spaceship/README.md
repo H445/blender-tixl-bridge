@@ -1,6 +1,6 @@
 # Asterion Breakaway demo
 
-A 108-second Blender-to-TiXL looping rescue scene: a combat craft answers a signal at the psychedelic Tethys moon, rebuilds as an explorer and hauler, warps to a copper storm giant, then returns through a final jump to its opening pose. One persistent set of 500 spacecraft meshes breaks into individually animated parts and rebuilds as three distinct configurations. Every part is visible and reused in COMBAT, EXPLORER, and HAULER. One camera follows the journey in a continuous take.
+A 108-second Blender-to-TiXL looping rescue scene: a combat craft slaloms through asteroid fields on its way to the psychedelic Tethys moon, rebuilds as an explorer and hauler, warps to a distant copper storm giant, dodges ring debris, then returns through a final jump to its opening pose. One persistent set of 500 spacecraft meshes breaks into individually animated parts and rebuilds as three distinct configurations. Every part is visible and reused in COMBAT, EXPLORER, and HAULER. One camera follows the journey in a continuous take.
 
 ## Materials and texture assets
 
@@ -24,22 +24,22 @@ Run `../build_advanced_space_demo.py` through the official Blender MCP TCP exten
 
 ## Timeline
 
-The scene is 108 seconds at 60 fps. The craft flies on an animated rig while all 500 pieces retain their local breakup choreography. Its key and bounce lights travel with it. A single camera makes at least one full rotation around each assembled ship, moves inward for the survey, and pulls closer on the warp passages without cuts. At each breakaway, the parts snap outward, drift almost motionless while the camera circles the suspended debris, then accelerate into the next configuration.
+The scene is 108 seconds at 60 fps. The craft flies on one continuous route while all 500 pieces retain their local breakup choreography. Its key and bounce lights travel with it. The opening pursuit covers over 110 metres; the first and second warp jumps span about 125 and 370 metres. The hull makes a complete orbit around Tethys and another around the copper giant before the return warp. Three 16-rock fields and five lanes of 1,150 fine dust grains establish parallax while the pilot steers around the center rocks and completes three longitudinal rolls. Both planets remain tens of metres from the ship even at the closest story beats. A single camera makes at least one full rotation around each assembled ship, moves inward for the survey, and pulls closer on the warp passages without cuts. At each breakaway, the parts snap outward, drift almost motionless while the camera circles the suspended debris, then accelerate into the next configuration.
 
 | Time | Configuration or action |
 | --- | --- |
-| 0–11 s | COMBAT craft detects the lunar signal and accelerates |
+| 0–11 s | COMBAT craft accelerates through the first asteroid field and rolls clear |
 | 11–16 s | First warp jump toward Tethys |
-| 16–24 s | Banking lunar approach |
+| 16–24 s | Begin the continuous Tethys orbit; dodge the lunar field and roll |
 | 24–36 s | Evasive breakup and EXPLORER assembly |
 | 36–60 s | EXPLORER scans the core near the moon |
 | 60–72 s | Breakup and HAULER cargo rebuild |
-| 72–84 s | Recover the luminous core |
+| 72–84 s | Recover the luminous core and complete the Tethys orbit |
 | 84–90 s | Escape warp jump |
-| 90–104 s | Orbit the ringed copper giant; COMBAT rebuilds for escort |
+| 90–104 s | Complete a fast orbit of the ringed copper giant; COMBAT rebuilds, dodges debris, and rolls |
 | 104–108 s | Return warp to the opening position and camera pose |
 
-The same hull, survey, and cargo meshes form all three ships. Each module has combat, explorer, hauler, and projectile poses, so the transition exercises hundreds of independent transform records without adding or removing craft parts. During all three breakups, every reusable piece also gets its own seeded XYZ rotation noise, with smooth fade-in and fade-out so the rebuilt ships settle into their exact poses. Larger parts tumble less than small fittings; the slowed debris intervals retain gentle angular drift. The reusable `../apply_breakaway_rotation_noise.py` recipe accepts any animated mesh collection and breakup frame windows. `../add_asterion_story.py` adds the mission flight, camera, scan beam, retrieved core, two planets, and warp trails without replacing any craft pieces. Both scripts are rerunnable through Blender MCP. `../validate_advanced_space_demo.py` checks reuse, packed maps, all three full orbits, camera continuity, the project seam, and the slowed debris intervals.
+The same hull, survey, and cargo meshes form all three ships. Each module has combat, explorer, hauler, and projectile poses, so the transition exercises hundreds of independent transform records without adding or removing craft parts. The cockpit glazing, rails, and HUD move together onto the explorer's survey neck or above the hauler's central command corridor. The hauler's twelve cargo pods form two supported side banks, leaving the flight deck visible. During all three breakups, every reusable piece also gets its own seeded XYZ rotation noise, with smooth fade-in and fade-out so the rebuilt ships settle into their exact poses. Larger parts tumble less than small fittings; the slowed debris intervals retain gentle angular drift. The reusable `../apply_breakaway_rotation_noise.py` recipe accepts any animated mesh collection and breakup frame windows. `../add_asterion_story.py` adds the mission flight, camera, 48 textured asteroids, space dust, scan beam, retrieved core, two planets, and warp trails without replacing any craft pieces. Both scripts are rerunnable through Blender MCP. `../validate_advanced_space_demo.py` checks reuse, packed maps, full ship orbits around both planets, camera orbits around all three roles, cockpit placement, camera continuity, forward travel, warp distances, rolls, asteroid clearance, planet standoff, the project seam, and the slowed debris intervals.
 
 ## Design references
 

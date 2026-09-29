@@ -314,16 +314,22 @@ assert all(count == 1 for count in assembly_cluster_counts.values()), (
 )
 camera_travel = sum((camera_samples[right][0]-camera_samples[left][0]).length
                     for left, right in zip(camera_probe_frames, camera_probe_frames[1:]))
-max_camera_speed = max(
-    (camera_samples[right][0]-camera_samples[left][0]).length/(right-left)
-    for left, right in zip(camera_probe_frames, camera_probe_frames[1:]))
+camera_speeds = [
+    ((camera_samples[right][0]-camera_samples[left][0]).length/(right-left),
+     left, right)
+    for left, right in zip(camera_probe_frames, camera_probe_frames[1:])]
+max_camera_speed = max(rate for rate, _, _ in camera_speeds)
+max_nonwarp_speed = max(rate for rate, left, right in camera_speeds
+                        if not any(left <= end*60+1 and right >= start*60+1
+                                   for start, end in ((11,16),(84,90),(104,108))))
 max_camera_turn = max(
     min((angle := camera_samples[left][1].rotation_difference(
         camera_samples[right][1]).angle), math.tau-angle)/(right-left)
     for left, right in zip(camera_probe_frames, camera_probe_frames[1:]))
 assert camera_travel > 100, f"The camera orbit is too static: {camera_travel} m"
-assert max_camera_speed < .5 and max_camera_turn < .02, (
-    f"The camera has a visible jump: {max_camera_speed} m/frame, "
+assert max_camera_speed < 2.0 and max_nonwarp_speed < .8 and max_camera_turn < .02, (
+    f"The camera has a visible jump: {max_camera_speed} m/frame warp, "
+    f"{max_nonwarp_speed} m/frame cruise, "
     f"{max_camera_turn} rad/frame"
 )
 
@@ -349,8 +355,61 @@ for name, start, end in (("arrival", 11, 16), ("escape", 84, 90)):
     first = flight_rig.matrix_world.translation.copy()
     scene.frame_set(end*60+1)
     distance = (flight_rig.matrix_world.translation-first).length
-    assert distance > 20, f"{name} warp lacks travel: {distance} m"
+    minimum = 100 if name == "arrival" else 250
+    assert distance > minimum, f"{name} warp lacks travel: {distance} m"
     warp_displacements[name] = distance
+scene.frame_set(original_frame, subframe=original_subframe)
+
+# Flight beats must translate through the scene and clear the rocks, rather
+# than only rotating the craft in front of the camera.
+asteroids = [obj for obj in objects if obj.name.startswith("ASTEROID | field ")]
+assert len(asteroids) == 48, f"Expected three sixteen-rock fields, found {len(asteroids)}"
+dust_lanes = [obj for obj in objects if obj.name.startswith("DUST | flight lane ")]
+assert len(dust_lanes) == 5, f"Expected five space-dust lanes, found {len(dust_lanes)}"
+assert all(len(obj.data.vertices) == 230*4 for obj in dust_lanes), (
+    "Space dust lanes have missing grains")
+scene.frame_set(1)
+flight_start = flight_rig.matrix_world.translation.copy()
+scene.frame_set(11*60+1)
+approach_travel = (flight_rig.matrix_world.translation-flight_start).length
+assert approach_travel > 100, f"Opening pursuit lacks forward travel: {approach_travel} m"
+planet_distances = {}
+for name, second, target in (("moon_survey", 45, bpy.data.objects["Tethys analogue | cratered moon"]),
+                             ("ember_orbit", 96, ember)):
+    scene.frame_set(second*60+1)
+    planet_distances[name] = (flight_rig.matrix_world.translation
+                              - target.matrix_world.translation).length
+assert planet_distances["moon_survey"] > 55 and planet_distances["ember_orbit"] > 65, (
+    f"Planet flybys are too close: {planet_distances}")
+asteroid_clearances = {}
+all_asteroid_clearances = {}
+for field, start, end in ((1, 1.0, 13.0), (2, 13.0, 84.0),
+                          (3, 87.5, 108.0)):
+    rock = bpy.data.objects[f"ASTEROID | field {field} rock 01"]
+    field_rocks = [bpy.data.objects[f"ASTEROID | field {field} rock {index:02d}"]
+                   for index in range(1, 17)]
+    closest = math.inf
+    closest_any = math.inf
+    for index in range(round((end-start)*2)+1):
+        scene.frame_set(round((start+index*.5)*60)+1)
+        craft_center = flight_rig.matrix_world.translation
+        closest = min(closest, (craft_center-rock.matrix_world.translation).length)
+        closest_any = min(closest_any, *((craft_center-other.matrix_world.translation).length
+                                         for other in field_rocks))
+    assert closest > 12, f"Ship passes too close to asteroid field {field}: {closest} m"
+    assert closest_any > 12.5, (
+        f"Ship passes too close to a satellite in field {field}: {closest_any} m")
+    asteroid_clearances[field] = closest
+    all_asteroid_clearances[field] = closest_any
+roll_turns = {}
+for label, start, end in (("first", 6.3, 9.2), ("lunar", 18.0, 21.4),
+                          ("ember", 93.5, 97.0)):
+    scene.frame_set(round(start*60)+1)
+    initial_bank = flight_rig.rotation_euler.y
+    scene.frame_set(round(end*60)+1)
+    turn = flight_rig.rotation_euler.y-initial_bank
+    assert abs(turn-math.tau) < .7, f"{label} roll is incomplete: {turn} rad"
+    roll_turns[label] = turn
 scene.frame_set(original_frame, subframe=original_subframe)
 
 
@@ -446,6 +505,41 @@ assert min(configuration_distances.values()) > 0.5, (
     f"geometry bounds: {configuration_distances}"
 )
 
+# The hull itself follows one circular trajectory around each destination.
+# Check the shared cockpit and both cargo banks at their assembled holds.
+planet_orbits = {}
+try:
+    for name, start, end, planet, minimum in (
+            ("TETHYS", 16, 84, bpy.data.objects["Tethys analogue | cratered moon"], 55),
+            ("EMBER", 90, 104, ember, 65)):
+        angles, distances = [], []
+        for frame in range(start*60+1, end*60+2, 30):
+            scene.frame_set(frame)
+            delta = flight_rig.matrix_world.translation-planet.matrix_world.translation
+            angles.append(math.atan2(delta.y, delta.x))
+            distances.append(delta.length)
+        sweep = sum(math.atan2(math.sin(right-left), math.cos(right-left))
+                    for left, right in zip(angles, angles[1:]))
+        assert abs(sweep) >= math.tau-.1, f"The craft does not orbit {name}: {sweep} rad"
+        assert min(distances) > minimum, f"The craft flies too close to {name}"
+        planet_orbits[name] = {"radians": sweep, "closestMeters": min(distances)}
+    canopy = bpy.data.objects["COCKPIT | faceted iridium canopy"]
+    cockpit_positions = {}
+    for name, frame in (("COMBAT",1),("EXPLORER",2161),("HAULER",4321)):
+        scene.frame_set(frame)
+        cockpit_positions[name] = canopy.location.copy()
+    scene.frame_set(4321)
+    cargo_port = bpy.data.objects["HAULER-CARGO-00-00"].location.copy()
+    cargo_starboard = bpy.data.objects["HAULER-CARGO-02-00"].location.copy()
+    assert (cockpit_positions["EXPLORER"].y > cockpit_positions["COMBAT"].y+1
+            and cockpit_positions["EXPLORER"].z > cockpit_positions["COMBAT"].z+.4), (
+        "Explorer cockpit did not move onto its survey neck")
+    assert (cockpit_positions["HAULER"].z > 1.8
+            and cargo_port.x < -3.5 and cargo_starboard.x > 3.5), (
+        "Hauler cockpit or twin cargo banks obstruct the command corridor")
+finally:
+    scene.frame_set(original_frame, subframe=original_subframe)
+
 summary = {
     "valid": True,
     "file": str(opened_file),
@@ -465,9 +559,16 @@ summary = {
     "assemblyClusterCounts": assembly_cluster_counts,
     "cameraTravelMeters": camera_travel,
     "maxCameraMetersPerFrame": max_camera_speed,
+    "maxCruiseCameraMetersPerFrame": max_nonwarp_speed,
     "maxCameraRadiansPerFrame": max_camera_turn,
     "assembledOrbitRadians": assembled_orbits,
     "warpDisplacementsMeters": warp_displacements,
+    "approachTravelMeters": approach_travel,
+    "planetFlybyDistancesMeters": planet_distances,
+    "asteroidCenterClearanceMeters": asteroid_clearances,
+    "asteroidFieldClearanceMeters": all_asteroid_clearances,
+    "spaceDustGrains": sum(len(obj.data.vertices)//4 for obj in dust_lanes),
+    "barrelRollRadians": roll_turns,
     "bulletTime": bullet_time,
     "breakupRotationNoiseModifiers": noise_count,
     "breakupRotationMotion": noise_motion,
@@ -477,6 +578,8 @@ summary = {
     "cameraMarkerCount": len(camera_markers),
     "cameraObjectCount": len(bpy.data.cameras),
     "configurationBoundsDistance": configuration_distances,
+    "shipPlanetOrbits": planet_orbits,
+    "cockpitPositions": {name:list(position) for name,position in cockpit_positions.items()},
     "returnedToRestCount": len(detachable),
     "restoredFrame": original_frame,
     "restoredSubframe": original_subframe,

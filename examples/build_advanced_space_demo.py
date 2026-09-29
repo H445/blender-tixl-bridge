@@ -714,13 +714,16 @@ for row in range(4):
     role_object(box(f"HAULER-CARGO-DECK-{row:02d}",
                     (7.6,.36,.34),(0,yy,.87),dark,bevel=.045),"HAULER")
     for col in range(3):
-        xx=(col-1)*2.55
+        # Twin outboard banks leave a visible, protected command corridor.
+        # Each side carries two rows of three reused container modules.
+        xx=-4.35 if row<2 else 4.35
+        pod_y=2.4-(row%2)*3.1-col*1.75
         role_object(box(f"HAULER-CARGO-{row:02d}-{col:02d}",
-                        (2.15,2.0,1.34),(xx,yy,1.70),
+                        (2.15,1.62,1.34),(xx,pod_y,1.70),
                         white if (row+col)%3==0 else hull,bevel=.11),"HAULER")
         for edge in (-1,1):
             role_object(box(f"HAULER-CONTAINER-STRAP-{row:02d}-{col:02d}-{edge:+d}",
-                            (.10,1.92,1.48),(xx+edge*.83,yy,1.70),
+                            (.10,1.55,1.48),(xx+edge*.83,pod_y,1.70),
                             copper,bevel=.018),"HAULER")
 
 # A portable space environment: textured emissive geometry and real meshes,
@@ -886,6 +889,12 @@ for idx,obj in enumerate(parts):
         # and hinged wings change the outline around this common load path.
         explorer=rest.copy()
         hauler=rest.copy()
+        if obj.name.startswith(("COCKPIT |", "COCKPIT-RAIL-", "COCKPIT-HUD-")):
+            # One intact flight deck slides onto the survey neck or rises
+            # above the hauler's open central corridor. Its glazing, frame,
+            # and HUD move as a coherent assembly rather than floating apart.
+            explorer += Vector((0,1.50,.55))
+            hauler += Vector((0,1.80,.90))
     # Each object fires independently, then joins two starkly different
     # layouts. Key hold frames make the three role silhouettes unambiguous.
     trajectory=[(1,rest,(0,0,0),(1,1,1)),
@@ -930,12 +939,12 @@ for role, objects in role_parts.items():
             if "ten-metre" in obj.name:
                 combat=Vector((0,0,-1.15))
                 combat_scale=(.72,.60,.72)
-                hauler=Vector((0,6.8,-.6))
-                hauler_scale=(.85,.78,.85)
+                hauler=Vector((0,4.35,1.15))
+                hauler_scale=(.92,.55,.90)
             elif "forward survey head" in obj.name:
                 combat=Vector((0,2.45,-1.15))
                 combat_scale=(.80,.80,.80)
-                hauler=Vector((0,9.9,-.6))
+                hauler=Vector((0,6.5,1.15))
                 hauler_scale=(.9,.9,.9)
             elif "ARRAY-TRUSS" in obj.name:
                 side=-1 if original.x<0 else 1
@@ -997,7 +1006,7 @@ for role, objects in role_parts.items():
                 if match is None:
                     raise ValueError(f"Unclassified reusable cargo module: {obj.name}")
                 row,col=(int(value) for value in match.groups())
-                center_x=(col-1)*2.55
+                center_x=-4.35 if row<2 else 4.35
                 local_x=original.x-center_x
                 side=-1 if row<2 else 1
                 combat=Vector((side*(2.45+col*1.12)+local_x*.50,

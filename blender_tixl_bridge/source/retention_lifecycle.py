@@ -16,8 +16,8 @@ _RUN = contextvars.ContextVar("retention_run", default=None)
 GENERATION = r"[0-9a-f]{32}"
 BACKUP = r"(?:[A-Za-z0-9_]+_)?[0-9a-f]{32}"
 DEFAULTS = {
-    "generations": {"max_count": 3, "max_bytes": 1024 * 1024 * 1024, "max_age_days": 30},
-    "backups": {"max_count": 10, "max_bytes": 256 * 1024 * 1024, "max_age_days": 30},
+    "generations": {"max_count": 2, "max_bytes": 1024 * 1024 * 1024, "max_age_days": 30},
+    "backups": {"max_count": 1, "max_bytes": 256 * 1024 * 1024, "max_age_days": 30},
     "staging": {"max_count": 2, "max_bytes": 512 * 1024 * 1024, "max_age_days": 7},
     "reports": {"max_count": 80, "max_bytes": 16 * 1024 * 1024, "max_age_days": 30},
     "logs": {"max_count": 20, "max_bytes": 64 * 1024 * 1024, "max_age_days": 30},
@@ -113,8 +113,14 @@ def _validate_summary(summary: dict, cache: Path):
     for key, folder in (("stage", ".staging"), ("generation", "generations")):
         value = summary.get(key)
         if value is not None:
-            if not isinstance(value, str) or not re.fullmatch(GENERATION, value) or not (cache / folder / value).is_dir():
+            if not isinstance(value, str) or not re.fullmatch(GENERATION, value):
                 raise ValueError("Invalid or missing recovery generation/stage")
+            if not (cache / folder / value).is_dir():
+                if summary["status"] != "failed":
+                    raise ValueError("Invalid or missing recovery generation/stage")
+                # Failed-run staging is temporary and may already have been
+                # pruned. Preserve the diagnostic summary without pinning it.
+                summary = {key_: value_ for key_, value_ in summary.items() if key_ != key}
     return summary
 
 
@@ -185,7 +191,10 @@ def _references(cache: Path, project: Path | None, backups: Path):
         if not isinstance(graph, dict):
             raise ValueError("Graph evidence must be an object")
         visit(graph)
-    return references
+    # Historical graph backups can outlive their generated files. They remain
+    # useful as graph recovery copies, but cannot pin a generation that no
+    # longer exists (including after an interrupted or manual cache cleanup).
+    return {name for name in references if (cache / "generations" / name).is_dir()}
 
 
 def cleanup(cache: Path, *, editor_is_running: bool, pinned_run: dict | None = None):
