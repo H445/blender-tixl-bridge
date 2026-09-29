@@ -13,9 +13,13 @@ Load only the reference required for the current task; follow conditional links 
 | --- | --- |
 | New user installation / namespace choices | [Onboarding](../../README.md), then sync verification below |
 | Saved-source sync / output verification | [Sync](references/sync.md) |
+| Offline cache build / deferred install | [Offline sync](../blender-tixl-offline-sync/SKILL.md) |
 | Add-on configuration / precise scene recipes | [Blender](references/blender.md) |
 | TiXL graph edits | [Edit](references/edit.md) and [operator semantics](references/operators.md) |
+| Repeatable live or staged Home edits | [Graph edit](../blender-tixl-graph-edit/SKILL.md) |
 | TiXL graph readability or dynamic graph layout | [Graph layout](references/graph-layout.md), then [Sync](references/sync.md) for restart and output checks |
+| Offline staged graph arrangement | [Graph layout skill](../blender-tixl-graph-layout/SKILL.md) |
+| Native timeline audio and beat-linked visuals | [Audio skill](../blender-tixl-audio/SKILL.md) |
 | Stale/blank output | [Troubleshooting](references/troubleshoot.md) |
 | Bounded snapshots, log follow, or opt-in output capture | [Diagnostics](references/diagnostics.md) |
 | Capability refresh failure / transport setup | [Discovery](references/discovery.md) |

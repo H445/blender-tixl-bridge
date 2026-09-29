@@ -12,6 +12,8 @@ Use official sources. Explain downloads/install locations and obtain only approv
 
 Load the [operational router](skills/blender-tixl-bridge/SKILL.md) for task-specific recipes. After upgrades, load [release refresh](skills/blender-tixl-release-refresh/SKILL.md). Capability discovery belongs to the add-on's one-shot automation, with no scheduled task, watcher or background service; no manufactured probe inputs.
 
+After setup, use the focused [offline sync](skills/blender-tixl-offline-sync/SKILL.md), [graph edit](skills/blender-tixl-graph-edit/SKILL.md), [graph layout](skills/blender-tixl-graph-layout/SKILL.md), and [audio](skills/blender-tixl-audio/SKILL.md) skills for repeatable production work. Their offline/manual paths use saved assets and the plug-in or command line; agent-driven Blender and TiXL actions still use MCP and the debug bridge.
+
 ## Official downloads
 
 - Blender 4.3 or newer: <https://www.blender.org/download/>

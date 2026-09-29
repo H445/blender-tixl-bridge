@@ -139,6 +139,8 @@ The installer copies and hashes the add-on, enables it, migrates the former `tix
 
 ## Command-line cache build
 
+The command-line path can prepare a cache without a live TiXL debug server or internet connection. The scene's saved `.blend` remains the source. Use `--no-install` to stage a new cache; after saving and closing any TiXL editor work, use the `install` action to publish that cache into the configured project. A person can do the same preparation from the Blender add-on in **Offline** connection mode. The reusable procedures for [offline sync](../.agents/skills/blender-tixl-offline-sync/SKILL.md), [graph edits](../.agents/skills/blender-tixl-graph-edit/SKILL.md), [graph layout](../.agents/skills/blender-tixl-graph-layout/SKILL.md), and [audio](../.agents/skills/blender-tixl-audio/SKILL.md) include file checks and manual TiXL handoffs; they do not require the agentic workspace.
+
 Set `TIXL_BRIDGE_BLENDER` to the Blender executable, then run:
 
 ```powershell

@@ -18,6 +18,14 @@ __pycache__/
 !.agents/skills/blender-tixl-bridge/*.md
 !.agents/skills/blender-tixl-release-refresh/
 !.agents/skills/blender-tixl-release-refresh/*.md
+!.agents/skills/blender-tixl-offline-sync/
+!.agents/skills/blender-tixl-offline-sync/*.md
+!.agents/skills/blender-tixl-graph-edit/
+!.agents/skills/blender-tixl-graph-edit/*.md
+!.agents/skills/blender-tixl-graph-layout/
+!.agents/skills/blender-tixl-graph-layout/*.md
+!.agents/skills/blender-tixl-audio/
+!.agents/skills/blender-tixl-audio/*.md
 !.agents/skills/blender-tixl-bridge/references/
 !.agents/skills/blender-tixl-bridge/references/*.md
 !.agents/skills/blender-tixl-release-refresh/references/
