@@ -5,6 +5,14 @@
 
 The Asterion home can be refined with `refine_asterion_visuals.py` after TiXL has been closed through the debug bridge. It preserves native AudioClip timelines, reduces full-frame tearing, and adds sparse ASCII accents plus a native turbulent torus SDF signal. The script backs up the original home graph outside `Symbols` before installation. `install_asterion_techno_refresh.py` then replaces the old score clip with seeded techno drums and continuously animates that SDF.
 
+`anchor_asterion_sdf.py` moves that signal onto the named copper giant: its texture drives the selected surface color and mesh relief, while a bright world-space contour uses the main camera and depth buffer. This example uses the static giant's exported position and scale; re-derive these values if its Blender transform changes. Stage the Home graph and UI outside `Symbols`, arrange the staged UI with `tools/layout_tixl_graph.py`, then install with `--apply` while the saved editor is closed. It preserves audio clips, TimeClips, and other object effects, and refuses to replace an already installed branch.
+
+```powershell
+python examples/anchor_asterion_sdf.py --output examples/.tixl_cache/AsterionBreakaway/sdf_planet/AsterionBreakaway.t3 --ui-output examples/.tixl_cache/AsterionBreakaway/sdf_planet/AsterionBreakaway.t3ui
+python tools/layout_tixl_graph.py --graph examples/.tixl_cache/AsterionBreakaway/sdf_planet/AsterionBreakaway.t3 --ui examples/.tixl_cache/AsterionBreakaway/sdf_planet/AsterionBreakaway.t3ui --output examples/.tixl_cache/AsterionBreakaway/sdf_planet/AsterionBreakaway.layout.t3ui
+python examples/anchor_asterion_sdf.py --output examples/.tixl_cache/AsterionBreakaway/sdf_planet/AsterionBreakaway.t3 --ui-output examples/.tixl_cache/AsterionBreakaway/sdf_planet/AsterionBreakaway.layout.t3ui --apply
+```
+
 ## BlendShapeExample
 
 Open `BlendShapeExample.blend` in Blender and run **Scene Properties → TiXL Bridge →
