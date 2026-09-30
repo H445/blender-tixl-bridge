@@ -20,6 +20,13 @@ python examples/animate_asterion_sdf_rings.py --output examples/.tixl_cache/Aste
 python examples/animate_asterion_sdf_rings.py --output examples/.tixl_cache/AsterionBreakaway/sdf_rings/AsterionBreakaway.t3 --ui-output examples/.tixl_cache/AsterionBreakaway/sdf_rings/AsterionBreakaway.t3ui --apply
 ```
 
+`fractalize_asterion_sdf.py` adds three levels of recursive Menger cavities to the copper ribbons and creates a larger moon corona with four interlocking fractal orbits, fourteen Menger knots, moving magenta/cyan cells, and beat-linked surges. The shared field functions live in `advanced_spaceship/fractal_orbits.hlsl` and run through native CustomSDF operators. The two anchors use their Blender-exported static positions; update them if the source objects move. The staged edit retains existing node positions, audio clips, surface effects, and the 108-second loop. Render checks at 28, 54, and 104 seconds cover the new geometry.
+
+```powershell
+python examples/fractalize_asterion_sdf.py --output examples/.tixl_cache/AsterionBreakaway/sdf_fractal/AsterionBreakaway.t3 --ui-output examples/.tixl_cache/AsterionBreakaway/sdf_fractal/AsterionBreakaway.t3ui
+python examples/fractalize_asterion_sdf.py --output examples/.tixl_cache/AsterionBreakaway/sdf_fractal/AsterionBreakaway.t3 --ui-output examples/.tixl_cache/AsterionBreakaway/sdf_fractal/AsterionBreakaway.t3ui --apply
+```
+
 ## BlendShapeExample
 
 Open `BlendShapeExample.blend` in Blender and run **Scene Properties → TiXL Bridge →
