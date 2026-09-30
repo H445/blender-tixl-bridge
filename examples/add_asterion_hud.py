@@ -20,7 +20,7 @@ assert camera and scene.render.fps == 60 and scene.frame_end == 6481
 # The TiXL output may be viewed in a narrower panel than Blender's 16:9
 # camera frame. Keep every HUD vertex inside a central safe area; scaling
 # only X/Y preserves the camera-facing depth and avoids perspective drift.
-HUD_SAFE_SCALE = .80
+HUD_SAFE_SCALE = .88
 
 
 def hud_xy(x, y):
@@ -243,14 +243,14 @@ def metric_samples():
     core = bpy.data.objects["SIGNAL | recovered moon core"]
     previous = scene.frame_current
     samples = []
-    # Two-second hold gives the eye time to read each numeric state. The
-    # underlying flight animation remains sampled by the bridge at 60 Hz.
-    for frame in range(1, scene.frame_end+1, 120):
+    # Sample telemetry twice per second while the primary HUD anchors stay
+    # fixed. The faster digits follow the flight without moving their panel.
+    for frame in range(1, scene.frame_end+1, 30):
         second = (frame-1)/60
         scene.frame_set(frame)
         bpy.context.view_layer.update()
-        heading = (5*round(math.degrees(rig.rotation_euler.z)/5)) % 360
-        roll = (5*round(math.degrees(rig.rotation_euler.y)/5)) % 360
+        heading = round(math.degrees(rig.rotation_euler.z)) % 360
+        roll = round(math.degrees(rig.rotation_euler.y)) % 360
         sensor = rig.matrix_world @ Vector((0, 3, 1.2))
         distance = min(999, round((core.matrix_world.translation-sensor).length))
         before = max(1, frame-3)
@@ -259,7 +259,7 @@ def metric_samples():
         first = rig.matrix_world.translation.copy()
         scene.frame_set(after)
         last = rig.matrix_world.translation.copy()
-        speed = min(999, 5*round((last-first).length*12/(after-before)))
+        speed = min(999, round((last-first).length*60/(after-before)))
         reset = 1-smooth01((second-103)/5)
         scan = round(100*smooth01((second-43)/15)*reset)
         cargo = round(100*smooth01((second-73)/9)*reset)
@@ -457,8 +457,8 @@ for index, (x, y, width, material) in enumerate(fragment_specs):
 
 fault_events = []
 for event in events():
-    if event.kind == "signal" and (
-            not fault_events or event.time - fault_events[-1].time >= 4):
+    if event.kind in ("signal", "ghost") and (
+            not fault_events or event.time - fault_events[-1].time >= 2):
         fault_events.append(event)
 for index, event in enumerate(fault_events):
     fragment = fragments[index % len(fragments)]
@@ -473,6 +473,36 @@ for index, event in enumerate(fault_events):
     fragment.scale = (0, 0, 0)
     fragment.keyframe_insert("scale", frame=stop)
 
+# Short spectral echoes add movement to the text without shifting its
+# readable primary layer or moving any HUD anchor.
+for ghost_index, (name, label, x, y, size, material, right) in enumerate((
+        ("HUD | signal fault title ghost", "ASTERION / RESCUE VECTOR",
+         -.96, .49, .039, cyan, False),
+        ("HUD | signal fault status ghost", "MOON CORE STATUS",
+         .96, .49, .028, amber, True))):
+    ghost = text_mesh(name, label, x, y, size, material, right=right)
+    ghost.location.z = -1.986
+    ghost.scale = (0, 0, 0)
+    ghost.keyframe_insert("scale", frame=1)
+    for event_index, event in enumerate(fault_events):
+        if event_index % 3 != ghost_index:
+            continue
+        start = max(2, round(event.time*60)+1)
+        stop = min(scene.frame_end-1, start+3)
+        direction = 1 if event_index % 2 else -1
+        ghost.location = (*hud_xy(x+direction*.008, y+direction*.003),
+                          -1.986)
+        ghost.keyframe_insert("location", frame=start)
+        ghost.scale = (1, 1, 1)
+        ghost.keyframe_insert("scale", frame=start)
+        ghost.scale = (0, 0, 0)
+        ghost.keyframe_insert("scale", frame=stop)
+    ghost.scale = (0, 0, 0)
+    ghost.keyframe_insert("scale", frame=scene.frame_end)
+    for curve in animation_curves(ghost):
+        for point in curve.keyframe_points:
+            point.interpolation = "CONSTANT"
+
 for fragment in fragments:
     fragment.scale = (0, 0, 0)
     fragment.keyframe_insert("scale", frame=scene.frame_end)
@@ -484,8 +514,8 @@ scene["mission_hud"] = (
     "Camera-mounted safe-area mesh typography: ten timed flight chapters, animated route "
     "progress, live speed/heading/roll/range digits, scan/cargo completion "
     "meters, moon-core search/lock/transfer/secured states, rotating signal "
-    "scope, wireform lattice, radial scan and sparse edge-only signal faults; "
-    "fixed-position labels and two-second telemetry holds; seamless loop"
+    "scope, wireform lattice, radial scan and HUD-local signal faults; "
+    "fixed-position labels and half-second telemetry updates; seamless loop"
 )
 source_path = str(Path(bpy.data.filepath).parent)
 if source_path not in sys.path:

@@ -12,7 +12,7 @@ import bpy
 
 HUD_COLLECTION = "05 HUD | mission telemetry"
 PREFIX = "HUD | identity"
-SAFE = .80
+SAFE = .88
 FLASH_SECONDS = (8.0, 12.0, 24.0, 36.0, 43.0, 58.0, 72.0, 84.0, 90.0, 104.0)
 
 
