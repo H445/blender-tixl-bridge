@@ -1,4 +1,4 @@
-"""Add restrained Prismal Labs / H445 identity to Asterion's camera HUD.
+"""Add opening and closing Prismal Labs / H445 credits to Asterion's HUD.
 
 Run ``add_identity()`` through Blender MCP after the mission HUD exists. The
 function replaces only its own objects, so it can update an authored .blend
@@ -13,7 +13,8 @@ import bpy
 HUD_COLLECTION = "05 HUD | mission telemetry"
 PREFIX = "HUD | identity"
 SAFE = .88
-FLASH_SECONDS = (8.0, 12.0, 24.0, 36.0, 43.0, 58.0, 72.0, 84.0, 90.0, 104.0)
+OPENING_SECONDS = (0.45,)
+ENDING_SECONDS = (104.35,)
 
 
 def _material(name: str, color: tuple[float, float, float], strength: float):
@@ -89,6 +90,45 @@ def _flash(obj, times, fps: float, final_frame: int, start_offset=0, duration=7)
             key.interpolation = "CONSTANT"
 
 
+def _reveal(obj, times, fps, final_frame, *, phase=0, echo=False):
+    """Key a fragmented entrance and geometric fade without material animation."""
+    base = obj.location.copy()
+    obj.scale = (0, 0, 0)
+    obj.keyframe_insert("scale", frame=1)
+    obj.keyframe_insert("location", frame=1)
+    if echo:
+        shape = ((-1, 0, 0, 0), (0, 1, -.018, .007),
+                 (3, 0, .012, -.004), (6, 1, .009, .003),
+                 (13, 0, 0, 0), (125, 0, 0, 0),
+                 (129, .75, -.012, .005), (137, 0, 0, 0))
+    else:
+        shape = ((-2, 0, 0, 0), (0, .08, -.075, 0),
+                 (3, 1.18, .018, 0), (5, 0, 0, 0),
+                 (8, .85, -.009, 0), (12, 1, 0, 0),
+                 (125, 1, 0, 0), (136, .85, .009, 0),
+                 (151, .48, .026, 0), (167, .12, .052, 0),
+                 (178, 0, .075, 0))
+    for seconds in times:
+        first = round(seconds*fps)+1+phase
+        for offset, magnitude, dx, dy in shape:
+            frame = min(final_frame-1, first+offset)
+            obj.scale = (magnitude, magnitude, magnitude)
+            obj.location = (base.x+dx, base.y+dy, base.z)
+            obj.keyframe_insert("scale", frame=frame)
+            obj.keyframe_insert("location", frame=frame)
+    obj.scale = (0, 0, 0)
+    obj.location = base
+    obj.keyframe_insert("scale", frame=final_frame)
+    obj.keyframe_insert("location", frame=final_frame)
+    action = obj.animation_data.action
+    curves = (action.fcurves if hasattr(action, "fcurves") else
+              [curve for layer in action.layers for strip in layer.strips
+               for bag in strip.channelbags for curve in bag.fcurves])
+    for curve in curves:
+        for key in curve.keyframe_points:
+            key.interpolation = "LINEAR"
+
+
 def add_identity() -> dict:
     scene = bpy.context.scene
     camera = scene.camera
@@ -111,30 +151,48 @@ def add_identity() -> dict:
     cyan = bpy.data.materials.get("HUD | signal cyan")
     if ice is None or cyan is None:
         raise RuntimeError("Mission HUD materials are missing")
-    dark = _material("HUD | identity negative plate", (.002, .007, .012), 1.0)
     pale = _material("HUD | identity low-key credit", (.19, .48, .60), 1.25)
     try:
         # A persistent systems credit, aligned with the existing lower HUD rail.
-        _plate(hud, camera, f"{PREFIX} Prismal Labs backing",
-               .545, -.559, .426, .041, dark, depth=-1.984)
         _text(hud, camera, f"{PREFIX} Prismal Labs credit",
               "PRISMAL LABS  /  MISSION SYSTEMS", .96, -.547, .023,
               pale, right=True)
-        # The callsign is an inverse-video telemetry fault, not a title card.
-        plate = _plate(hud, camera, f"{PREFIX} H445 reverse plate",
-                       -.089, .462, .178, .043, dark)
-        label = _text(hud, camera, f"{PREFIX} H445 callsign",
-                      "H445", -.047, .468, .027, ice)
-        ghost = _text(hud, camera, f"{PREFIX} H445 displaced signal",
-                      "H445", -.043, .471, .027, cyan, depth=-1.979)
+        red = _material("HUD | identity magenta echo", (.70, .025, .42), 1.5)
         fps = scene.render.fps / scene.render.fps_base
-        _flash(plate, FLASH_SECONDS, fps, scene.frame_end, duration=8)
-        _flash(label, FLASH_SECONDS, fps, scene.frame_end, duration=7)
-        _flash(ghost, FLASH_SECONDS, fps, scene.frame_end, start_offset=2, duration=3)
+        credits = (
+            ("opening", "H445 / Prismal Labs", OPENING_SECONDS,
+             -.36, .065, .069, -.39, .045, .78),
+            ("ending", "H445", ENDING_SECONDS,
+             -.115, .065, .11, -.16, .045, .34),
+        )
+        for credit_name, wording, times, x, y, size, plate_x, plate_y, width in credits:
+            label = _text(hud, camera, f"{PREFIX} {credit_name} title",
+                          wording, x, y, size, ice)
+            ghost = _text(hud, camera, f"{PREFIX} {credit_name} cyan echo",
+                          wording, x+.006, y+.004, size, cyan,
+                          depth=-1.979)
+            magenta_ghost = _text(
+                hud, camera, f"{PREFIX} {credit_name} magenta echo",
+                wording, x-.006, y-.004, size, red, depth=-1.977)
+            _reveal(label, times, fps, scene.frame_end, phase=4)
+            _reveal(ghost, times, fps, scene.frame_end, phase=1, echo=True)
+            _reveal(magenta_ghost, times, fps, scene.frame_end,
+                    phase=3, echo=True)
+            for index in range(10):
+                bar = _plate(hud, camera,
+                             f"{PREFIX} {credit_name} scan fragment {index:02d}",
+                             plate_x-.02+(index % 3)*.036,
+                             plate_y+index*.014,
+                             width*.80-(index % 4)*.06, .0035,
+                             cyan if index % 2 else red, depth=-1.976)
+                _flash(bar, times, fps, scene.frame_end,
+                       start_offset=(index*3) % 13, duration=9+index % 4)
         scene["mission_hud_identity"] = (
-            "Prismal Labs systems credit in the lower HUD; H445 inverse-video "
-            "call sign flickers on ten mission beats and vanishes at the loop seam")
-        return {"identityObjects": 5, "flashes": len(FLASH_SECONDS),
+            "Prismal Labs systems credit in the lower HUD; an opening "
+            "H445 / Prismal Labs title and closing H445 title use layered "
+            "glitch reveals and clear before the 108-second loop seam")
+        return {"identityObjects": 1 + len(credits)*13,
+                "credits": ("H445 / Prismal Labs", "H445"),
                 "staticCredit": "PRISMAL LABS  /  MISSION SYSTEMS"}
     finally:
         bpy.ops.object.select_all(action="DESELECT")
