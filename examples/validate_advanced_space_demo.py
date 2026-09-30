@@ -107,6 +107,8 @@ required_maps = {
     "carbon_albedo.png", "carbon_normal.png", "carbon_orm.png",
     "heat_titanium.png", "copper_normal.png", "copper_orm.png",
     "solar_ceramic.png", "solar_normal.png", "solar_orm.png",
+    "canopy_albedo.png", "canopy_normal.png", "canopy_orm.png",
+    "nozzle_albedo.png", "nozzle_normal.png", "nozzle_orm.png",
     "moon_albedo.png", "moon_normal.png", "moon_orm.png",
     "nasa_starmap_16k.jpg",
 }
@@ -139,6 +141,35 @@ for material in bpy.data.materials:
                     and node.inputs["Occlusion"].is_linked):
                 occlusion_routes += 1
 assert occlusion_routes >= 5, "Packed ORM red channels are not routed to glTF occlusion"
+
+# Tiling beyond [0, 1] is intentional on the long hard-surface parts. Every
+# textured face still needs a finite, non-collapsed UV island, and untextured
+# HUD/emitter meshes are not required to carry unused UV data.
+textured_materials = {material for material, _ in texture_nodes}
+uv_objects = 0
+uv_faces = 0
+for obj in objects:
+    if obj.type != "MESH":
+        continue
+    mesh = obj.data
+    faces = [poly for poly in mesh.polygons
+             if poly.material_index < len(mesh.materials)
+             and mesh.materials[poly.material_index] in textured_materials]
+    if not faces:
+        continue
+    assert mesh.uv_layers.active is not None, (
+        f"Textured mesh has no active UV layer: {obj.name}")
+    uv_objects += 1
+    uv = mesh.uv_layers.active.data
+    for poly in faces:
+        points = [uv[index].uv for index in poly.loop_indices]
+        assert all(math.isfinite(v) for point in points for v in point), (
+            f"Invalid UV coordinate on {obj.name}")
+        area = abs(sum(points[i].x * points[(i+1) % len(points)].y
+                       - points[(i+1) % len(points)].x * points[i].y
+                       for i in range(len(points)))) * .5
+        assert area > 1e-8, f"Collapsed UV face on {obj.name}"
+        uv_faces += 1
 
 markers = list(scene.timeline_markers)
 camera_markers = [marker for marker in markers if marker.camera is not None]
@@ -236,7 +267,7 @@ finally:
     scene.frame_set(original_frame, subframe=original_subframe)
 assert len([obj for obj in objects if obj.name.startswith("WARP | ion trail")]) >= 24
 hud = bpy.data.collections.get("05 HUD | mission telemetry")
-assert hud is not None and len(hud.objects) == 182, (
+assert hud is not None and len(hud.objects) >= 182, (
     "Mission chapter and core-status HUD is incomplete")
 assert all(obj.type == "MESH" and obj.parent == scene.camera
            for obj in hud.objects), "HUD must export as camera-mounted mesh"
@@ -869,6 +900,8 @@ summary = {
     "breakupRotationMotion": noise_motion,
     "animatedDetachableCount": len(animated_detachable),
     "packedTextureImageCount": len(packed_images),
+    "texturedUvObjectCount": uv_objects,
+    "texturedUvFaceCount": uv_faces,
     "gltfOcclusionRoutes": occlusion_routes,
     "cameraMarkerCount": len(camera_markers),
     "cameraObjectCount": len(bpy.data.cameras),

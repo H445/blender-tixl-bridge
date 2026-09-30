@@ -5,7 +5,8 @@ with ``exec(compile(open(path, encoding='utf-8').read(), path, 'exec'),
 {'__file__': path})``. Never run
 Blender via its command-line interface for this repository. The AI image assets live
 in ``examples/advanced_spaceship/textures/`` and are supplied separately. The
-builder requires the complete albedo, normal, and ORM map set.
+builder requires the complete albedo, normal, and ORM map set, including the
+deterministic cockpit and nozzle maps from ``add_asterion_surface_maps.py``.
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ REQUIRED_TEXTURES = (
     "carbon_albedo.png", "carbon_normal.png", "carbon_orm.png",
     "heat_titanium.png", "copper_normal.png", "copper_orm.png",
     "solar_ceramic.png", "solar_normal.png", "solar_orm.png",
+    "canopy_albedo.png", "canopy_normal.png", "canopy_orm.png",
+    "nozzle_albedo.png", "nozzle_normal.png", "nozzle_orm.png",
     "moon_albedo.png", "moon_normal.png", "moon_orm.png",
     "ember_albedo.png", "ember_normal.png", "ember_orm.png",
     "nasa_starmap_16k.jpg",
@@ -193,12 +196,14 @@ white = pbr("04 | photovoltaic ceramic cover", (0.66, 0.72, 0.75), 0.24, 0.32,
             albedo="solar_ceramic.png", orm="solar_orm.png",
             normal="solar_normal.png")
 canopy_mat = pbr("04b | smoked iridium cockpit glazing", (0.10, 0.20, 0.27),
-                 0.42, 0.22)
+                 0.42, 0.22, albedo="canopy_albedo.png",
+                 orm="canopy_orm.png", normal="canopy_normal.png")
 blue = pbr("05 | ion blue emitter", (0.04, 0.16, 0.28), 0.38, 0.22,
            emission_color=(0.045, 0.43, 0.95), emission_strength=7.0)
 nozzle_blue = pbr("05b | cobalt engine nozzle", (0.008, 0.035, 0.18),
                   0.3, 0.28, emission_color=(0.002, 0.32, 0.8),
-                  emission_strength=1.4)
+                  emission_strength=1.4, albedo="nozzle_albedo.png",
+                  orm="nozzle_orm.png", normal="nozzle_normal.png")
 amber = pbr("06 | warning amber emitter", (0.24, 0.10, 0.015), 0.25, 0.3,
             emission_color=(1.0, 0.29, 0.035), emission_strength=3.0)
 starfield = pbr("07 | NASA Goddard deep star map", (0, 0, 0), 0, 1,

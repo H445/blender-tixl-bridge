@@ -4,7 +4,7 @@ A 108-second Blender-to-TiXL looping rescue scene: a combat craft slaloms throug
 
 The [audio package](audio/README.md) supplies two seeded 120 BPM techno music stems, chopped break drums, and separate propulsion, lunar scanning, and cargo effects. Eight editable native TiXL AudioClips route through a shared AudioBus with clip and master levels. The same accent schedule drives sparse video cuts and a continuously changing TiXL SDF signal.
 
-The camera-mounted mission HUD carries a small **Prismal Labs / Mission Systems** credit on a narrow dark backing beneath the right-side scan panel. **H445** appears as a brief inverse-video signal fault on ten selected mission beats, with a two-frame cyan displacement; it is absent at both loop boundaries. [`asterion_hud_identity.py`](../asterion_hud_identity.py) can refresh these five identity meshes without rebuilding the telemetry HUD, and `add_asterion_hud.py` includes them on a full HUD rebuild.
+The camera-mounted mission HUD carries a small **Prismal Labs / Mission Systems** credit beneath the right-side scan panel. A transparent glitch reveal presents **H445 / Prismal Labs** near the opening and **H445** near the end; both clear before the loop boundary. [`asterion_hud_identity.py`](../asterion_hud_identity.py) refreshes these credits without rebuilding telemetry.
 
 The HUD keeps chapter and moon-core labels at fixed positions, holds numeric telemetry for two seconds per reading, and limits small edge glitches to spaced signal accents. Its flight metrics remain independent of the ship's 60 Hz motion. Rebuild the HUD through `add_asterion_hud.py` using Blender MCP when revising this behavior.
 
@@ -12,7 +12,7 @@ Blender renders this scene at **1920 × 1080** at 100% scale. The saved TiXL Hom
 
 ## Materials and texture assets
 
-Five GPT-generated surface images and ten aligned technical maps are supplied in `textures/`. The copper giant adds three deterministic procedural maps made by `generate_ember_planet_maps.py`. All six surface families have albedo, tangent normal, and packed occlusion/roughness/metallic maps. The background uses NASA/Goddard's 16,384 × 8,192 equirectangular star map as an emission texture, replacing the 1,774 × 887 generated panorama.
+Five GPT-generated surface images and ten aligned technical maps are supplied in `textures/`. The copper giant adds three deterministic procedural maps made by `generate_ember_planet_maps.py`. The cockpit glazing and cobalt nozzles add six procedural maps made by `add_asterion_surface_maps.py`. All eight textured surface families have albedo, tangent normal, and packed occlusion/roughness/metallic maps. The background uses NASA/Goddard's 16,384 × 8,192 equirectangular star map as an emission texture.
 
 | File | Prompt theme |
 | --- | --- |
@@ -22,13 +22,17 @@ Five GPT-generated surface images and ten aligned technical maps are supplied in
 | `solar_ceramic.png` | Blue-black photovoltaic ceramic cells with silver traces |
 | `moon_albedo.png` | Gray cratered moon regolith with varied impact detail |
 | `ember_albedo.png` | Copper cloud bands and two turbulent storm systems |
+| `canopy_albedo.png` | Smoked blue iridium coating and fine glass scoring |
+| `nozzle_albedo.png` | Heat-marked cobalt engine metal with machining grain |
 | `nasa_starmap_16k.jpg` | NASA/Goddard Deep Star Maps spherical star panorama |
 
-The builder requires every map and packs it into the blend. The Blender glTF export includes base color, normal, metallic/roughness, and occlusion links for all six textured surface families. Uniform cockpit glazing and small light emitters use direct PBR values. The surface prompts, map derivation method, NASA credit, usage terms, and file hashes are recorded in [textures/GENERATION.md](textures/GENERATION.md).
+The builder requires every map and packs it into the blend. The Blender glTF export includes base color, normal, metallic/roughness, and occlusion links for all eight textured surface families. Small light emitters use direct PBR values. The active TiXL Home graph renders the opaque ship without a mesh-noise or texture-pixelation chain. The surface prompts, map derivation method, NASA credit, usage terms, and file hashes are recorded in [textures/GENERATION.md](textures/GENERATION.md).
+
+The ship is built from rigid detachable parts on one flight rig, so it uses object transforms rather than skeletal skin weights. Every textured face has a static UV map; long metal parts intentionally tile beyond the 0–1 UV square to retain texel density. `../validate_advanced_space_demo.py` checks UV presence, finite coordinates, non-collapsed islands, packed maps, and the rigid part pool.
 
 ## Build in Blender
 
-Run `../build_advanced_space_demo.py` through the official Blender MCP TCP extension, normally at `localhost:9876`, using its `execute_blender_code` request to execute the saved script. Do not launch Blender from the command line or use UI automation. The script saves `../AsterionBreakaway.blend` and prints `ASTERION_BUILT` with the object and texture counts.
+For a fresh build, generate the deterministic cockpit and nozzle files with `../add_asterion_surface_maps.py` through Blender MCP first. Run `../build_advanced_space_demo.py` through the same official Blender MCP TCP extension, normally at `localhost:9876`, using its `execute_blender_code` request to execute the saved script. Do not launch Blender from the command line or use UI automation. The builder saves `../AsterionBreakaway.blend` and prints `ASTERION_BUILT` with the object and texture counts.
 
 ## Timeline
 
