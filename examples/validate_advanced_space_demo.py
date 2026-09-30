@@ -610,6 +610,21 @@ assert thrust_lengths[104] > thrust_lengths[103]*5, (
 assert abs(thrust_lengths[108]-thrust_lengths[0]) < 1e-4, (
     "Engine fire breaks the 108-second loop seam"
 )
+core_material = bpy.data.materials["STORY | ice-blue exhaust core"]
+plasma_material = bpy.data.materials["STORY | cobalt exhaust"]
+assert core_material.node_tree.animation_data is not None
+assert plasma_material.node_tree.animation_data is not None
+hdr_strengths = {}
+for second in (0, 13, 27, 87, 108):
+    scene.frame_set(second*60+1)
+    hdr_strengths[second] = (
+        core_material.node_tree.nodes["Emission"].inputs["Strength"].default_value,
+        plasma_material.node_tree.nodes["Principled BSDF"].inputs["Emission Strength"].default_value,
+    )
+assert hdr_strengths[13][0] > hdr_strengths[0][0]*1.6
+assert hdr_strengths[87][0] > hdr_strengths[0][0]*1.7
+assert hdr_strengths[27][0] < hdr_strengths[0][0]*.05
+assert all(abs(a-b) < 1e-4 for a, b in zip(hdr_strengths[0], hdr_strengths[108]))
 scene.frame_set(3*60+1)
 early_turn = (bpy.data.objects["THRUST | plasma +1-2"].scale.y
               - bpy.data.objects["THRUST | plasma -1-2"].scale.y)
