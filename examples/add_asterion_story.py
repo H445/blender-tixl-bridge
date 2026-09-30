@@ -370,6 +370,10 @@ ring["story_role"] = "Second location orbital dust rings"
 ring.location = ember_center
 ring.rotation_euler = (.62, .18, -.35)
 ring.data.materials.append(emission("STORY | amber dust rings", (.36, .11, .035), .45))
+# TiXL's animated SDF ribbons replace this legacy mesh annulus.
+ring.hide_render = True
+ring.hide_viewport = True
+ring["story_role"] = "Legacy orbital ring replaced by TiXL SDF ribbons"
 
 key_data = bpy.data.lights.new("EMBER | orange solar bounce", "AREA")
 key_data.energy = 12500

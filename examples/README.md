@@ -13,6 +13,13 @@ python tools/layout_tixl_graph.py --graph examples/.tixl_cache/AsterionBreakaway
 python examples/anchor_asterion_sdf.py --output examples/.tixl_cache/AsterionBreakaway/sdf_planet/AsterionBreakaway.t3 --ui-output examples/.tixl_cache/AsterionBreakaway/sdf_planet/AsterionBreakaway.layout.t3ui --apply
 ```
 
+After that pass, `animate_asterion_sdf_rings.py` replaces the world contour with three braided, opening SDF orbits. Hide `EMBER | broken dust rings` in Blender's render and sync before installation; the story generator also hides this legacy mesh. The native CustomSDF field varies its shape per chapter and pulses gently at 120 BPM, with an exact 108-second loop. The script places only its new controls near their consumer, preserving the saved layout and checking wire crossings.
+
+```powershell
+python examples/animate_asterion_sdf_rings.py --output examples/.tixl_cache/AsterionBreakaway/sdf_rings/AsterionBreakaway.t3 --ui-output examples/.tixl_cache/AsterionBreakaway/sdf_rings/AsterionBreakaway.t3ui
+python examples/animate_asterion_sdf_rings.py --output examples/.tixl_cache/AsterionBreakaway/sdf_rings/AsterionBreakaway.t3 --ui-output examples/.tixl_cache/AsterionBreakaway/sdf_rings/AsterionBreakaway.t3ui --apply
+```
+
 ## BlendShapeExample
 
 Open `BlendShapeExample.blend` in Blender and run **Scene Properties → TiXL Bridge →
