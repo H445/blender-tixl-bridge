@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-from break_pattern import SIXTEENTH, chops
+from break_pattern import ACTIVE_WINDOWS, SIXTEENTH, chops
 from techno_pattern import STEP, events, harmony_at, intensity, signal_events
 
 
@@ -345,8 +345,8 @@ def flight_fx():
     envelope_speed = np.interp(t, np.arange(len(power))*.5, power).astype(np.float32)
     engine_hz = 48+23*envelope_speed+2.2*np.sin(2*np.pi*.31*t)
     engine_phase = 2*np.pi*np.cumsum(engine_hz)/SAMPLE_RATE
-    base = (.12*noise + .105*np.sin(engine_phase)
-            + .032*np.sin(2.01*engine_phase))
+    base = .65*(.12*noise + .105*np.sin(engine_phase)
+                + .032*np.sin(2.01*engine_phase))
     out[:, 0] = base*envelope_speed
     out[:, 1] = np.roll(base, 283)*envelope_speed
     for start, end in ((11, 16), (84, 90), (104, 108)):
@@ -582,14 +582,36 @@ def break_fx():
     write("asterion_amen_chops_120bpm.wav", out, peak=.54)
 
 
+def master_music():
+    """Level the score independently of ship FX, preserving four editable stems."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from tools.music_stem_mastering import level_music_stems, read_pcm, write_pcm
+
+    plan = (("asterion_music_cinematic_120bpm.wav", .86),
+            ("asterion_music_electronic_120bpm.wav", .68),
+            ("asterion_music_techno_drums_120bpm.wav", .74),
+            ("asterion_amen_chops_120bpm.wav", .72))
+    decoded = [read_pcm(OUT / filename) for filename, _ in plan]
+    if any(rate != SAMPLE_RATE for _, rate in decoded):
+        raise ValueError("Music sample rate changed")
+    mastered, report = level_music_stems(
+        [data for data, _ in decoded], [gain for _, gain in plan], SAMPLE_RATE,
+        windows=[None, None, None, list(ACTIVE_WINDOWS)], target_rms=.075)
+    for (filename, _), samples in zip(plan, mastered):
+        write_pcm(OUT / filename, samples, SAMPLE_RATE)
+    print("MUSIC_MASTER", report)
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stem", choices=("all", "cinematic", "electronic",
+    parser.add_argument("--stem", choices=("all", "music", "cinematic", "electronic",
                                            "techno", "flight", "scan",
                                            "cargo", "glitch", "break"),
                         default="all")
     stem = parser.parse_args().stem
+    music_group = {"music", "cinematic", "electronic", "techno", "break"}
     for index, (name, render) in enumerate((("cinematic", cinematic_music),
                                             ("electronic", electronic_music),
                                             ("techno", techno_percussion),
@@ -598,6 +620,8 @@ if __name__ == "__main__":
                                             ("cargo", cargo_fx),
                                             ("glitch", glitch_fx),
                                             ("break", break_fx))):
-        if stem in ("all", name):
+        if stem in ("all", name) or (stem in music_group and name in music_group):
             RNG = np.random.default_rng(14031984+index*99991)
             render()
+    if stem == "all" or stem in music_group:
+        master_music()

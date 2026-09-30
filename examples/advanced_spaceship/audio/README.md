@@ -29,20 +29,50 @@ curious and sparse for the survey, tightens for cargo pickup, and reaches its
 most intense groove in the Ember orbit before resolving at the loop seam.
 The zero and 108-second sample endpoints are silent in every stem.
 
+The three continuous music stems and chopped break receive one shared,
+stereo-linked music gain envelope. Four-second RMS detection and two-second
+gain smoothing keep the soundtrack steady while retaining drum attacks and
+the changing arrangement. Music has static AudioClip gains and reaches the
+ordinary AudioBus directly; it has no ship position, listener-distance, flight
+speed, or warp-volume input. Flight FX alone retain the engine/warp envelope.
+The continuous engine bed is reduced by 35%; warp blasts and expansion bass
+falls retain their original event gains. Scan, cargo and digital faults use
+clip gains of 0.50, 0.48 and 0.36 respectively.
+
 The current TiXL Home graph keeps Blender source clips on lane 0 and places
 the eight audio stem groups on lanes 1–8. The chopped break uses three clips
 on lane 4. `examples/rebalance_asterion_audio.py` stages or reapplies those
 lanes, clears accidental music mutes, sets the clip and bus levels, and fits
 the saved TiXL timeline and render export range to all 54 bars. Audit the
 candidate with `tools/audit_tixl_audio.py --graph <staged.t3> --assets
-<TiXL-project-Assets>`. The measured stereo sum peaks at about 0.705 with
-no clipped samples at the current levels. The project has no unused WAVs;
+<TiXL-project-Assets>`. With bus gain 0.82, the measured stereo sum peaks at
+0.512 with no clipped samples. Music RMS is 0.0606 and its six-second windows
+span 1.13 dB across the full loop. The audit reports music and FX separately
+and identifies connected clip gain/mute drivers. The project has no unused WAVs;
 all eight assets are referenced by its AudioClips.
 
 Run `generate_asterion_audio.py --stem all` to reproduce the WAVs with NumPy.
-Individual stems can be rendered with `--stem cinematic`, `electronic`,
-`techno`, `flight`, `scan`, `cargo`, `glitch`, or `break`. The synthesized break
+Use `--stem music` to rebuild and master all four music stems together.
+Selecting `cinematic`, `electronic`, `techno`, or `break` also rebuilds the
+entire music group so the mastering envelope is always derived from raw
+renders. Individual FX use `--stem flight`, `scan`, `cargo`, or `glitch`.
+The synthesized break
 is original; no third-party sample or song recording is required.
+
+`tools/music_stem_mastering.py` can also run independently of Blender, TiXL,
+or an agent. Pass `--plan <music.json> --output <new-directory>` with a plan
+containing `sampleRate`, `targetRms`, and `stems`: each stem has a `path`,
+its intended clip `gain`, and optional active `windows` in seconds. Paths
+resolve relative to the plan. Input WAVs must be raw stereo PCM16 stems aligned
+to the same full timeline and sample rate. The tool writes separate processed
+WAVs and refuses to overwrite the raw sources. Use a common gain envelope
+for music; leave scene FX out of its plan.
+
+To restore only Asterion's audio gains/mutes, stage the graph and matching UI
+with `examples/rebalance_asterion_audio.py --mix-only --graph <Home.t3>
+--output <staged.t3> --ui-output <staged.t3ui>`. Audit that candidate, then add
+`--apply` while TiXL is closed. This mode preserves clip timing, labels,
+timeline viewport, graph layout and export settings.
 
 For an existing Asterion TiXL Home graph, first confirm the live editor graph
 matches its saved `.t3` and `.t3ui`, then close TiXL through the debug bridge.

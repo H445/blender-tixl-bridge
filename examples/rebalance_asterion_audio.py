@@ -30,9 +30,9 @@ PLAN = {
     "asterion_music_techno_drums_120bpm.wav": ("Music | seeded techno drums", 3, .74),
     "asterion_amen_chops_120bpm.wav": ("Break | chopped drums", 4, .72),
     "asterion_fx_flight.wav": ("FX | propulsion and warp", 5, .50),
-    "asterion_fx_scan.wav": ("FX | lunar scan", 6, .58),
-    "asterion_fx_cargo.wav": ("FX | cargo capture", 7, .52),
-    "asterion_fx_glitch.wav": ("FX | glitch transmission", 8, .44),
+    "asterion_fx_scan.wav": ("FX | lunar scan", 6, .50),
+    "asterion_fx_cargo.wav": ("FX | cargo capture", 7, .48),
+    "asterion_fx_glitch.wav": ("FX | glitch transmission", 8, .36),
 }
 
 
@@ -40,7 +40,7 @@ def slot(child: dict, ident: str) -> dict | None:
     return next((item for item in child.get("InputValues", []) if item["Id"] == ident), None)
 
 
-def prepare(graph: dict) -> tuple[dict, list[dict]]:
+def prepare(graph: dict, *, mix_only: bool = False) -> tuple[dict, list[dict]]:
     if graph["Id"] != GRAPH_ID:
         raise ValueError("Expected AsterionBreakaway Home graph")
     clips = [child for child in graph["Children"] if child.get("SymbolId") == CLIP_SYMBOL]
@@ -69,13 +69,18 @@ def prepare(graph: dict) -> tuple[dict, list[dict]]:
         before = {"name": clip.get("Name"), "lane": time_clip["LayerIndex"],
                   "gain": slot(clip, VOLUME)["Value"],
                   "muted": slot(clip, MUTE)["Value"] if slot(clip, MUTE) else False}
-        clip["Name"] = title + suffix
-        time_clip["LayerIndex"] = lane
+        if not mix_only:
+            clip["Name"] = title + suffix
+            time_clip["LayerIndex"] = lane
+        if any(edge["TargetParentOrChildId"] == clip["Id"]
+               and edge["TargetSlotId"] in (VOLUME, MUTE)
+               for edge in graph["Connections"]):
+            raise ValueError(f"Audio gain/mute has a live driver: {clip.get('Name')}")
         slot(clip, VOLUME)["Value"] = gain
         if slot(clip, MUTE):
             slot(clip, MUTE)["Value"] = False
         changes.append({"asset": name, "before": before,
-                        "after": {"name": clip["Name"], "lane": lane,
+                        "after": {"name": clip["Name"], "lane": time_clip["LayerIndex"],
                                   "gain": gain, "muted": False}})
     if used != set(PLAN):
         raise ValueError(f"Missing planned assets: {set(PLAN) - used}")
@@ -131,6 +136,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path, help="Staged graph path outside TiXL Symbols")
     parser.add_argument("--ui-output", type=Path, help="Staged matching .t3ui outside TiXL Symbols")
     parser.add_argument("--apply", action="store_true", help="Back up and replace the closed editor's graph")
+    parser.add_argument("--mix-only", action="store_true",
+                        help="Only restore audio gains/mutes; preserve timeline, layout and export settings")
     args = parser.parse_args()
     path = args.graph.resolve()
     ui_path = path.with_suffix(".t3ui")
@@ -138,8 +145,11 @@ def main() -> None:
     before_ui_bytes = ui_path.read_bytes()
     before = read_graph(path)
     before_ui = read_graph(ui_path)
-    graph, changes = prepare(read_graph(path))
-    ui, ui_changes = prepare_ui(read_graph(ui_path))
+    graph, changes = prepare(read_graph(path), mix_only=args.mix_only)
+    if args.mix_only:
+        ui, ui_changes = read_graph(ui_path), {}
+    else:
+        ui, ui_changes = prepare_ui(read_graph(ui_path))
     if len(graph["Children"]) != len(before["Children"]) or graph["Connections"] != before["Connections"]:
         raise ValueError("Audio-only change unexpectedly altered graph topology")
     if ui["SymbolChildUis"] != before_ui["SymbolChildUis"]:

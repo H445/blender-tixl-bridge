@@ -50,6 +50,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--graph", required=True, type=Path)
     parser.add_argument("--assets", type=Path, help="Project Assets directory, if graph is staged elsewhere")
+    parser.add_argument("--music-prefix", action="append",
+                        help="Music clip-name prefix; repeat as needed (defaults: Music | and Break |)")
     args = parser.parse_args()
     graph_path = args.graph.resolve()
     graph = read_graph(graph_path)
@@ -68,6 +70,12 @@ def main() -> None:
     bus = buses[0]
     bus_gain = float(input_value(bus, BUS_VOLUME, 1))
     edges = graph["Connections"]
+    music_prefixes = tuple(args.music_prefix or ["Music |", "Break |"])
+    clip_ids = {clip["Id"] for clip in clips}
+    gain_drivers = [{"target": edge["TargetParentOrChildId"], "slot": edge["TargetSlotId"]}
+                    for edge in edges
+                    if (edge["TargetParentOrChildId"] in clip_ids and edge["TargetSlotId"] in (VOLUME, MUTE))
+                    or (edge["TargetParentOrChildId"] == bus["Id"] and edge["TargetSlotId"] == BUS_VOLUME)]
     bus_sources = {edge["SourceParentOrChildId"] for edge in edges
                    if edge["TargetParentOrChildId"] == bus["Id"]}
     if {clip["Id"] for clip in clips} != bus_sources:
@@ -108,6 +116,7 @@ def main() -> None:
             raise ValueError(f"Clip exceeds source WAV: {clip.get('Name')}")
         window = data[first:last]
         rows.append({"name": clip.get("Name"), "id": clip["Id"], "path": str(path),
+                     "role": "music" if clip.get("Name", "").startswith(music_prefixes) else "fx",
                      "lane": time_clip["LayerIndex"], "start": start, "end": end,
                      "sourceStart": src_start, "sourceEnd": src_end,
                      "gain": float(input_value(clip, VOLUME, 1)),
@@ -121,6 +130,8 @@ def main() -> None:
         raise ValueError(f"Mixed WAV sample rates: {rates}")
     rate = rates.pop()
     mix = np.zeros((round(duration * rate), 2), dtype=np.float32)
+    music = np.zeros_like(mix)
+    fx = np.zeros_like(mix)
     for row in rows:
         if row["muted"]:
             continue
@@ -128,15 +139,26 @@ def main() -> None:
         first, last = round(row["sourceStart"] * rate), round(row["sourceEnd"] * rate)
         dest = round(row["start"] * rate)
         window = data[first:last]
-        mix[dest:dest + len(window)] += window * row["gain"] * bus_gain
+        audio = window * row["gain"] * bus_gain
+        mix[dest:dest + len(window)] += audio
+        group = music if row["role"] == "music" else fx
+        group[dest:dest + len(window)] += audio
     levels = []
     for start in np.arange(0, duration, 6):
         window = mix[round(start * rate):round(min(start + 6, duration) * rate)]
+        first, last = round(start * rate), round(min(start + 6, duration) * rate)
         levels.append({"start": float(start), "peak": float(np.max(np.abs(window))),
-                       "rms": float(np.sqrt(np.mean(window.astype(np.float64) ** 2)))})
+                       "rms": float(np.sqrt(np.mean(window.astype(np.float64) ** 2))),
+                       "musicRms": float(np.sqrt(np.mean(music[first:last].astype(np.float64) ** 2))),
+                       "fxRms": float(np.sqrt(np.mean(fx[first:last].astype(np.float64) ** 2)))})
+    music_windows = [row["musicRms"] for row in levels if row["musicRms"] > 0]
     print(json.dumps({"bpm": bpm, "sourceLanes": source_lanes, "busGain": bus_gain,
+                      "audioGainDrivers": gain_drivers,
                       "clips": rows, "mixPeak": float(np.max(np.abs(mix))),
                       "mixRms": float(np.sqrt(np.mean(mix.astype(np.float64) ** 2))),
+                      "musicPeak": float(np.max(np.abs(music))),
+                      "musicRms": float(np.sqrt(np.mean(music.astype(np.float64) ** 2))),
+                      "musicWindowSpreadDb": float(20 * np.log10(max(music_windows) / min(music_windows))) if music_windows else None,
                       "clippedSamples": int(np.count_nonzero(np.abs(mix) >= 1)),
                       "mixBySixSeconds": levels}, indent=2))
 
