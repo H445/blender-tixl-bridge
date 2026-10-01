@@ -35,3 +35,7 @@ python blender_tixl_bridge/source/blend_sync.py install --blend "<saved scene.bl
 Supply the configured operator project and editor settings from the [user guide](../../../docs/USER_GUIDE.md#command-line-cache-build). Installation defers while TiXL is open; do not force it past a possible unsaved edit. An agent closes a known-clean configured session through the debug bridge and launches through the configured bridge with full process permissions. A person without the debug bridge saves and closes TiXL manually, then reopens the generated project. After installation, inspect the actual render and logs in TiXL; an offline build alone cannot establish render correctness. For an agent's live checks use [sync verification](../blender-tixl-bridge/references/sync.md); for a manual check use the [user guide](../../../docs/USER_GUIDE.md#troubleshooting).
 
 Repeat with a new saved scene path and its own cache/project. Reuse the procedure and validations, not project-specific graph IDs, absolute user paths, or asset names.
+
+## Installed ZIP paths
+
+The ZIP bundles this skill and its reusable dependencies under the installed `blender_tixl_bridge` folder. In a checkout, run commands from the repository root. In an installed ZIP, use the add-on folder as the root and replace the checkout `blender_tixl_bridge/source/` prefix with `source/`. Offline audio helpers require NumPy in the Python interpreter used to run them. Example sound assets and scene generators remain workspace examples; they are not required by the generic workflow.

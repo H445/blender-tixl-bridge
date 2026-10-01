@@ -15,7 +15,7 @@ Require complete coverage for the installed components. Review any new or unclas
 
 ## 3. Capture stable release screenshots
 
-Keep these filenames so documentation links remain stable:
+Keep these filenames so documentation links remain stable. Refresh screenshots affected by the release. Existing inspected evidence may be retained when the pictured UI and example are unchanged; record its scope in validation notes. If the bundled example is not installed in the live session, inspect a current graph read-only, preserve the user context, and record that limitation rather than mislabeling its screenshot:
 
 | File | Required evidence |
 | --- | --- |
@@ -57,7 +57,7 @@ Do not move detail back into the root README merely because it changed. Update t
 ## 5. Rebuild and verify
 
 1. Run the repository tests appropriate to the change.
-2. Run `python build_addon_zip.py` and confirm it creates `blender-tixl-bridge-<bl_info version>.zip` containing repository rules, both skills and their task references, both generated capability files, and the capability automation.
+2. Run `python build_addon_zip.py` and confirm it creates `blender-tixl-bridge-<bl_info version>.zip` containing repository rules, all six bridge skills, their task references and offline helpers, both generated capability files, and the capability automation.
 3. Before a requested release, confirm the tag is exactly `v<bl_info version>`; the release workflow rejects a mismatched tag and uploads the versioned ZIP as a GitHub Release asset.
 4. Validate this skill with the skill-creator `quick_validate.py` script.
 5. Run `git diff --check`, inspect `git diff --stat`, and review the final README and binary screenshot diff list.

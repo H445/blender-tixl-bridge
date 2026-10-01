@@ -353,3 +353,30 @@ the pointer before it can publish a ZIP. The archive test covers that failure.
 The local 0.5.1 build includes the real compressed Blender example; the full
 217-test suite passes. Blender MCP verified the 0.5.1 add-on enabled with the
 same scene and saved bridge settings, then refreshed capability discovery.
+
+
+## 0.5.9 skills and capabilities release
+
+The installed bridge is 0.5.9, tested with Blender 5.2.2 LTS, official Blender
+MCP TCP extension 1.0.3, and TiXL 4.3.0.2 (debug protocol 1). The add-on's
+manual capability refresh completed with full discovery coverage, 33 classified
+debug methods and 14 reusable bridge operators. A fresh Blender process,
+launched through MCP, verified the installed version and persisted bridge
+preferences. The foreground scene and configured paths were preserved.
+
+All six reusable bridge skills are bundled, including audio, graph edits,
+layout and offline sync. The ZIP now includes their referenced documentation
+and standalone audio/layout helpers. Layout helper imports support both the
+checkout and installed ZIP directory structures. Audio helpers require NumPy.
+The route test checks every relative skill link and excludes local notes and
+personal configuration from the archive.
+
+The 225 Python tests passed, as did the production GLB numerical reader gate
+(40 measured parses, one read/parse each) and the production animation cache
+and buffer ownership gate. All six skill frontmatter validators passed.
+Current native Blender Scene and Preferences screenshots show 0.5.9; paths in
+the Preferences image are illustrative. The existing legible TiXL morph-example
+screenshots are retained: that example is not installed in the current editor
+session, and this release does not change its operator UI. Read-only live
+inspection of Asterion resolved 128 children and 204 connections without missing
+entries. The user's graph view, playhead, selection and output pin were restored.

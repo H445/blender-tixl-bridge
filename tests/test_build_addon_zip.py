@@ -8,7 +8,8 @@ import tempfile
 import unittest
 from zipfile import ZipFile
 
-from build_addon_zip import ROOT, addon_version, archive_name, build_archive, version_text
+from build_addon_zip import (ROOT, BRIDGE_SKILLS, OFFLINE_HELPERS, agent_bundle_files,
+                             addon_version, archive_name, build_archive, version_text)
 
 
 class BuildAddonZipTest(unittest.TestCase):
@@ -40,19 +41,11 @@ class BuildAddonZipTest(unittest.TestCase):
                 if name.endswith(".blend"):
                     (example / name).write_bytes(b"BLENDER" + b"fixture")
                 else:
-                    (example / name).write_text("fixture\n", encoding="utf-8")
+                    shutil.copy2(ROOT / "examples" / name, example / name)
+            for screenshot in (ROOT / "examples" / "screenshots").glob("*.png"):
+                shutil.copy2(screenshot, example / "screenshots" / screenshot.name)
 
-            files = [
-                "AGENTS.md", ".agents/CAPABILITIES.md", ".agents/CAPABILITIES_DETAIL.md",
-                ".agents/README.md", ".agents/capability_automation.py", ".agents/bridge_diagnostics.py",
-                ".agents/capability_automation.example.json", ".agents/rebuild_capabilities.py",
-                ".agents/probes/blender_runtime_probe.py",
-                ".agents/skills/blender-tixl-bridge/SKILL.md",
-                ".agents/skills/blender-tixl-release-refresh/SKILL.md",
-            ]
-            files += [path.relative_to(ROOT).as_posix()
-                      for skill in ("blender-tixl-bridge", "blender-tixl-release-refresh")
-                      for path in sorted((ROOT / ".agents" / "skills" / skill / "references").glob("*.md"))]
+            files = [path.relative_to(ROOT).as_posix() for path in agent_bundle_files(ROOT)]
             for relative in files:
                 destination = root / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
@@ -78,17 +71,18 @@ class BuildAddonZipTest(unittest.TestCase):
                 self.assertNotIn("blender_tixl_bridge/.agents/AGENTS.md", names)
                 self.assertNotIn("blender_tixl_bridge/.agents/preferences.json", names)
                 self.assertNotIn("blender_tixl_bridge/.agents/capability_automation.json", names)
-                self.assertFalse(any("preference" in name.lower() for name in names))
+                self.assertFalse(any("/.agents/" in name and "preference" in name.lower() for name in names))
 
-                route_entries = [name for name in names if name.endswith(".md") and
-                                 ("/.agents/skills/" in name or name.endswith("/.agents/README.md") or
-                                  name.endswith("/.agents/CAPABILITIES.md") or
-                                  name.endswith("/.agents/CAPABILITIES_DETAIL.md") or
-                                  name.endswith("/AGENTS.md"))]
+                for skill in BRIDGE_SKILLS:
+                    self.assertIn(f"blender_tixl_bridge/.agents/skills/{skill}/SKILL.md", names)
+                for helper in OFFLINE_HELPERS:
+                    self.assertIn(f"blender_tixl_bridge/tools/{helper}", names)
+
+                route_entries = [name for name in names if name.endswith(".md")]
                 self.assertTrue(route_entries)
                 for entry in route_entries:
                     text = archive.read(entry).decode("utf-8")
-                    for target in re.findall(r"(?<!!)\[[^\]]*\]\(([^)]+)\)", text):
+                    for target in re.findall(r"!?\[[^\]]*\]\(([^)]+)\)", text):
                         target = target.strip().split()[0].split("#", 1)[0].split("?", 1)[0]
                         if not target or target.startswith(("http://", "https://", "mailto:")):
                             continue

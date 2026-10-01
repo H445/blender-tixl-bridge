@@ -12,6 +12,12 @@ This guide covers the human installation and daily workflow for the Blender–Ti
 
 The current bridge release is tested with Blender 5.2.2 LTS and TiXL 4.3.0.2.
 
+The install-from-disk ZIP includes all six bridge skills, capability discovery,
+linked workflow documentation, and offline graph/audio helpers. These live under
+the installed add-on folder. The audio audit and mastering helpers require NumPy
+in the Python interpreter used to run them. Scene-specific music and effects
+generators remain in the workspace examples.
+
 ## Complete application first-run setup
 
 ### Blender and Blender MCP

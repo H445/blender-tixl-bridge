@@ -12,7 +12,10 @@ import sys
 from pathlib import Path
 
 
-SOURCE = Path(__file__).resolve().parents[1] / "blender_tixl_bridge" / "source"
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT / "blender_tixl_bridge" / "source"
+if not SOURCE.is_dir():  # Install-from-disk ZIP places source beside tools.
+    SOURCE = ROOT / "source"
 sys.path.insert(0, str(SOURCE))
 from blend_sync_project import _read_tixl_json  # noqa: E402
 from connected_graph_layout import count_wire_crossings, layout_connected_graph  # noqa: E402

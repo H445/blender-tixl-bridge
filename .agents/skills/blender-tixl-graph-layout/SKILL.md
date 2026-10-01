@@ -14,3 +14,7 @@ Read [repository rules](../../../AGENTS.md), [capability summary](../../CAPABILI
 5. Verify graph view, missing children/connections, representative output frames and the loop seam. Restore the prior editor context where possible. If live TiXL is unavailable, report the layout as staged or installed, not visually verified.
 
 This process applies to arbitrary graphs. New homes may use generated lane defaults; an existing user's layout is never silently overwritten by sync.
+
+## Installed ZIP paths
+
+The ZIP bundles this skill and its reusable dependencies under the installed `blender_tixl_bridge` folder. In a checkout, run commands from the repository root. In an installed ZIP, use the add-on folder as the root and replace the checkout `blender_tixl_bridge/source/` prefix with `source/`. Offline audio helpers require NumPy in the Python interpreter used to run them. Example sound assets and scene generators remain workspace examples; they are not required by the generic workflow.
